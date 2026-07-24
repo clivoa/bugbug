@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from hackbot.risk.identity import canonical_engagement_identity
 from hackbot.risk.models import (
     ActionDefinition,
     ActionRequest,
@@ -13,44 +14,13 @@ from hackbot.risk.models import TestingPolicy as _TestingPolicy
 from hackbot.risk.registry import ActionRegistry, RegistryError
 
 
-def test_risk_levels_are_ordered():
-    assert RiskLevel.L0 < RiskLevel.L1 < RiskLevel.L2 < RiskLevel.L3
-
-
-def test_action_definition_is_frozen_and_characteristics_raise_floor():
-    action = ActionDefinition("fixture.write", RiskLevel.L1, state_changing=True)
-    assert action.effective_floor == RiskLevel.L2
-    with pytest.raises(FrozenInstanceError):
-        action.action_id = "changed"
-
-
-def test_request_cannot_lower_registered_floor():
-    action = ActionDefinition("fixture.scan", RiskLevel.L2)
-    request = ActionRequest(
-        engagement_id="sample",
-        engagement_path="/tmp/sample",
-        action_id="fixture.scan",
-        target="https://example.com",
-        argv=("fixture", "scan"),
-        hypothesis_id="hyp-1",
-        rationale="Validate one authorized hypothesis.",
-        rate=1,
-        concurrency=1,
-        data_touched="Public response headers.",
-        expected_impact="One low-rate request.",
-        stop_condition="Stop on any rate limit.",
-        cleanup_plan="No state is created.",
-        program_rule="Automated testing rule.",
-        requested_risk=RiskLevel.L0,
-    )
-    assert request.effective_risk(action) == RiskLevel.L2
-
-
-@pytest.mark.parametrize("field", ["hypothesis_id", "stop_condition", "cleanup_plan"])
-def test_active_request_requires_reviewed_safety_fields(field):
-    values = {
-        "engagement_id": "sample",
-        "engagement_path": "/tmp/sample",
+def _request_values(tmp_path):
+    engagement = tmp_path / "engagement"
+    engagement.mkdir(exist_ok=True)
+    engagement_path, engagement_id = canonical_engagement_identity(engagement)
+    return {
+        "engagement_id": engagement_id,
+        "engagement_path": engagement_path,
         "action_id": "fixture.scan",
         "target": "https://example.com",
         "argv": ("fixture", "scan"),
@@ -64,10 +34,79 @@ def test_active_request_requires_reviewed_safety_fields(field):
         "cleanup_plan": "No state is created.",
         "program_rule": "Automated testing rule.",
     }
+
+
+def test_risk_levels_are_ordered():
+    assert RiskLevel.L0 < RiskLevel.L1 < RiskLevel.L2 < RiskLevel.L3
+
+
+def test_action_definition_is_frozen_and_characteristics_raise_floor():
+    action = ActionDefinition("fixture.write", RiskLevel.L1, state_changing=True)
+    assert action.effective_floor == RiskLevel.L2
+    with pytest.raises(FrozenInstanceError):
+        action.action_id = "changed"
+
+
+def test_request_cannot_lower_registered_floor(tmp_path):
+    action = ActionDefinition("fixture.scan", RiskLevel.L2)
+    request = ActionRequest(**_request_values(tmp_path), requested_risk=RiskLevel.L0)
+    assert request.effective_risk(action) == RiskLevel.L2
+
+
+@pytest.mark.parametrize("field", ["hypothesis_id", "stop_condition", "cleanup_plan"])
+def test_active_request_requires_reviewed_safety_fields(field, tmp_path):
+    values = _request_values(tmp_path)
     values[field] = ""
 
     with pytest.raises(ValueError, match=field):
         ActionRequest(**values)
+
+
+def test_request_requires_id_for_the_canonical_engagement_path(tmp_path):
+    values = _request_values(tmp_path)
+    values["engagement_id"] = "different"
+    with pytest.raises(ValueError, match="engagement_id"):
+        ActionRequest(**values)
+
+
+def test_request_canonicalizes_symlinked_engagement_paths(tmp_path):
+    values = _request_values(tmp_path)
+    real_path = values["engagement_path"]
+    alias = tmp_path / "engagement-alias"
+    alias.symlink_to(real_path, target_is_directory=True)
+    values["engagement_path"] = str(alias)
+    request = ActionRequest(**values)
+    assert request.engagement_path == real_path
+
+
+def test_request_rejects_oversized_or_missing_engagement_paths(tmp_path):
+    values = _request_values(tmp_path)
+    values["engagement_path"] = "x" * 2_049
+    with pytest.raises(ValueError, match="engagement_path"):
+        ActionRequest(**values)
+    values = _request_values(tmp_path)
+    values["engagement_path"] = str(tmp_path / "missing")
+    with pytest.raises(ValueError, match="engagement path"):
+        ActionRequest(**values)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        ("Authorization: Bearer secret",),
+        ("X-Header\rInjected",),
+        ("X-Header", "x-header"),
+        ("x" * 129,),
+    ],
+)
+def test_request_required_headers_are_bounded_field_names_only(tmp_path, headers):
+    with pytest.raises(ValueError, match="required_headers"):
+        ActionRequest(**_request_values(tmp_path), required_headers=headers)
+
+
+def test_request_normalizes_required_header_names(tmp_path):
+    request = ActionRequest(**_request_values(tmp_path), required_headers=("X-Research-ID",))
+    assert request.required_headers == ("x-research-id",)
 
 
 def test_registry_rejects_duplicate_and_unknown_actions():

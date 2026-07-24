@@ -37,6 +37,43 @@ def test_program_load_returns_scope():
     assert not scope.check("https://blog.acme-corp.example/").allowed
 
 
+def test_loader_rejects_duplicate_yaml_keys_in_program_at_every_depth(tmp_path):
+    program = tmp_path / "program.yaml"
+    program.write_text(
+        """schema_version: 1
+program:
+  name: first-name
+  name: second-name
+scope:
+  in_scope:
+    domains: [example.com]
+    domains: [expanded.example]
+testing_rules:
+  max_requests_per_second: 1
+  max_requests_per_second: 1000
+  automated_scanning_allowed: false
+  automated_scanning_allowed: true
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(loader.ProgramError, match="duplicate YAML key"):
+        loader.load_program_file(program)
+
+
+def test_loader_rejects_duplicate_yaml_keys_in_standalone_scope(tmp_path):
+    scope = tmp_path / "scope.yaml"
+    scope.write_text(
+        """schema_version: 1
+in_scope:
+  domains: [example.com]
+  domains: [expanded.example]
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(loader.ProgramError, match="duplicate YAML key"):
+        loader.load_scope_file(scope)
+
+
 # --- engagement creation ---------------------------------------------------
 def _doc():
     import yaml

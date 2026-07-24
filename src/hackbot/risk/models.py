@@ -8,6 +8,7 @@ from datetime import datetime
 from enum import Enum, IntEnum
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from hackbot.risk.identity import EngagementIdentityError, canonical_engagement_identity
 from hackbot.scope import Scope
 
 _IDENTIFIER_LIMIT = 128
@@ -111,8 +112,17 @@ def _normalized_unique_strings(value: object, *, name: str) -> tuple[str, ...]:
     return normalized
 
 
-def _header_field_names(value: object) -> tuple[str, ...]:
-    names = _normalized_unique_strings(value, name="required_headers")
+def _header_field_names(value: object, *, maximum_items: int | None = None) -> tuple[str, ...]:
+    items = _tuple_of_strings(
+        value,
+        name="required_headers",
+        item_limit=_IDENTIFIER_LIMIT,
+        maximum_items=maximum_items,
+        allow_empty_items=False,
+    )
+    names = tuple(item.strip().lower() for item in items)
+    if any(not name for name in names) or len(set(names)) != len(names):
+        raise ValueError("required_headers values must be non-empty and unique")
     if any(_HEADER_FIELD_NAME_RE.fullmatch(name) is None for name in names):
         raise ValueError("required_headers must contain RFC token-like field names only")
     return names
@@ -157,6 +167,14 @@ class ActionRequest:
     def __post_init__(self) -> None:
         _text(self.engagement_id, name="engagement_id", limit=_IDENTIFIER_LIMIT)
         _text(self.engagement_path, name="engagement_path", limit=_TARGET_AND_RULE_LIMIT)
+        try:
+            engagement_path, engagement_id = canonical_engagement_identity(self.engagement_path)
+        except EngagementIdentityError as exc:
+            raise ValueError(str(exc)) from exc
+        if self.engagement_id != engagement_id:
+            raise ValueError("engagement_id must match the canonical engagement_path")
+        object.__setattr__(self, "engagement_path", engagement_path)
+        object.__setattr__(self, "engagement_id", engagement_id)
         _text(self.action_id, name="action_id", limit=_IDENTIFIER_LIMIT)
         _text(self.target, name="target", limit=_TARGET_AND_RULE_LIMIT)
         object.__setattr__(
@@ -211,12 +229,7 @@ class ActionRequest:
         object.__setattr__(
             self,
             "required_headers",
-            _tuple_of_strings(
-                self.required_headers,
-                name="required_headers",
-                item_limit=_IDENTIFIER_LIMIT,
-                allow_empty_items=False,
-            ),
+            _header_field_names(self.required_headers, maximum_items=_ARGV_LIMIT),
         )
         if self.requested_risk is not None and not isinstance(self.requested_risk, RiskLevel):
             raise ValueError("requested_risk must be a RiskLevel or None")
