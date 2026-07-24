@@ -1,0 +1,113 @@
+{
+  "note": {
+    "note_id": "note-port-scanning-bash",
+    "title": "port scanning com bash e /dev/tcp",
+    "category": "recon",
+    "difficulty": "basico",
+    "updated": "2026-07-17",
+    "tags": [
+      "#hacking",
+      "#recon",
+      "#port-scanning",
+      "#bash",
+      "#no-tools"
+    ],
+    "intro": "tecnica de scan de portas usando apenas bash puro, sem precisar de nmap ou qualquer outra ferramenta instalada. util quando voce tem uma shell limitada no alvo e precisa mapear a rede interna.",
+    "sections": [
+      "1. scan basico (todas as portas)",
+      "2. scan rapido (portas comuns)",
+      "3. scan com timeout",
+      "4. scan de multiplos hosts",
+      "5. scan paralelo (muito mais rapido)",
+      "6. alternativas sem /dev/tcp",
+      "7. xargs -P (paralelo limpo)",
+      "8. /dev/udp (scan UDP)",
+      "9. Python one-liner (fallback)",
+      "checklist rapido"
+    ],
+    "commands": [
+      "# scan de todas as 65535 portas (demora bastante)\nTARGET=10.10.10.10; for port in $(seq 1 65535); do\n  bash -c \"echo >/dev/tcp/$TARGET/$port\" 2>/dev/null && echo \"porta $port aberta\"\ndone",
+      "# scan apenas das portas mais interessantes\nTARGET=10.10.10.10\nfor port in 21 22 23 25 53 80 110 111 135 139 143 443 445 993 995 1433 1521 2049 3306 3389 5432 5900 8080 8443; do\n  (echo >/dev/tcp/$TARGET/$port) 2>/dev/null && echo \"porta $port aberta\"\ndone",
+      "# com timeout de 1 segundo por porta\nTARGET=10.10.10.10\nfor port in $(seq 1 1024); do\n  timeout 1 bash -c \"echo >/dev/tcp/$TARGET/$port\" 2>/dev/null && echo \"porta $port aberta\"\ndone",
+      "# varrer um /24 nas portas mais comuns\nfor host in $(seq 1 254); do\n  for port in 22 80 443 445 3389; do\n    timeout 1 bash -c \"echo >/dev/tcp/10.10.10.$host/$port\" 2>/dev/null && echo \"10.10.10.$host:$port aberta\"\n  done\ndone",
+      "# usar & pra rodar em paralelo e wait pra aguardar\nTARGET=10.10.10.10\nfor port in $(seq 1 1024); do\n  (timeout 1 bash -c \"echo >/dev/tcp/$TARGET/$port\" 2>/dev/null && echo \"porta $port aberta\") &\ndone\nwait",
+      "# usando nc (netcat)\nfor port in $(seq 1 1024); do\n  nc -z -w 1 $TARGET $port 2>/dev/null && echo \"porta $port aberta\"\ndone\n\n# usando python one-liner\npython3 -c \"\nimport socket\nfor p in range(1,1025):\n    try:\n        s=socket.socket(); s.settimeout(1); s.connect(('$TARGET',p))\n        print(f'porta {p} aberta'); s.close()\n    except: pass\n\"",
+      "# scan paralelo com xargs\nseq 1 1024 | xargs -P 50 -I{} bash -c \\\n  'timeout 1 bash -c \"echo >/dev/tcp/$TARGET/{}\" 2>/dev/null && echo \"porta {} aberta\"'",
+      "# testar porta UDP\necho test >/dev/udp/$TARGET/53",
+      "# python one-liner compacto\npython3 -c \"import socket; [print(f'porta {p} aberta') for p in range(1,1025) if (lambda s: (s.settimeout(1), s.connect_ex(($TARGET,p)) == 0, s.close()))(socket.socket(socket.AF_INET, socket.SOCK_STREAM))]\""
+    ],
+    "warnings": [],
+    "checklist": [
+      "verificar echo $BASH_VERSION (suporte a /dev/tcp)",
+      "scan portas comuns (22, 80, 443, 445, 3389)",
+      "adicionar timeout 1 por porta",
+      "paralelo com xargs -P 50",
+      "fallback: nc -z -w 1",
+      "fallback: python3 socket",
+      "/dev/udp pra UDP (limitado)",
+      "multi-host: loop /24",
+      "redirecionar output pra arquivo"
+    ],
+    "paragraphs": [
+      "tecnica de scan de portas usando apenas bash puro, sem precisar de nmap ou qualquer outra ferramenta instalada. util quando voce tem uma shell limitada no alvo e precisa mapear a rede interna.",
+      "em situacoes onde voce tem acesso a uma maquina comprometida mas nao pode instalar ferramentas. o bash com /dev/tcp e /dev/udp funciona na maioria dos linux.",
+      "/dev/tcp nao existe em sh/dash. so bash compilado com --enable-net-redirections. verificar com echo $BASH_VERSION antes de usar.",
+      "timeout 1 por porta evita travar em portas filtradas. sem timeout, porta filtrada segura a conexao por ~60s.",
+      "o scan basico pode travar em portas filtradas. adicione timeout pra acelerar.",
+      "se o bash nao tiver /dev/tcp compilado (raro, mas acontece):",
+      "mais limpo que & + wait. xargs gerencia o paralelismo automaticamente.",
+      "-P 50 = 50 processos simultaneos. mais limpo que lancar & manualmente. xargs gerencia o pool de processos.",
+      "bash tambem suporta /dev/udp pra testar portas UDP. limitado porque UDP e connectionless.",
+      "UDP e connectionless. echo >/dev/udp/... nao confirma se a porta esta aberta — so que nao deu erro imediato. false negatives sao comuns. pra scan UDP confiavel, usar nmap -sU.",
+      "se bash nao tiver /dev/tcp e nao tiver nc, python e a alternativa mais confiavel."
+    ]
+  },
+  "classification": {
+    "note_id": "note-port-scanning-bash",
+    "title": "port scanning com bash e /dev/tcp",
+    "recon_type": "active",
+    "assessment": "external",
+    "bug_bounty": "restricted",
+    "risk_level": 2,
+    "approval_level": "explicit",
+    "skill_target": "recon/service-fingerprinting",
+    "internal_pack": false,
+    "macos_findings": [
+      {
+        "id": "bash-dev-tcp",
+        "severity": "incompatible-zsh",
+        "adaptation": "zsh has no /dev/tcp; run under bash, or use `nc -z` / naabu adapter"
+      },
+      {
+        "id": "bash-dev-udp",
+        "severity": "incompatible-zsh",
+        "adaptation": "no /dev/udp in zsh; use nmap -sU adapter (L2, approval)"
+      },
+      {
+        "id": "gnu-timeout",
+        "severity": "coreutils",
+        "adaptation": "macOS lacks `timeout` unless coreutils/gtimeout installed; adapter provides one"
+      },
+      {
+        "id": "xargs-parallel",
+        "severity": "portable-ok",
+        "adaptation": "xargs -P works on both; enforce concurrency cap in adapter"
+      }
+    ],
+    "disabled_sections": [],
+    "policy_note": "port scanning is L2; /dev/tcp & /dev/udp need macOS adaptation or naabu/nmap adapter",
+    "required_tools": [
+      "nc",
+      "naabu",
+      "nmap"
+    ],
+    "required_api_keys": [],
+    "network_noise": "high",
+    "request_volume": "high",
+    "scope_risk": "medium",
+    "third_party_impact": "possible"
+  },
+  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "source_file": "references/recon/Recon-bundle.html",
+  "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
+}

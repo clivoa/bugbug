@@ -1,0 +1,121 @@
+{
+  "note": {
+    "note_id": "note-tcp-fin-fingerprint",
+    "title": "tcp fin fingerprint",
+    "category": "recon",
+    "difficulty": "intermediario",
+    "updated": "2026-07-17",
+    "tags": [
+      "#hacking",
+      "#recon",
+      "#fingerprinting",
+      "#tcp",
+      "#networking"
+    ],
+    "intro": "tecnica de fingerprinting de sistema operacional baseada no comportamento da pilha tcp/ip. ao enviar pacotes tcp com flags especificas pra portas abertas, voce consegue diferenciar sistemas pela forma como eles respondem (ou nao).",
+    "sections": [
+      "1. como funciona o tcp fin",
+      "2. tcp fin simples com scapy (python)",
+      "3. usando nmap",
+      "4. outras tecnicas de fingerprinting tcp",
+      "ttl (time to live)",
+      "tcp window size",
+      "5. fingerprinting passivo com p0f",
+      "6. JA3/JA4 TLS fingerprinting",
+      "7. JARM (active server fingerprinting)",
+      "8. HTTP/2 SETTINGS frame fingerprint",
+      "9. favicon hash",
+      "10. passive OS fingerprint via HTTP headers",
+      "11. HASSH (SSH fingerprinting)",
+      "checklist rapido"
+    ],
+    "commands": [
+      "from scapy.all import *\n\nmeu_ip = \"192.168.0.10\"\nip_alvo = \"192.168.0.11\"\nporta_alvo = 80\n\nip1 = IP(src=meu_ip, dst=ip_alvo)\ntcp1 = TCP(sport=1024, dport=porta_alvo, flags=\"F\", seq=12345)\npacket = ip1 / tcp1\n\np = sr1(packet, timeout=3)\nif p:\n    p.show()\n    if p.haslayer(TCP) and p[TCP].flags == \"RA\":\n        print(\"recebeu RST+ACK -> provavelmente windows/cisco\")\nelse:\n    print(\"sem resposta -> provavelmente linux/bsd (segue a rfc)\")",
+      "# fin scan (-sF) - envia pacotes com flag FIN\nsudo nmap -sF -Pn -p 80,443 $TARGET\n\n# xmas scan (-sX) - envia FIN+PSH+URG\nsudo nmap -sX -Pn -p 80,443 $TARGET\n\n# null scan (-sN) - envia pacote sem nenhuma flag\nsudo nmap -sN -Pn -p 80,443 $TARGET\n\n# os detection completo do nmap\nsudo nmap -O $TARGET",
+      "# ver o ttl de um host (o valor do ttl entrega o so)\nping -c 1 $TARGET | grep \"ttl=\"",
+      "# capturar o window size com tcpdump\nsudo tcpdump -i eth0 -c 5 \"host $TARGET and tcp[13] == 18\" -nn",
+      "# escutar trafego e identificar os automaticamente\nsudo p0f -i eth0 -p\n\n# ler de um pcap\np0f -r captura.pcap",
+      "# ja4-go\nja4-go alvo.com:443\n# tls-pepper\ntls-pepper --target alvo.com:443\n# shodan tem campo tls.ja3_hash\nshodan search \"tls.ja3_hash:HASH\" --fields ip_str,port",
+      "python3 jarm.py alvo.com 443\n# buscar no censys por mesmo JARM\ncensys search \"services.jarm:JARMHASH\"",
+      "python3 -c \"import mmh3,requests,codecs; r=requests.get('https://alvo.com/favicon.ico'); print(mmh3.hash(codecs.encode(r.content,'base64')))\"\nshodan search http.favicon.hash:HASH --fields ip_str,port,hostnames",
+      "curl -sI https://alvo.com\n# nginx geralmente: Server, Date, Content-Type, Content-Length, Connection\n# apache geralmente: Date, Server, Last-Modified, ETag, Accept-Ranges, Content-Length\n# IIS geralmente: Content-Type, Server, X-Powered-By, X-AspNet-Version",
+      "hassh-rust -t alvo.com:22\n# capturar de pcap\nhassh-rust -r capture.pcap"
+    ],
+    "warnings": [
+      "[!warning] TCP timestamps alteram deteccao de TTL. Windows com timestamping desativado pode parecer outro SO. sempre confirmar com multiplas tecnicas",
+      "fingerprint de cliente/servidor SSH. hassh-rust. util pra identificar versao do SSH server sem banner."
+    ],
+    "checklist": [
+      "porta fechada -> deve responder com RST",
+      "porta aberta -> deve ignorar o pacote (nao responder)",
+      "FIN/Xmas/Null scan rodado?",
+      "TTL capturado?",
+      "nmap -O com root?",
+      "JA3/JA4 TLS fingerprint?",
+      "JARM ativo?",
+      "HTTP/2 fingerprint?",
+      "Favicon hash no Shodan?",
+      "Headers HTTP analisados?",
+      "HASSH SSH fingerprint?",
+      "p0f passivo?"
+    ],
+    "paragraphs": [
+      "tecnica de fingerprinting de sistema operacional baseada no comportamento da pilha tcp/ip. ao enviar pacotes tcp com flags especificas pra portas abertas, voce consegue diferenciar sistemas pela forma como eles respondem (ou nao).",
+      "a rfc 793 define que:",
+      "porem, muitas implementacoes nao seguem a rfc e respondem com RST mesmo em portas abertas. isso inclui:",
+      "se voce enviar um FIN pra uma porta aberta de um servidor web e receber RST de volta, voce pode ter certeza que nao e linux nem bsd. provavelmente e windows ou cisco.",
+      "o nmap tem scan types que exploram esse mesmo comportamento.",
+      "rode os tres tipos de scan (fin, xmas, null) e compare com um syn scan normal (-sS). se os resultados forem diferentes, isso ja da pistas sobre o sistema operacional.",
+      "alem do fin, existem outras formas de identificar o so pela pilha tcp:",
+      "cada so usa tamanhos de janela tcp diferentes. o nmap usa isso internamente no -O.",
+      "se voce quer identificar os sem enviar nenhum pacote:",
+      "[!warning] TCP timestamps alteram deteccao de TTL. Windows com timestamping desativado pode parecer outro SO. sempre confirmar com multiplas tecnicas",
+      "[!tip] nmap -O precisa de root. sem root usa fingerprinting menos preciso (TCP/IP fingerprint baseado em respostas syn)",
+      "fingerprint de cliente/servidor pelo ClientHello TLS. JA4 e o padrao atual (2024+). JA3 ainda suportado mas depreciado.",
+      "fingerprint de servidor TLS ativo (10 conexoes). salesforce/jarm. censys indexa JARM — util pra clusterizar servidores identicos.",
+      "fingerprint por config do HTTP/2 (SETTINGS, WINDOW_UPDATE, priority, pseudo-header order). Akamai whitepaper. scrapfly/browserleaks tem testadores online.",
+      "mmh3 hash do favicon pra identificar mesmo servidor across domains.",
+      "Server, X-Powered-By, ordem de headers. cada web server ordena headers diferente (nginx vs apache vs IIS).",
+      "fingerprint de cliente/servidor SSH. hassh-rust. util pra identificar versao do SSH server sem banner."
+    ]
+  },
+  "classification": {
+    "note_id": "note-tcp-fin-fingerprint",
+    "title": "tcp fin fingerprint",
+    "recon_type": "active",
+    "assessment": "external",
+    "bug_bounty": "restricted",
+    "risk_level": 2,
+    "approval_level": "explicit",
+    "skill_target": "recon/service-fingerprinting",
+    "internal_pack": false,
+    "macos_findings": [
+      {
+        "id": "scapy",
+        "severity": "needs-root+deps",
+        "adaptation": "raw sockets need root; prefer nmap; Linux-runner recommended"
+      },
+      {
+        "id": "p0f",
+        "severity": "linux-oriented",
+        "adaptation": "p0f rarely packaged on macOS; Linux-runner or exclude"
+      }
+    ],
+    "disabled_sections": [],
+    "policy_note": "TCP FIN/JARM/JA3 active fingerprinting = L2; scapy needs root/Linux-runner; JA3/JARM passive-ish subset L1",
+    "required_tools": [
+      "nmap",
+      "scapy",
+      "p0f",
+      "jarm"
+    ],
+    "required_api_keys": [],
+    "network_noise": "high",
+    "request_volume": "medium",
+    "scope_risk": "medium",
+    "third_party_impact": "possible"
+  },
+  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "source_file": "references/recon/Recon-bundle.html",
+  "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
+}

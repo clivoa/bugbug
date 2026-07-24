@@ -1,0 +1,95 @@
+{
+  "note": {
+    "note_id": "note-subdomain-discovery",
+    "title": "subdomain discovery",
+    "category": "recon",
+    "difficulty": "intermediario",
+    "updated": "2026-07-17",
+    "tags": [
+      "#hacking",
+      "#recon",
+      "#subdominios",
+      "#dns",
+      "#passive-recon"
+    ],
+    "intro": "enumeracao de subdominios e crucial pra expandir a superficie de ataque. dominios esquecidos, ambientes de dev/staging, e portais internos expostos sao os alvos mais faceis.",
+    "sections": [
+      "1. enumeracao passiva (sem tocar no alvo)",
+      "crt.sh (certificate transparency)",
+      "motores de busca e agregadores",
+      "apis de terceiros",
+      "2. enumeracao ativa (dns bruteforce)",
+      "resolvers confiaveis",
+      "3. validacao (filtrar vivos)",
+      "checklist rapido"
+    ],
+    "commands": [
+      "# browser: https://crt.sh/?q=%25.alvo.com\n# via curl com jq\ncurl -s \"https://crt.sh/?q=%25.alvo.com&output=json\" | jq -r '.[].name_value' | sed 's/\\*\\.//g' | sort -u > crtsh_subs.txt\n\n# via certspotter\ncurl -s \"https://api.certspotter.com/v1/issuances?domain=alvo.com&include_subdomains=true&expand=dns_names\" | jq -r '.[].dns_names[]' | sort -u",
+      "# subfinder (suporta +30 fontes passivas)\nsubfinder -d alvo.com -all -o subfinder.txt\nsubfinder -dL domains.txt -all -o all_subs.txt\n\n# amass (owasp, modulo passivo)\namass enum -passive -d alvo.com -o amass.txt\n\n# assetfinder (rapidao, unica fonte)\nassetfinder --subs-only alvo.com | tee assetfinder.txt\n\n# github + google dorks (subdominios em repositorios)\ngithub-subdomains -d alvo.com -t $GITHUB_TOKEN",
+      "# securitytrails\ncurl -s \"https://api.securitytrails.com/v1/domain/alvo.com/subdomains?children_only=false\" \\\n  -H \"APIKEY: TOKEN\" | jq -r '.subdomains[]' | sed 's/$/.alvo.com/'\n\n# alienvault otx\ncurl -s \"https://otx.alienvault.com/api/v1/indicators/domain/alvo.com/passive_dns\" | \\\n  jq -r '.passive_dns[].hostname' | sort -u\n\n# rapiddns\ncurl -s \"https://rapiddns.io/subdomain/alvo.com?full=1\" | grep -oP 'title=\"\\K[^\"]+' | grep \"alvo.com\" | sort -u",
+      "# gobuster dns\ngobuster dns -d alvo.com -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -t 100 -o gobuster_dns.txt\n\n# puredns (resolve + bruteforce com massdns)\npuredns bruteforce /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt alvo.com -r resolvers.txt -w puredns.txt\n\n# shuffledns (wrapper do massdns)\nshuffledns -d alvo.com -w wordlist.txt -r resolvers.txt -o shuffledns.txt\n\n# dnsgen + massdns (permutacoes)\ndnsgen subs_conhecidos.txt | shuffledns -d alvo.com -r resolvers.txt -o dnsgen_new.txt\n\n# alterx (permutacoes inteligentes)\nalterx -l subs_conhecidos.txt -enrich -o permutations.txt\npuredns resolve permutations.txt -r resolvers.txt -w resolved.txt",
+      "wget https://raw.githubusercontent.com/trickest/resolvers/main/resolvers.txt\ndnsvalidator -tL resolvers.txt -o resolvers_validados.txt",
+      "# httpx (multi-funcao, o melhor)\ncat all_subs.txt | httpx -silent -status-code -title -tech-detect -follow-redirects -o httpx_results.txt\n\n# so ips vivos\ncat all_subs.txt | httpx -silent -o live_subs.txt\n\n# filtrando por status code\ncat all_subs.txt | httpx -silent -mc 200,301,302,403 -o interesting.txt\n\n# httpx com screenshot preview\ncat live_subs.txt | httpx -silent -screenshot -screenshot-dir screens/\n\n# alternativa: httprobe (mais simples)\ncat all_subs.txt | httprobe -c 50 | tee live_subs.txt",
+      "subfinder -d alvo.com -all -silent | dnsgen - | puredns resolve -r resolvers.txt | httpx -silent -status-code -title -o full_recon.txt",
+      "# subjack\nsubjack -w subs.txt -t 100 -timeout 30 -ssl -c fingerprints.json -o takeover.txt\n\n# nuclei takeover templates\nnuclei -l live_subs.txt -t ~/nuclei-templates/takeovers/ -o takeover_nuclei.txt\n\n# verificar cnames suspeitos manualmente\ndig CNAME sub.alvo.com +short | grep -E \"amazonaws.com|azure|github.io|herokuapp|surge.sh|netlify\"",
+      "#!/bin/bash\nDOMAIN=$1\nOUTDIR=\"recon/$DOMAIN\"\nmkdir -p \"$OUTDIR\"\n\necho \"[*] passivo...\"\nsubfinder -d \"$DOMAIN\" -all -silent > \"$OUTDIR/passive.txt\"\nassetfinder --subs-only \"$DOMAIN\" >> \"$OUTDIR/passive.txt\"\ncurl -s \"https://crt.sh/?q=%25.$DOMAIN&output=json\" | jq -r '.[].name_value' | sed 's/\\*\\.//g' >> \"$OUTDIR/passive.txt\"\nsort -u \"$OUTDIR/passive.txt\" -o \"$OUTDIR/passive.txt\"\necho \"[+] $(wc -l < \"$OUTDIR/passive.txt\") subs passivos\"\n\necho \"[*] bruteforce...\"\npuredns bruteforce /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt \"$DOMAIN\" -r resolvers.txt > \"$OUTDIR/bruteforce.txt\"\necho \"[+] $(wc -l < \"$OUTDIR/bruteforce.txt\") subs bruteforce\"\n\necho \"[*] juntando...\"\ncat \"$OUTDIR/passive.txt\" \"$OUTDIR/bruteforce.txt\" | sort -u > \"$OUTDIR/all_subs.txt\"\necho \"[+] $(wc -l < \"$OUTDIR/all_subs.txt\") subs unicos\"\n\necho \"[*] validando (httpx)...\"\nhttpx -l \"$OUTDIR/all_subs.txt\" -silent -status-code -title -o \"$OUTDIR/live.txt\"\necho \"[+] $(wc -l < \"$OUTDIR/live.txt\") vivos\"\n\necho \"[*] takeover check...\"\nsubjack -w \"$OUTDIR/all_subs.txt\" -t 100 -ssl -o \"$OUTDIR/takeover.txt\" 2>/dev/null\n\necho \"[done] resultados em $OUTDIR/\"",
+      "chaos -d alvo.com -silent\nchaos -dL domains.txt -silent -o chaos_subs.txt",
+      "# tool dedicada\ngithub-subdomains -d alvo.com -t $GITHUB_TOKEN -o gh_subs.txt\n\n# google dork\n# site:github.com \"alvo.com\"\n# site:github.com \"dev.alvo.com\" -site:github.com/alvo",
+      "alterx -l subs_conhecidos.txt -p \"${prefix}.${word}.${suffix}\" -enrich -o permutations.txt",
+      "diff old_subs.txt new_subs.txt | grep \"^>\" | sed 's/^> //' > new_only.txt\n# ou comm\ncomm -13 <(sort old_subs.txt) <(sort new_subs.txt) > new_only.txt"
+    ],
+    "warnings": [],
+    "checklist": [
+      "Enumeracao passiva (crt.sh, subfinder, assetfinder)?",
+      "Bruteforce ativo (puredns/gobuster)?",
+      "Resolvers validados com dnsvalidator?",
+      "Permutacoes com alterx?",
+      "Reverse PTR nos IPs descobertos?",
+      "Chaos API consultada?",
+      "Github code search feito?",
+      "Validacao com httpx?",
+      "Subdomain takeover check?",
+      "Diffing vs run anterior?"
+    ],
+    "paragraphs": [
+      "enumeracao de subdominios e crucial pra expandir a superficie de ataque. dominios esquecidos, ambientes de dev/staging, e portais internos expostos sao os alvos mais faceis."
+    ]
+  },
+  "classification": {
+    "note_id": "note-subdomain-discovery",
+    "title": "subdomain discovery",
+    "recon_type": "mixed",
+    "assessment": "external",
+    "bug_bounty": "applicable",
+    "risk_level": 1,
+    "approval_level": "auto-if-in-scope",
+    "skill_target": "recon/subdomain-discovery",
+    "internal_pack": false,
+    "macos_findings": [
+      {
+        "id": "gnu-timeout",
+        "severity": "coreutils",
+        "adaptation": "macOS lacks `timeout` unless coreutils/gtimeout installed; adapter provides one"
+      }
+    ],
+    "disabled_sections": [],
+    "policy_note": "passive sources L0; DNS bruteforce L1 rate-limited; validation httpx L1",
+    "required_tools": [
+      "subfinder",
+      "amass",
+      "dnsx",
+      "httpx",
+      "puredns"
+    ],
+    "required_api_keys": [
+      "various-passive-sources(optional)"
+    ],
+    "network_noise": "low",
+    "request_volume": "medium",
+    "scope_risk": "medium",
+    "third_party_impact": "possible"
+  },
+  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "source_file": "references/recon/Recon-bundle.html",
+  "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
+}

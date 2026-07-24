@@ -1,0 +1,106 @@
+{
+  "note": {
+    "note_id": "note-enumeracao-linux",
+    "title": "enumeracao de rede em linux",
+    "category": "recon",
+    "difficulty": "basico",
+    "updated": "2026-07-17",
+    "tags": [
+      "#hacking",
+      "#recon",
+      "#linux",
+      "#networking",
+      "#nmap"
+    ],
+    "intro": "tecnicas e comandos pra descoberta de hosts e servicos em redes internas a partir de uma maquina linux. cobre desde ping sweep basico ate scans nmap otimizados e filtragem de resultados.",
+    "sections": [
+      "1. host discovery (identificacao de alvos)",
+      "ping sweep",
+      "arpscan (camada 2)",
+      "2. nmap scanning strategies",
+      "descoberta massiva",
+      "naabu (projectdiscovery)",
+      "port scan direcionado",
+      "scan completo (todas as portas)",
+      "3. filtragem de resultados",
+      "4. /proc/net/arp",
+      "5. ss / netstat",
+      "checklist rapido"
+    ],
+    "commands": [
+      "# loop simples pra varrer um /24\nfor i in $(seq 1 254); do ping -c 1 -W 1 10.10.10.$i | grep 'from'; done > live_hosts.txt",
+      "# verificar se o arping existe e executar\nif [ -x /sbin/arping ]; then\n  for i in $(seq 1 255); do arping -c 1 10.1.1.$i | grep reply; done\nfi",
+      "# -sn: no port scan (ping sweep)\n# -PE: icmp echo request\nsudo nmap -sn -iL ranges.txt -oA discovery/hosts/pingsweep -PE",
+      "# scan top 1000 portas em lista de hosts\nnaabu -list hosts.txt -top-ports 1000 -silent\n\n# scan portas especificas\nnaabu -list hosts.txt -p 22,80,443,445,3389 -silent\n\n# output json\nnaabu -list hosts.txt -top-ports 1000 -json -o naabu.json",
+      "# -Pn: ignorar ping (tratar host como online)\n# -sV: versao de servico\n# -A: os detection, scripts e traceroute\nnmap -Pn -n -sV -A -p 21,22,80,443,445,3306,3389,8080 -iL targets.txt -oX portscan.xml",
+      "# scan de todas as 65535 portas (demora, mas e completo)\nnmap -Pn -n -p- -sV --min-rate 1000 $TARGET -oA fullscan\n\n# scan rapido de top 100 portas\nnmap -Pn -n --top-ports 100 -sV $TARGET",
+      "# filtrar resultados xml do nmap com grep\ngrep \"open\" portscan.gnmap | cut -d \" \" -f 2 | sort -u\n\n# usar xmllint pra extrair dados do xml\nxmllint --xpath \"//port[@state='open']\" portscan.xml",
+      "# listar hosts do cache ARP\ncat /proc/net/arp | grep -v HWtype\n\n# filtrar so IPs\ncat /proc/net/arp | grep -v HWtype | awk '{print $1}' | sort -u",
+      "# portas TCP escutando\nss -tlnp | grep LISTEN\n\n# portas UDP\nss -ulnp\n\n# netstat (alternativa legada)\nnetstat -tlnp\nnetstat -ulnp\n\n# todas as conexoes ativas\nss -tunap"
+    ],
+    "warnings": [],
+    "checklist": [
+      "ping sweep /24 (for i in $(seq 1 254); do ping -c 1 -W 1 10.10.10.$i; done)",
+      "arpscan (camada 2, mais confiavel)",
+      "nmap -sn (descoberta sem port scan)",
+      "nmap -sV -A (servicos e versao)",
+      "nmap -p- (todas as portas)",
+      "naabu -top-ports 1000 (alternativa rapida)",
+      "/proc/net/arp (passivo em box comprometida)",
+      "ss -tlnp (portas locais sem scanner)",
+      "filtrar portas de interesse (web, smb, db, ad)"
+    ],
+    "paragraphs": [
+      "tecnicas e comandos pra descoberta de hosts e servicos em redes internas a partir de uma maquina linux. cobre desde ping sweep basico ate scans nmap otimizados e filtragem de resultados.",
+      "se o nmap nao estiver disponivel, use loops de ping ou arping nativos do bash.",
+      "varredura rapida usando icmp.",
+      "mais confiavel que ping porque usa arp (nao e filtrado por firewalls de host).",
+      "estrategias otimizadas pra diferentes cenarios.",
+      "identifica hosts ativos sem escanear portas.",
+      "nmap -sn sem root usa TCP probes (SYN em portas comuns) em vez de ICMP. menos confiavel que ARP. sempre rodar com sudo pra descoberta ARP.",
+      "--min-rate 1000 controla velocidade sem perder hosts. --max-retries 2 evita retransmissao excessiva.",
+      "alternativa rapida ao nmap pra port scan em massa.",
+      "naabu e mais rapido que nmap pra scan em massa de muitas portas. nmap ainda e melhor pra service detection e scripts NSE.",
+      "veja mais sobre nmap em nmap",
+      "escaneie as portas mais comuns nos hosts identificados.",
+      "apos o scan, filtre os servicos pra focar no seu vetor de ataque.",
+      "descoberta passiva em box comprometida. zero pacotes, mostra hosts recentes que se comunicaram com a maquina.",
+      "/proc/net/arp nao envia pacotes. mostra hosts que o sistema ja comunicou recentemente. ideal pra recon invisivel em box comprometida.",
+      "enumeracao de portas locais sem scanner. util em box comprometida sem ferramentas.",
+      "netstat e considerado obsoleto em distros modernas. preferir ss. se netstat nao existir, usar ss."
+    ]
+  },
+  "classification": {
+    "note_id": "note-enumeracao-linux",
+    "title": "enumeracao de rede em linux",
+    "recon_type": "active",
+    "assessment": "internal",
+    "bug_bounty": "disabled",
+    "risk_level": "disabled",
+    "approval_level": "forbidden-by-default",
+    "skill_target": "internal-recon/linux-enumeration",
+    "internal_pack": true,
+    "macos_findings": [
+      {
+        "id": "proc-net-arp",
+        "severity": "linux-only",
+        "adaptation": "no /proc on macOS; use `arp -an` (BSD) — Linux-runner only feature"
+      }
+    ],
+    "disabled_sections": [],
+    "policy_note": "internal Linux host/network enumeration; internal profile only",
+    "required_tools": [
+      "nmap",
+      "ss",
+      "arp"
+    ],
+    "required_api_keys": [],
+    "network_noise": "high",
+    "request_volume": "medium",
+    "scope_risk": "internal-only",
+    "third_party_impact": "n/a"
+  },
+  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "source_file": "references/recon/Recon-bundle.html",
+  "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
+}

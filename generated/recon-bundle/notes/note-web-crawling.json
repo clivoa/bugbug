@@ -1,0 +1,97 @@
+{
+  "note": {
+    "note_id": "note-web-crawling",
+    "title": "web crawling & js analysis",
+    "category": "recon",
+    "difficulty": "intermediario",
+    "updated": "2026-07-17",
+    "tags": [
+      "#hacking",
+      "#recon",
+      "#crawler",
+      "#js-analysis",
+      "#endpoints"
+    ],
+    "intro": "descobrir todos os endpoints, arquivos js, parametros e rotas de api de uma aplicacao web. essencial pra achar endpoints escondidos, apis internas, e segredos vazados em javascript.",
+    "sections": [
+      "1. url discovery (historico)",
+      "2. filtrar urls interessantes",
+      "3. js analysis (garimpar secrets e endpoints)",
+      "analise manual via browser devtools",
+      "4. tecnologia fingerprinting",
+      "5. workflow automatizado",
+      "6. source maps",
+      "7. mitmproxy2swagger",
+      "8. mobile app analysis",
+      "9. postman/insomnia collections vazadas",
+      "checklist rapido"
+    ],
+    "commands": [
+      "# wayback machine (archive.org)\ncurl -s \"https://web.archive.org/cdx/search/cdx?url=*.alvo.com&output=text&fl=original&collapse=urlkey\" | sort -u > wayback_urls.txt\n\n# gau (getallurls — varias fontes)\ngau alvo.com --o gau_urls.txt\ngau --subs alvo.com --o gau_all.txt\n\n# waybackurls\nwaybackurls alvo.com | sort -u > waybackurls.txt\n\n# gospider (busca todas as fontes + crawl ativo)\ngospider -s \"https://alvo.com\" -o gospider_out -t 20 -d 3 --js\n\n# katana (projectdiscovery, muito rapido)\nkatana -u https://alvo.com -d 3 -jc -kf -o katana_urls.txt\nkatana -list live_subs.txt -d 2 -o katana_all.txt\n\n# hakrawler\necho \"https://alvo.com\" | hakrawler -d 3 -subs\n\n# juntar todas as fontes\n(gau alvo.com; waybackurls alvo.com; katana -u https://alvo.com -d 2 -silent) | sort -u > all_urls.txt",
+      "# urls com parametros (potencial injecao)\ncat all_urls.txt | grep \"=\" | qsreplace \"FUZZ\" | sort -u > params.txt\n\n# endpoints de api\ncat all_urls.txt | grep -iE \"api|graphql|v1|v2|rest|json|xml|swagger|openapi\" | sort -u > api_endpoints.txt\n\n# arquivos js\ncat all_urls.txt | grep -E \"\\.js$|\\.js\\?\" | sort -u > js_files.txt\n\n# arquivos sensiveis\ncat all_urls.txt | grep -iE \"\\.env|\\.config|\\.json|\\.yaml|\\.bak|\\.backup|\\.old|\\.sql|\\.zip|\\.tar\" | sort -u > sensitive_files.txt\n\n# rotas interessantes\ncat all_urls.txt | grep -iE \"admin|dashboard|panel|login|register|debug|test|staging|secret|internal|backup\" | sort -u > interesting_routes.txt\n\n# endpoints de upload/download\ncat all_urls.txt | grep -iE \"upload|download|file|export|import\" | sort -u > file_endpoints.txt\n\n# redirects (potencial ssrf / open redirect)\ncat all_urls.txt | grep -iE \"redirect|url=|next=|return=|callback=|target=\" | sort -u > redirects.txt",
+      "# baixar todos os js\ncat js_files.txt | getJS --complete --resolve --output js_downloads/\n\n# subjs (extrai endpoints de js via regex)\ncat js_files.txt | subjs -c 20 > js_endpoints.txt\n\n# jsluice (go, secrets + urls de js)\njsluice urls js_downloads/*.js > jsluice_urls.txt\njsluice secrets js_downloads/*.js > jsluice_secrets.txt\n\n# grep multi-padrao nos js baixados\ngrep -rnE \"api[_-]?key|apikey|secret|token|password|passwd|private[_-]?key\" js_downloads/\n\n# aws keys\ngrep -rnE \"AKIA[0-9A-Z]{16}|aws_access|aws_secret|s3\\.amazonaws\" js_downloads/\n\n# firebase configs (as vezes com chave de admin)\ngrep -rnE \"firebase\\.initializeApp|firebaseConfig|apiKey.*AIza\" js_downloads/\n\n# mapas de rota (react/vue/angular)\ngrep -rnE \"path:|route:|Router|Routes|createRouter\" js_downloads/ | head -30",
+      "# no console do devtools (F12 > Console):\n# extrair urls do js carregado na pagina\nperformance.getEntriesByType('resource').filter(r => r.initiatorType === 'script').map(r => r.name)\n\n# buscar variaveis globais expostas\nObject.keys(window).sort()\n\n# em Sources > Search (ctrl+shift+f) buscar por:\n# apiKey, secret, token, password, aws_, firebase, mongodb, postgres, private_key, BEGIN RSA",
+      "# verificar source maps\ncat all_urls.txt | grep \"\\.js\\.map$\" > sourcemaps.txt\nwhile read url; do curl -s \"$url\" -o \"js/$(basename $url)\"; done < sourcemaps.txt",
+      "# whatweb\nwhatweb -a 3 https://alvo.com --no-errors\n\n# wappalyzer cli\nnpx wappalyzer https://alvo.com\n\n# webanalyze (go)\nwebanalyze -hosts live_subs.txt -output csv > tech_analysis.csv",
+      "#!/bin/bash\nDOMAIN=$1\nOUTDIR=\"recon/$DOMAIN/crawl\"\nmkdir -p \"$OUTDIR\"\n\necho \"[*] coletando urls historicas...\"\ngau \"$DOMAIN\" --o \"$OUTDIR/gau.txt\" 2>/dev/null\nwaybackurls \"$DOMAIN\" | sort -u > \"$OUTDIR/wayback.txt\"\n\necho \"[*] crawl ativo...\"\n<a class=\"internal-link\" data-target=\"-f live_subs.txt\" href=\"#-f live_subs.txt\">-f live_subs.txt</a> && katana -list live_subs.txt -d 2 -silent -o \"$OUTDIR/katana.txt\"\nkatana -u \"https://$DOMAIN\" -d 2 -silent -o \"$OUTDIR/katana_root.txt\"\n\necho \"[*] juntando e filtrando...\"\ncat \"$OUTDIR/gau.txt\" \"$OUTDIR/wayback.txt\" \"$OUTDIR/katana.txt\" \"$OUTDIR/katana_root.txt\" 2>/dev/null | sort -u > \"$OUTDIR/all_urls.txt\"\ncat \"$OUTDIR/all_urls.txt\" | grep \"=\" | sort -u > \"$OUTDIR/params.txt\"\ncat \"$OUTDIR/all_urls.txt\" | grep -E \"\\.js$|\\.js\\?\" | sort -u > \"$OUTDIR/js_files.txt\"\ncat \"$OUTDIR/all_urls.txt\" | grep -iE \"api|graphql|v1|rest\" | sort -u > \"$OUTDIR/api.txt\"\n\necho \"[*] baixando js e scan de secrets...\"\nmkdir -p \"$OUTDIR/js\"\ncat \"$OUTDIR/js_files.txt\" | getJS --complete --resolve --output \"$OUTDIR/js/\" 2>/dev/null\ngrep -rlnE \"api[_-]?key|secret|token|password|aws_|firebase\" \"$OUTDIR/js/\" > \"$OUTDIR/js_secrets.txt\" 2>/dev/null\n\necho \"[+] $(wc -l < \"$OUTDIR/all_urls.txt\") urls\"\necho \"[+] $(wc -l < \"$OUTDIR/params.txt\") com parametros\"\necho \"[+] $(wc -l < \"$OUTDIR/js_files.txt\") arquivos js\"\necho \"[done] resultados em $OUTDIR/\"",
+      "cat all_urls.txt | grep \"\\.js\\.map$\" > sourcemaps.txt\nwhile read url; do curl -s \"$url\" -o \"js/$(basename $url)\"; done < sourcemaps.txt\n\n# extrair arquivos do source map\nnpx source-map-explorer js/app.js.map\n# ou\nnpx shuji js/app.js.map -o src_extracted/",
+      "mitmproxy2swagger -i flow.mitm -o spec.yaml -f har\n# alternativa mais nova: mitm2openapi (Arkptz) em 2 passos\nmitm2openapi discover -i flow.mitm -o endpoints.json\nmitm2openapi generate -i endpoints.json -o spec.yaml",
+      "# APK\napktool d app.apk -o app_src\ngrep -rnE \"https?://\" app_src/ | grep -oE \"https?://[a-zA-Z0-9./_:-]+\" | sort -u > apk_urls.txt\n\n# IPA (jadx pra decompilar .dex/.jar em Android; class-dump pra iOS)\njadx app.apk -d app_src\ngrep -rnE \"https?://\" app_src/ | grep -oE \"https?://[a-zA-Z0-9./_:-]+\" | sort -u",
+      "# google dorks\n# site:postman.com intitle:\"alvo\"\n# filetype:json postman intext:\"alvo.com\"\n# site:getpostman.com \"alvo.com\"\n# intext:\"postman_collection\" \"alvo.com\""
+    ],
+    "warnings": [
+      "[!warning] katana sem -jc nao crawlea JS. sem essa flag perde endpoints escondidos em bundles webpack"
+    ],
+    "checklist": [
+      "URLs historicas (gau/wayback)?",
+      "Crawl ativo com katana (-jc)?",
+      "gau com –subs?",
+      "JS baixado e analisado (secrets)?",
+      "Source maps extraidos?",
+      "Spec OpenAPI via mitmproxy2swagger?",
+      "Mobile app (APK/IPA) analisado?",
+      "Postman/Insomnia dorkado?",
+      "Endpoints de API catalogados?",
+      "Rotas sensiveis filtradas?"
+    ],
+    "paragraphs": [
+      "descobrir todos os endpoints, arquivos js, parametros e rotas de api de uma aplicacao web. essencial pra achar endpoints escondidos, apis internas, e segredos vazados em javascript.",
+      "gau pega historico profundo, katana faz crawl ativo rapido, waybackurls pega archive.org. os tres juntos cobrem quase tudo.",
+      "[!warning] katana sem -jc nao crawlea JS. sem essa flag perde endpoints escondidos em bundles webpack",
+      "[!tip] gau com –subs em wildcard. sem isso perde ~60% das URLs de subdominios",
+      "baixar .js.map e extrair codigo fonte original. se o alvo tem webpack com devtool: source-map, voce baixa o fonte completo do projeto.",
+      "gerar OpenAPI spec do trafego do Burp/mitmproxy. a partir do trafego real, reconstruir a superficie da API.",
+      "extrair URLs de APK/IPA. mobile apps frequentemente hardcode endpoints internos que nao estao no web.",
+      "collections publicas podem expor endpoints, auth headers, e ambiente do alvo."
+    ]
+  },
+  "classification": {
+    "note_id": "note-web-crawling",
+    "title": "web crawling & js analysis",
+    "recon_type": "mixed",
+    "assessment": "external",
+    "bug_bounty": "applicable",
+    "risk_level": 1,
+    "approval_level": "auto-if-in-scope",
+    "skill_target": "recon/web-crawling",
+    "internal_pack": false,
+    "macos_findings": [],
+    "disabled_sections": [],
+    "policy_note": "wayback/gau L0; live crawl (katana) L1 with strict scope + rate limit",
+    "required_tools": [
+      "katana",
+      "gau",
+      "waybackurls",
+      "httpx",
+      "hakrawler"
+    ],
+    "required_api_keys": [],
+    "network_noise": "low",
+    "request_volume": "medium",
+    "scope_risk": "medium",
+    "third_party_impact": "possible"
+  },
+  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "source_file": "references/recon/Recon-bundle.html",
+  "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
+}

@@ -1,0 +1,95 @@
+{
+  "note": {
+    "note_id": "note-osint-tools",
+    "title": "ferramentas de osint",
+    "category": "recon",
+    "difficulty": "basico",
+    "updated": "2026-07-17",
+    "tags": [
+      "#hacking",
+      "#recon",
+      "#osint",
+      "#passive-recon",
+      "#tools"
+    ],
+    "intro": "colecao de ferramentas pra open source intelligence. reconhecimento passivo usando fontes publicas, sem tocar no alvo.",
+    "sections": [
+      "1. enumeracao de subdominios e dominios",
+      "2. busca de pessoas e usernames",
+      "3. shodan e censys",
+      "dorks uteis pro shodan",
+      "4. reconhecimento de infraestrutura",
+      "5. recursos online",
+      "6. GitHub secret dorking",
+      "7. wayback machine",
+      "8. LinkedIn employee enum",
+      "9. DNS history",
+      "checklist rapido"
+    ],
+    "commands": [
+      "# theHarvester - emails, subdominios, ips, urls\ntheHarvester -d alvo.com -b all -l 500\n\n# subfinder - enumeracao passiva de subdominios\nsubfinder -d alvo.com -o subs.txt\n\n# amass - enumeracao avancada\namass enum -passive -d alvo.com -o amass.txt\n\n# assetfinder\nassetfinder --subs-only alvo.com",
+      "# sherlock - encontrar perfis pelo username\nsherlock username\n\n# holehe - verificar onde um email esta registrado\nholehe email@alvo.com\n\n# ghunt - osint em contas google\nghunt email email@alvo.com",
+      "# shodan (busca de dispositivos conectados)\nshodan search \"hostname:alvo.com\"\nshodan host 1.2.3.4\n\n# shodan via cli\npip3 install shodan\nshodan init SUA_API_KEY\nshodan search \"org:nome_da_empresa\"\nshodan search \"ssl.cert.subject.CN:alvo.com\"\n\n# censys\ncensys search \"alvo.com\"",
+      "# whois\nwhois alvo.com\n\n# bgp e asn\nwhois -h whois.radb.net -- '-i origin AS12345'\n\n# nslookup reverso em bloco\nfor ip in $(seq 1 254); do host 10.10.10.$ip; done | grep -v \"NXDOMAIN\"\n\n# wayback machine (paginas antigas)\ncurl \"http://web.archive.org/cdx/search/cdx?url=alvo.com/*&output=text&fl=original&collapse=urlkey\" | sort -u\n\n# gau (getallurls)\ngau alvo.com --subs | sort -u > urls.txt",
+      "# google dorks pra github\n# site:github.com \"alvo.com\" AKIA|api_key|secret|token|password\n\n# github-dorks (automatizado)\ngithub-dorks -r alvo -t $GITHUB_TOKEN\n\n# trufflehog (scan de repos)\ntrufflehog github --org=alvo\n\n# gitleaks (scan local)\ngitleaks detect --source ./",
+      "# todas as urls ja acessadas do dominio\ncurl \"http://web.archive.org/cdx/search/cdx?url=*.alvo.com&output=text&fl=original&collapse=urlkey\" | sort -u\n\n# filtrar so APIs\ncurl \"http://web.archive.org/cdx/search/cdx?url=*.alvo.com/api/*&output=text&fl=original&collapse=urlkey\" | sort -u\n\n# waybackurls (cli)\nwaybackurls alvo.com | sort -u > wayback.txt\n\n# gau (getallurls)\ngau alvo.com --subs | sort -u > gau_urls.txt",
+      "# theHarvester - emails e nomes\ntheHarvester -d alvo.com -b linkedin\n\n# hunter.io pra emails corporativos\n# api: hunter.io\ncurl \"https://api.hunter.io/v2/email-finder?domain=alvo.com&api_key=SUA_KEY\" | jq .\n\n# padrao de naming: primeiro.ultimo, primeiraletra+ultimo, etc\n# se achar joao.silva@alvo.com, o padrao e primeiro.ultimo",
+      "# SecurityTrails API - historico de IPs A\ncurl -s \"https://api.securitytrails.com/v1/history/alvo.com/dns/a\" \\\n  -H \"APIKEY: ***\" | jq '.records[].values[].ip' | sort -u\n\n# RiskIQ (passiveTotal)\ncurl \"https://api.riskiq.net/v0/pdns/data/domain/alvo.com\" -u user:key | jq .\n\n# dnsdumpster - historico gratuito\n# https://dnsdumpster.com/"
+    ],
+    "warnings": [],
+    "checklist": [
+      "subfinder + amass + assetfinder (passivo)",
+      "shodan + censys (infra)",
+      "chaos API (subdomains ilimitado)",
+      "github dorking (secrets em repos)",
+      "wayback machine (endpoints antigos)",
+      "LinkedIn/theHarvester (nomes e emails)",
+      "hunter.io (emails corporativos)",
+      "DNS history (origin IP atras de CDN)",
+      "whois + ASN (infraestrutura)",
+      "have i been pwned / dehashed (leaks)"
+    ],
+    "paragraphs": [
+      "colecao de ferramentas pra open source intelligence. reconhecimento passivo usando fontes publicas, sem tocar no alvo.",
+      "shodan free tier = 10 queries/mes. pra volume alto, usar browser pra buscas free ou assinatura. censys free = 250 queries/mes.",
+      "chaos API e gratis e ilimitada pra enum de subdomains. chaos -d alvo.com -silent. api key gratis em chaos.projectdiscovery.io.",
+      "achar credenciais em repos publicos. github e uma mina de ouro pra secrets vazadas.",
+      "se achar credencial valida, nao use diretamente. reporte. uso nao autorizado e crime.",
+      "apis deletadas, paginas antigas, configs removidas. a wayback machine guarda tudo.",
+      "apis removidas muitas vezes ainda respondem no wayback. comparar urls antigas com atuais pra achar endpoints escondidos.",
+      "pra username/password spraying depois. descobrir padrao de naming de usuarios.",
+      "SecurityTrails/RiskIQ pra ver IPs antigos (origin atras de CDN).",
+      "se o alvo usa Cloudflare, o DNS history pode revelar o IP original antes do CDN. testar o IP antigo diretamente."
+    ]
+  },
+  "classification": {
+    "note_id": "note-osint-tools",
+    "title": "ferramentas de osint",
+    "recon_type": "passive",
+    "assessment": "external",
+    "bug_bounty": "applicable",
+    "risk_level": 0,
+    "approval_level": "none",
+    "skill_target": "recon/osint",
+    "internal_pack": false,
+    "macos_findings": [],
+    "disabled_sections": [],
+    "policy_note": "OSINT aggregation; Shodan/censys via adapters; no active probing",
+    "required_tools": [
+      "shodan",
+      "theHarvester",
+      "amass"
+    ],
+    "required_api_keys": [
+      "SHODAN_API_KEY",
+      "censys(optional)"
+    ],
+    "network_noise": "none",
+    "request_volume": "low",
+    "scope_risk": "low",
+    "third_party_impact": "none"
+  },
+  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "source_file": "references/recon/Recon-bundle.html",
+  "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
+}
