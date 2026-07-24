@@ -30,24 +30,43 @@ def test_secrets_list_degrades_without_keyring(capsys, monkeypatch):
 
 
 @pytest.mark.skipif(not HAS_KEYRING, reason="keyring not installed (offline core env)")
-def test_real_keyring_backend_roundtrip():
-    """Exercise the production backend against a throwaway service, then clean up."""
+def test_keyring_backend_roundtrip_isolated():
+    """
+    Validate KeyringBackend against an ISOLATED, in-process keyring backend — this
+    does NOT touch the native macOS Keychain. The native Keychain round-trip lives
+    in scripts/keychain_sentinel.py (run out-of-band; never in the default suite).
+    """
     import keyring
-    from keyring.backends import fail  # noqa: F401  (ensures keyring imports cleanly)
+    from keyring.backend import KeyringBackend as _KBackend
     from hackbot.security.secrets import KeyringBackend
 
-    # use an in-memory keyring so we never touch the user's real login keychain
-    try:
-        from keyrings.alt.file import PlaintextKeyring  # type: ignore
-        keyring.set_keyring(PlaintextKeyring())
-    except Exception:
-        pytest.skip("no isolated keyring backend available to test safely")
+    class _DictKeyring(_KBackend):
+        priority = 1  # type: ignore[assignment]
 
-    b = KeyringBackend(service="hackbot-smoketest")
+        def __init__(self):
+            super().__init__()
+            self._store: dict[tuple[str, str], str] = {}
+
+        def get_password(self, service, username):
+            return self._store.get((service, username))
+
+        def set_password(self, service, username, password):
+            self._store[(service, username)] = password
+
+        def delete_password(self, service, username):
+            self._store.pop((service, username), None)
+
+        def get_credential(self, service, username):  # pragma: no cover
+            return None
+
+    previous = keyring.get_keyring()
+    keyring.set_keyring(_DictKeyring())
     try:
-        b.set("SMOKE_TEST_KEY", "throwaway")
-        assert b.get("SMOKE_TEST_KEY") == "throwaway"
-        assert "SMOKE_TEST_KEY" in b.names()
+        b = KeyringBackend(service="hackbot-isolated-test")
+        b.set("ISOLATED_TEST_KEY", "throwaway")
+        assert b.get("ISOLATED_TEST_KEY") == "throwaway"
+        assert "ISOLATED_TEST_KEY" in b.names()
+        b.delete("ISOLATED_TEST_KEY")
+        assert b.get("ISOLATED_TEST_KEY") is None
     finally:
-        b.delete("SMOKE_TEST_KEY")
-    assert b.get("SMOKE_TEST_KEY") is None
+        keyring.set_keyring(previous)

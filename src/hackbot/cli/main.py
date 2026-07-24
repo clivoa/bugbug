@@ -86,6 +86,15 @@ def _secret_manager():
 
 
 def _cmd_secrets(args: argparse.Namespace) -> int:
+    # The import DRY-RUN only reads local files — it must work in a stdlib-only
+    # install with NO keychain backend present. Handle it before touching keyring.
+    if args.action == "import-claude-settings" and args.dry_run:
+        from hackbot.security import claude_import as ci
+        results = ci.plan_imports(args.dir or ".claude")
+        print(ci.render_plan(results, applied=False))
+        print("\n[dry-run] nothing was imported. Re-run without --dry-run to apply.")
+        return 0
+
     try:
         mgr = _secret_manager()
     except _SecretsUnavailable as e:
@@ -129,14 +138,10 @@ def _cmd_secrets(args: argparse.Namespace) -> int:
     if args.action == "import-claude-settings":
         from hackbot.security import claude_import as ci
         directory = args.dir or ".claude"
-        if args.dry_run:
-            results = ci.plan_imports(directory)
-            print(ci.render_plan(results, applied=False))
-            print("\n[dry-run] nothing was imported. Re-run without --dry-run to apply.")
-            return 0
-        results = ci.apply_imports(directory, mgr)
+        results = ci.apply_imports(directory, mgr, force=args.force)
         print(ci.render_plan(results, applied=True))
-        return 0
+        _ok, _skipped, failed = ci.summarize(results)
+        return 0 if failed == 0 else 4        # partial completion -> nonzero
     return 2
 
 
@@ -177,6 +182,8 @@ def build_parser() -> argparse.ArgumentParser:
     sec.add_argument("--dir", help="directory of Claude settings files (import-claude-settings)")
     sec.add_argument("--dry-run", action="store_true",
                      help="import-claude-settings: show the plan, import nothing")
+    sec.add_argument("--force", action="store_true",
+                     help="import-claude-settings: replace an existing keychain entry (default: skip)")
     sec.add_argument("--json", action="store_true")
     sec.set_defaults(func=_cmd_secrets)
 
