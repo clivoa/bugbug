@@ -40,6 +40,7 @@ venv/
 .mypy_cache/
 htmlcov/
 .coverage
+.worktrees/
 
 # --- OS / editor ---
 .DS_Store
