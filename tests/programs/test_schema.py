@@ -10,6 +10,7 @@ from hackbot.programs.schema import (
     ValidationError,
     validate_program,
     validate_scope,
+    validate_testing_policy,
 )
 
 FIX = Path(__file__).parent / "fixtures"
@@ -85,3 +86,51 @@ def test_unknown_top_level_program_section_rejected():
             {"schema_version": 1, "scope": {"in_scope": {"domains": ["a.com"]}}, "backdoor": True}
         )
     assert any("unknown top-level section" in m for m in e.value.errors)
+
+
+def test_testing_policy_rejects_invalid_ranges():
+    with pytest.raises(ValidationError):
+        validate_testing_policy({"max_requests_per_second": 0, "concurrency": 101})
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["denial_of_service_allowed", "social_engineering_allowed"],
+)
+def test_project_level_l3_flags_cannot_be_true(field):
+    with pytest.raises(ValidationError):
+        validate_testing_policy({field: True})
+
+
+def test_policy_rejects_duplicate_normalized_tool_names():
+    with pytest.raises(ValidationError):
+        validate_testing_policy({"prohibited_tools": ["NMAP", "nmap"]})
+
+
+def test_policy_parses_restricted_hours_mapping():
+    policy = validate_testing_policy(
+        {"restricted_hours": {"timezone": "Europe/Madrid", "windows": ["09:00-10:00"]}}
+    )
+    assert policy.restricted_hours_timezone == "Europe/Madrid"
+    assert policy.restricted_hours == ("09:00-10:00",)
+
+
+@pytest.mark.parametrize(
+    "restricted_hours",
+    [
+        {"timezone": "Mars/Olympus", "windows": ["09:00-10:00"]},
+        {"timezone": "UTC", "windows": ["09:00-09:00"]},
+        {"timezone": "UTC", "windows": ["9:00-10:00"]},
+        {"timezone": "UTC", "windows": ["09:00-10:00"], "extra": True},
+    ],
+)
+def test_policy_rejects_invalid_restricted_hours(restricted_hours):
+    with pytest.raises(ValidationError):
+        validate_testing_policy({"restricted_hours": restricted_hours})
+
+
+def test_validate_program_applies_typed_testing_policy_validation():
+    program = load("valid_program.yaml")
+    program["testing_rules"]["concurrency"] = True
+    with pytest.raises(ValidationError, match="concurrency"):
+        validate_program(program)
