@@ -205,7 +205,7 @@ def validate_scope(doc: object, *, require_version: bool = True) -> ScopeDoc:
 def _check_version(v: object, errors: list[str], label: str) -> None:
     if v is None:
         _err(errors, f"{label}: missing required schema_version")
-    elif v not in SUPPORTED_VERSIONS:
+    elif isinstance(v, bool) or not isinstance(v, int) or v not in SUPPORTED_VERSIONS:
         _err(
             errors,
             f"{label}: unsupported schema_version {v!r} (supported: {sorted(SUPPORTED_VERSIONS)})",
@@ -253,7 +253,7 @@ def _restricted_hours(value: object) -> tuple[tuple[str, ...], str | None]:
     timezone = timezone.strip()
     try:
         ZoneInfo(timezone)
-    except ZoneInfoNotFoundError as exc:
+    except (ZoneInfoNotFoundError, ValueError) as exc:
         raise ValidationError(["restricted_hours.timezone: invalid IANA name"]) from exc
     windows = _normalized_unique_strings(value["windows"], name="restricted_hours.windows")
     if not windows:

@@ -221,6 +221,12 @@ def test_testing_policy_rejects_unknown_restricted_hours_timezone():
         _testing_policy(restricted_hours_timezone="Mars/Olympus")
 
 
+@pytest.mark.parametrize("timezone", ["/etc/passwd", "../UTC"])
+def test_testing_policy_rejects_invalid_zoneinfo_path_values(timezone):
+    with pytest.raises(ValueError, match="restricted_hours_timezone"):
+        _testing_policy(restricted_hours=["09:00-10:00"], restricted_hours_timezone=timezone)
+
+
 @pytest.mark.parametrize(
     "headers",
     [["Authorization: Bearer value"], ["X Header"], ["X-Header\rInjected"]],

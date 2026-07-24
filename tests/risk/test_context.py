@@ -102,6 +102,13 @@ def test_authorization_rejects_unknown_keys(tmp_path):
         load_authorization(authorization)
 
 
+def test_authorization_invalid_utf8_raises_context_error(tmp_path):
+    authorization = tmp_path / "authorization.json"
+    authorization.write_bytes(b"\xff\xfe")
+    with pytest.raises(ContextError, match=str(authorization)):
+        load_authorization(authorization)
+
+
 @pytest.mark.parametrize(
     "document",
     [

@@ -49,7 +49,7 @@ def load_authorization(path: str | Path) -> AuthorizationState:
         value = strict_json_loads(authorization_path.read_text(encoding="utf-8"))
     except DuplicateJSONKeyError as exc:
         raise ContextError(f"authorization: {exc}") from exc
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise ContextError(f"authorization: unable to read {authorization_path}") from exc
     if not isinstance(value, dict):
         raise ContextError("authorization: expected a JSON object")
