@@ -7,13 +7,16 @@ supported approval-store platform until it has an equivalent lock primitive.
 
 from __future__ import annotations
 
+import ctypes
+import errno
 import hashlib
 import json
 import os
 import re
 import secrets
 import stat
-from collections.abc import Mapping
+import sys
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -40,7 +43,34 @@ _SECRET_RE = re.compile(
     r"password|private[ _-]?key)\s*[:=]|\b(?:sk|ghp|xox[baprs])_[A-Za-z0-9_-]{12,})"
 )
 _ARTIFACT_LIMIT = 65_536
+_TRANSACTION_LIMIT = 196_608
 _VERSION = 1
+_STATE_NAMES = ("pending", "granted", "consumed", "expired")
+_DIRECTORY_NAMES = (*_STATE_NAMES, "locks", "transactions")
+_EVENT_KEYS = frozenset(
+    {
+        "timestamp",
+        "engagement_id",
+        "action_id",
+        "challenge_digest",
+        "effective_risk",
+        "result",
+        "reason_code",
+    }
+)
+_TRANSACTION_KEYS = frozenset(
+    {
+        "version",
+        "operation",
+        "challenge_digest",
+        "source",
+        "destination",
+        "source_checksum",
+        "source_identity",
+        "artifact",
+        "event",
+    }
+)
 _ARTIFACT_KEYS = frozenset(
     {
         "action_id",
@@ -265,7 +295,20 @@ def _validate_inputs(
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "request argv does not match template")
     if not isinstance(nonce, str) or _NONCE_RE.fullmatch(nonce) is None:
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "nonce must be bounded canonical text")
-    _reject_secrets((request.argv, request.rationale, request.target, request.data_touched))
+    _reject_secrets(
+        (
+            request.argv,
+            request.target,
+            request.hypothesis_id,
+            request.rationale,
+            request.data_touched,
+            request.expected_impact,
+            request.stop_condition,
+            request.cleanup_plan,
+            request.program_rule,
+            request.required_headers,
+        )
+    )
     try:
         from hackbot.risk.policy import RiskEngine
         from hackbot.risk.registry import ActionRegistry
@@ -402,47 +445,177 @@ def _validate_challenge(challenge: object) -> ApprovalChallenge:
     return challenge
 
 
+@dataclass(slots=True)
+class _Layout:
+    root: int
+    directories: dict[str, int]
+
+    def directory(self, name: str) -> int:
+        try:
+            return self.directories[name]
+        except KeyError as exc:
+            raise ApprovalError("APPROVAL_UNSAFE_PATH", "invalid approval state") from exc
+
+    def close(self) -> None:
+        failure: OSError | None = None
+        for fd in self.directories.values():
+            try:
+                os.close(fd)
+            except OSError as exc:
+                failure = failure or exc
+        try:
+            os.close(self.root)
+        except OSError as exc:
+            failure = failure or exc
+        if failure is not None:
+            raise failure
+
+
+@dataclass(frozen=True, slots=True)
+class _Record:
+    value: dict[str, object]
+    raw: bytes
+    identity: tuple[int, int]
+
+
 class ApprovalStore:
-    """Engagement-local, no-overwrite L2 approval persistence."""
+    """Descriptor-owned, engagement-local, no-overwrite L2 persistence."""
 
     def __init__(self, engagement_dir: str | Path) -> None:
         try:
             self.engagement_path, self.engagement_id = canonical_engagement_identity(engagement_dir)
-        except EngagementIdentityError as exc:
+            engagement_fd = os.open(
+                self.engagement_path,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+            )
+            info = os.fstat(engagement_fd)
+            path_info = os.stat(self.engagement_path, follow_symlinks=False)
+            if (
+                not stat.S_ISDIR(info.st_mode)
+                or info.st_uid != os.geteuid()
+                or (info.st_dev, info.st_ino) != (path_info.st_dev, path_info.st_ino)
+            ):
+                os.close(engagement_fd)
+                raise OSError("unsafe engagement directory")
+        except (EngagementIdentityError, OSError) as exc:
             raise ApprovalError(
                 "APPROVAL_INVALID_ENGAGEMENT", "invalid engagement directory"
             ) from exc
+        self._engagement_fd: int | None = engagement_fd
         self.root = str(Path(self.engagement_path) / "approvals")
 
-    def _ensure_layout(self) -> None:
-        root = Path(self.root)
+    def close(self) -> None:
+        """Release the descriptor anchoring the canonical engagement directory."""
+        fd = getattr(self, "_engagement_fd", None)
+        self._engagement_fd = None
+        if fd is not None:
+            os.close(fd)
+
+    def __enter__(self) -> ApprovalStore:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
         try:
-            if root.exists() and root.is_symlink():
-                raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval path is a symlink")
-            root.mkdir(mode=0o700, exist_ok=True)
-            if not root.is_dir() or root.is_symlink():
-                raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval path is unsafe")
-            os.chmod(root, 0o700)
-            for name in ("pending", "granted", "consumed", "expired"):
-                directory = root / name
-                if directory.exists() and directory.is_symlink():
-                    raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval path is a symlink")
-                directory.mkdir(mode=0o700, exist_ok=True)
-                if not directory.is_dir() or directory.is_symlink():
-                    raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval path is unsafe")
-                os.chmod(directory, 0o700)
-            for name in ("locks", "transactions"):
-                directory = root / name
-                if directory.exists() and directory.is_symlink():
-                    raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval path is a symlink")
-                directory.mkdir(mode=0o700, exist_ok=True)
-                if not directory.is_dir() or directory.is_symlink():
-                    raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval path is unsafe")
-                os.chmod(directory, 0o700)
+            self.close()
+        except OSError:
+            pass
+
+    @staticmethod
+    def _name(digest: str) -> str:
+        if _DIGEST_RE.fullmatch(digest) is None:
+            raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge digest is malformed")
+        return digest + ".json"
+
+    @staticmethod
+    def _identity(info: os.stat_result) -> tuple[int, int]:
+        return info.st_dev, info.st_ino
+
+    @staticmethod
+    def _validate_directory(info: os.stat_result) -> None:
+        if (
+            not stat.S_ISDIR(info.st_mode)
+            or stat.S_IMODE(info.st_mode) != 0o700
+            or info.st_uid != os.geteuid()
+        ):
+            raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval directory is unsafe")
+
+    @staticmethod
+    def _validate_regular(
+        info: os.stat_result,
+        *,
+        limit: int,
+        code: str,
+        message: str,
+    ) -> None:
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or stat.S_IMODE(info.st_mode) != 0o600
+            or info.st_uid != os.geteuid()
+            or info.st_nlink != 1
+            or info.st_size > limit
+        ):
+            raise ApprovalError(code, message)
+
+    @classmethod
+    def _open_directory(cls, parent_fd: int, name: str) -> int:
+        created = False
+        try:
+            try:
+                os.mkdir(name, 0o700, dir_fd=parent_fd)
+                created = True
+            except FileExistsError:
+                pass
+            fd = os.open(
+                name,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                dir_fd=parent_fd,
+            )
+            if created:
+                os.fchmod(fd, 0o700)
+            cls._validate_directory(os.fstat(fd))
+            return fd
+        except ApprovalError:
+            if "fd" in locals():
+                os.close(fd)
+            raise
+        except OSError as exc:
+            if "fd" in locals():
+                os.close(fd)
+            raise ApprovalError(
+                "APPROVAL_UNSAFE_PATH",
+                "approval directory is unsafe or is a symlink",
+            ) from exc
+
+    @contextmanager
+    def _layout(self) -> Iterator[_Layout]:
+        engagement_fd = self._engagement_fd
+        if engagement_fd is None:
+            raise ApprovalError("APPROVAL_IO", "approval store is closed")
+        root_fd: int | None = None
+        directories: dict[str, int] = {}
+        try:
+            root_fd = self._open_directory(engagement_fd, "approvals")
+            for name in _DIRECTORY_NAMES:
+                directories[name] = self._open_directory(root_fd, name)
+            layout = _Layout(root_fd, directories)
+            root_fd = None
+            directories = {}
+            try:
+                yield layout
+            finally:
+                layout.close()
         except ApprovalError:
             raise
         except OSError as exc:
-            raise ApprovalError("APPROVAL_IO", "unable to create approval directory") from exc
+            raise ApprovalError("APPROVAL_IO", "approval layout operation failed") from exc
+        finally:
+            for fd in directories.values():
+                os.close(fd)
+            if root_fd is not None:
+                os.close(root_fd)
 
     def _assert_local(self, challenge: ApprovalChallenge) -> None:
         _validate_challenge(challenge)
@@ -455,47 +628,155 @@ class ApprovalStore:
             )
 
     @staticmethod
-    def _name(digest: str) -> str:
-        if _DIGEST_RE.fullmatch(digest) is None:
-            raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge digest is malformed")
-        return digest + ".json"
+    def _crash_point(_phase: str) -> None:
+        """No-op fault-injection seam used to test transaction recovery."""
 
-    def _path(self, state: str, digest: str) -> Path:
-        return Path(self.root) / state / self._name(digest)
+    @classmethod
+    def _entry_info(
+        cls,
+        directory_fd: int,
+        name: str,
+        *,
+        limit: int,
+        code: str,
+        message: str,
+    ) -> os.stat_result | None:
+        try:
+            info = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise ApprovalError(code, message) from exc
+        cls._validate_regular(info, limit=limit, code=code, message=message)
+        return info
 
-    @contextmanager
-    def _digest_lock(self, digest: str):
-        """Serialize state transitions on supported macOS/Linux filesystems."""
-        import fcntl
-
-        path = Path(self.root) / "locks" / (self._name(digest) + ".lock")
+    @classmethod
+    def _read_json(
+        cls,
+        directory_fd: int,
+        name: str,
+        *,
+        limit: int,
+        code: str,
+        message: str,
+    ) -> _Record:
         fd: int | None = None
         try:
-            fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+            fd = os.open(
+                name,
+                os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                dir_fd=directory_fd,
+            )
             info = os.fstat(fd)
-            if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600:
-                raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval lock path is unsafe")
-            fcntl.flock(fd, fcntl.LOCK_EX)
-            yield
+            cls._validate_regular(info, limit=limit, code=code, message=message)
+            chunks: list[bytes] = []
+            remaining = info.st_size
+            while remaining:
+                chunk = os.read(fd, min(remaining, 65_536))
+                if not chunk:
+                    raise OSError("short approval record read")
+                chunks.append(chunk)
+                remaining -= len(chunk)
+            if os.fstat(fd).st_size != info.st_size:
+                raise OSError("approval record changed during read")
+            raw = b"".join(chunks)
+            value = strict_json_loads(raw.decode("utf-8"))
+            if not isinstance(value, dict) or canonical_bytes(value) != raw:
+                raise ValueError("non-canonical approval record")
+            return _Record(value, raw, cls._identity(info))
         except ApprovalError:
             raise
-        except OSError as exc:
-            raise ApprovalError("APPROVAL_IO", "approval lock failed") from exc
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            DuplicateJSONKeyError,
+            ValueError,
+            RecursionError,
+        ) as exc:
+            raise ApprovalError(code, message) from exc
         finally:
             if fd is not None:
-                try:
-                    fcntl.flock(fd, fcntl.LOCK_UN)
-                except OSError:
-                    pass
                 os.close(fd)
 
-    @staticmethod
-    def _fsync_directory(path: Path) -> None:
-        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    @classmethod
+    def _write_exclusive(
+        cls,
+        directory_fd: int,
+        name: str,
+        value: Mapping[str, object],
+        *,
+        exists_code: str = "APPROVAL_EXISTS",
+        exists_message: str = "approval record already exists",
+    ) -> tuple[int, int]:
+        payload = canonical_bytes(value)
+        fd: int | None = None
+        identity: tuple[int, int] | None = None
         try:
+            fd = os.open(
+                name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                0o600,
+                dir_fd=directory_fd,
+            )
+            os.fchmod(fd, 0o600)
+            identity = cls._identity(os.fstat(fd))
+            view = memoryview(payload)
+            while view:
+                wrote = os.write(fd, view)
+                if wrote <= 0:
+                    raise OSError("short approval record write")
+                view = view[wrote:]
             os.fsync(fd)
+            os.fsync(directory_fd)
+            return identity
+        except FileExistsError as exc:
+            raise ApprovalError(exists_code, exists_message) from exc
+        except (OSError, ValueError, TypeError) as exc:
+            if identity is not None:
+                try:
+                    current = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+                    if cls._identity(current) == identity:
+                        os.unlink(name, dir_fd=directory_fd)
+                        os.fsync(directory_fd)
+                except OSError:
+                    pass
+            raise ApprovalError("APPROVAL_IO", "approval record write failed") from exc
         finally:
-            os.close(fd)
+            if fd is not None:
+                os.close(fd)
+
+    @classmethod
+    def _verify_identity(
+        cls,
+        directory_fd: int,
+        name: str,
+        expected: tuple[int, int],
+        *,
+        code: str = "APPROVAL_UNSAFE_PATH",
+        message: str = "approval record changed during operation",
+    ) -> os.stat_result:
+        info = cls._entry_info(
+            directory_fd,
+            name,
+            limit=_TRANSACTION_LIMIT,
+            code=code,
+            message=message,
+        )
+        if info is None or cls._identity(info) != expected:
+            raise ApprovalError(code, message)
+        return info
+
+    @classmethod
+    def _unlink_verified(
+        cls,
+        directory_fd: int,
+        name: str,
+        identity: tuple[int, int],
+    ) -> None:
+        cls._verify_identity(directory_fd, name, identity)
+        os.unlink(name, dir_fd=directory_fd)
+        os.fsync(directory_fd)
 
     @staticmethod
     def _artifact(
@@ -522,89 +803,19 @@ class ApprovalStore:
         return value
 
     @staticmethod
-    def _write_exclusive(path: Path, value: Mapping[str, object]) -> None:
-        payload = canonical_bytes(value)
-        fd: int | None = None
-        created = False
-        try:
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            created = True
-            view = memoryview(payload)
-            while view:
-                wrote = os.write(fd, view)
-                if wrote <= 0:
-                    raise OSError("short approval artifact write")
-                view = view[wrote:]
-            os.fsync(fd)
-        except FileExistsError as exc:
-            raise ApprovalError("APPROVAL_EXISTS", "approval record already exists") from exc
-        except OSError as exc:
-            if created:
-                try:
-                    path.unlink()
-                except OSError:
-                    pass
-            raise ApprovalError("APPROVAL_IO", "approval record write failed") from exc
-        finally:
-            if fd is not None:
-                os.close(fd)
-        try:
-            os.chmod(path, 0o600)
-        except OSError as exc:
-            try:
-                path.unlink()
-            except OSError:
-                pass
-            raise ApprovalError("APPROVAL_IO", "approval record write failed") from exc
-
-    @staticmethod
-    def _read_artifact(path: Path, *, kind: str) -> dict[str, object]:
-        fd: int | None = None
-        try:
-            no_follow = getattr(os, "O_NOFOLLOW", None)
-            if no_follow is None:
-                raise ApprovalError("APPROVAL_UNSAFE_PATH", "safe artifact reads are unavailable")
-            fd = os.open(path, os.O_RDONLY | no_follow)
-            info = os.fstat(fd)
-            if (
-                not stat.S_ISREG(info.st_mode)
-                or stat.S_IMODE(info.st_mode) != 0o600
-                or info.st_uid != os.geteuid()
-                or info.st_size > _ARTIFACT_LIMIT
-            ):
-                raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
-            chunks: list[bytes] = []
-            remaining = info.st_size
-            while remaining:
-                chunk = os.read(fd, remaining)
-                if not chunk:
-                    raise OSError("short approval artifact read")
-                chunks.append(chunk)
-                remaining -= len(chunk)
-            raw = b"".join(chunks)
-            value = strict_json_loads(raw.decode("utf-8"))
-        except ApprovalError:
-            raise
-        except (
-            OSError,
-            UnicodeError,
-            json.JSONDecodeError,
-            DuplicateJSONKeyError,
-            ValueError,
-            RecursionError,
-        ) as exc:
-            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact") from exc
-        finally:
-            if fd is not None:
-                os.close(fd)
-        if not isinstance(value, dict) or set(value) != (
+    def _validate_artifact_value(
+        value: dict[str, object], *, allowed_kinds: frozenset[str]
+    ) -> None:
+        kind = value.get("kind")
+        if kind not in allowed_kinds or set(value) != (
             _PENDING_KEYS if kind == "pending" else _GRANT_KEYS
         ):
             raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
-        if value.get("version") != _VERSION or value.get("kind") != kind:
+        if value.get("version") != _VERSION:
             raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
         for key in ("challenge_digest", "policy_digest", "scope_digest"):
-            if not isinstance(value.get(key), str) or _DIGEST_RE.fullmatch(value[key]) is None:
+            digest = value.get(key)
+            if not isinstance(digest, str) or _DIGEST_RE.fullmatch(digest) is None:
                 raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
         if not isinstance(value.get("engagement_id"), str) or not isinstance(
             value.get("engagement_path"), str
@@ -614,80 +825,713 @@ class ApprovalStore:
             RiskLevel.L2
         ):
             raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
-        if not isinstance(value.get("nonce"), str) or _NONCE_RE.fullmatch(value["nonce"]) is None:
+        nonce = value.get("nonce")
+        if not isinstance(nonce, str) or _NONCE_RE.fullmatch(nonce) is None:
             raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
         binding = value.get("challenge")
+        if not isinstance(binding, dict):
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
+        try:
+            binding_bytes = canonical_bytes(binding)
+            request = binding.get("request")
+            engagement = binding.get("engagement")
+        except (TypeError, ValueError, UnicodeError) as exc:
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact") from exc
         if (
-            not isinstance(binding, dict)
-            or hashlib.sha256(canonical_bytes(binding)).hexdigest() != value["challenge_digest"]
+            hashlib.sha256(binding_bytes).hexdigest() != value["challenge_digest"]
+            or not isinstance(request, dict)
+            or not isinstance(engagement, dict)
+            or engagement.get("id") != value["engagement_id"]
+            or engagement.get("path") != value["engagement_path"]
+            or request.get("action_id") != value["action_id"]
+            or binding.get("effective_risk") != value["effective_risk"]
+            or binding.get("policy_digest") != value["policy_digest"]
+            or binding.get("scope_digest") != value["scope_digest"]
+            or binding.get("created_at") != value["created_at"]
+            or binding.get("expires_at") != value["expires_at"]
+            or binding.get("nonce") != value["nonce"]
         ):
             raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
-        _parse_timestamp(value.get("created_at"), name="created_at")
-        _parse_timestamp(value.get("expires_at"), name="expires_at")
+        created_at = _parse_timestamp(value.get("created_at"), name="created_at")
+        expires_at = _parse_timestamp(value.get("expires_at"), name="expires_at")
+        if expires_at != created_at + timedelta(minutes=5):
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
         if kind == "granted":
+            approved_by = value.get("approved_by")
+            approved_at = _parse_timestamp(value.get("approved_at"), name="approved_at")
             if (
-                not isinstance(value.get("approved_by"), str)
-                or _APPROVED_BY_RE.fullmatch(value["approved_by"]) is None
+                not isinstance(approved_by, str)
+                or _APPROVED_BY_RE.fullmatch(approved_by) is None
+                or not created_at <= approved_at < expires_at
             ):
                 raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
-            _parse_timestamp(value.get("approved_at"), name="approved_at")
-        return value
+
+    def _read_artifact(self, layout: _Layout, state: str, digest: str) -> _Record:
+        allowed = {
+            "pending": frozenset({"pending"}),
+            "granted": frozenset({"granted"}),
+            "consumed": frozenset({"granted"}),
+            "expired": frozenset({"pending", "granted"}),
+        }[state]
+        record = self._read_json(
+            layout.directory(state),
+            self._name(digest),
+            limit=_ARTIFACT_LIMIT,
+            code="APPROVAL_MALFORMED",
+            message="malformed approval artifact",
+        )
+        self._validate_artifact_value(record.value, allowed_kinds=allowed)
+        if record.value["challenge_digest"] != digest:
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
+        return record
 
     @staticmethod
     def _matches(challenge: ApprovalChallenge, artifact: Mapping[str, object]) -> bool:
         expected = ApprovalStore._artifact(challenge, kind=str(artifact["kind"]))
-        for key, value in expected.items():
-            if key in {"approved_at", "approved_by"}:
-                continue
-            if artifact.get(key) != value:
-                return False
-        return True
+        return all(
+            artifact.get(key) == value
+            for key, value in expected.items()
+            if key not in {"approved_at", "approved_by"}
+        )
 
-    def _state(self, digest: str) -> str | None:
-        self._recover(digest)
-        for state in ("consumed", "expired", "granted", "pending"):
-            path = self._path(state, digest)
-            if path.exists() or path.is_symlink():
-                return state
-        return None
+    @staticmethod
+    def _event(
+        challenge: ApprovalChallenge, *, result: str, reason_code: str, now: datetime
+    ) -> dict[str, object]:
+        if (
+            _EVENT_RESULT_RE.fullmatch(result) is None
+            or _EVENT_REASON_RE.fullmatch(reason_code) is None
+        ):
+            raise ApprovalError("APPROVAL_INVALID_EVENT", "invalid approval event")
+        return {
+            "timestamp": _timestamp(_utc(now, name="now")),
+            "engagement_id": challenge.engagement_id,
+            "action_id": challenge.action_id,
+            "challenge_digest": challenge.challenge_digest,
+            "effective_risk": int(challenge.effective_risk),
+            "result": result,
+            "reason_code": reason_code,
+        }
 
-    def _recover(self, digest: str) -> None:
-        """Finish or roll back an interrupted journaled rename deterministically."""
-        journal = Path(self.root) / "transactions" / (self._name(digest) + ".json")
-        if not journal.exists():
+    @staticmethod
+    def _validate_event(event: object, *, digest: str | None = None) -> dict[str, object]:
+        if not isinstance(event, dict) or set(event) != _EVENT_KEYS:
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        try:
+            _parse_timestamp(event.get("timestamp"), name="event timestamp")
+        except ApprovalError as exc:
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction") from exc
+        if (
+            not isinstance(event.get("engagement_id"), str)
+            or _DIGEST_RE.fullmatch(event["engagement_id"]) is None
+            or not isinstance(event.get("action_id"), str)
+            or _APPROVED_BY_RE.fullmatch(event["action_id"]) is None
+            or not isinstance(event.get("challenge_digest"), str)
+            or _DIGEST_RE.fullmatch(event["challenge_digest"]) is None
+            or event.get("effective_risk") != int(RiskLevel.L2)
+            or not isinstance(event.get("result"), str)
+            or _EVENT_RESULT_RE.fullmatch(event["result"]) is None
+            or not isinstance(event.get("reason_code"), str)
+            or _EVENT_REASON_RE.fullmatch(event["reason_code"]) is None
+            or (digest is not None and event["challenge_digest"] != digest)
+        ):
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        return event
+
+    @staticmethod
+    def _contains_line(fd: int, payload: bytes) -> bool:
+        os.lseek(fd, 0, os.SEEK_SET)
+        carry = b""
+        needle = payload.removesuffix(b"\n")
+        while True:
+            chunk = os.read(fd, 65_536)
+            if not chunk:
+                return carry == needle
+            parts = (carry + chunk).split(b"\n")
+            carry = parts.pop()
+            if needle in parts:
+                return True
+
+    def _append_event_record(
+        self, layout: _Layout, event: dict[str, object], *, idempotent: bool
+    ) -> None:
+        import fcntl
+
+        self._validate_event(event)
+        payload = canonical_bytes(event) + b"\n"
+        fd: int | None = None
+        created = False
+        try:
+            try:
+                fd = os.open(
+                    "events.jsonl",
+                    os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                    0o600,
+                    dir_fd=layout.root,
+                )
+                created = True
+                os.fchmod(fd, 0o600)
+            except FileExistsError:
+                fd = os.open(
+                    "events.jsonl",
+                    os.O_RDWR | os.O_APPEND | os.O_NOFOLLOW | os.O_CLOEXEC,
+                    dir_fd=layout.root,
+                )
+            self._validate_regular(
+                os.fstat(fd),
+                limit=sys.maxsize,
+                code="APPROVAL_UNSAFE_PATH",
+                message="approval audit path is unsafe",
+            )
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            self._validate_regular(
+                os.fstat(fd),
+                limit=sys.maxsize,
+                code="APPROVAL_UNSAFE_PATH",
+                message="approval audit path is unsafe",
+            )
+            if not idempotent or not self._contains_line(fd, payload):
+                if os.write(fd, payload) != len(payload):
+                    raise OSError("short audit write")
+                os.fsync(fd)
+            if created:
+                os.fsync(layout.root)
+        except ApprovalError:
+            raise
+        except OSError as exc:
+            raise ApprovalError("APPROVAL_IO", "approval audit write failed") from exc
+        finally:
+            if fd is not None:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                except OSError:
+                    pass
+                os.close(fd)
+
+    @contextmanager
+    def _digest_lock(self, layout: _Layout, digest: str) -> Iterator[None]:
+        import fcntl
+
+        name = self._name(digest) + ".lock"
+        lock_dir = layout.directory("locks")
+        fd: int | None = None
+        try:
+            try:
+                fd = os.open(
+                    name,
+                    os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                    0o600,
+                    dir_fd=lock_dir,
+                )
+                os.fchmod(fd, 0o600)
+                os.fsync(lock_dir)
+            except FileExistsError:
+                fd = os.open(
+                    name,
+                    os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC,
+                    dir_fd=lock_dir,
+                )
+            self._validate_regular(
+                os.fstat(fd),
+                limit=0,
+                code="APPROVAL_UNSAFE_PATH",
+                message="approval lock path is unsafe",
+            )
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            self._validate_regular(
+                os.fstat(fd),
+                limit=0,
+                code="APPROVAL_UNSAFE_PATH",
+                message="approval lock path is unsafe",
+            )
+            yield
+        except ApprovalError:
+            raise
+        except OSError as exc:
+            raise ApprovalError("APPROVAL_IO", "approval lock failed") from exc
+        finally:
+            if fd is not None:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                except OSError:
+                    pass
+                os.close(fd)
+
+    @staticmethod
+    def _rename_noreplace(
+        source_fd: int, source: str, destination_fd: int, destination: str
+    ) -> None:
+        libc = ctypes.CDLL(None, use_errno=True)
+        if sys.platform == "darwin":
+            rename = libc.renameatx_np
+            rename.argtypes = [
+                ctypes.c_int,
+                ctypes.c_char_p,
+                ctypes.c_int,
+                ctypes.c_char_p,
+                ctypes.c_uint,
+            ]
+            rename.restype = ctypes.c_int
+            result = rename(
+                source_fd,
+                os.fsencode(source),
+                destination_fd,
+                os.fsencode(destination),
+                0x00000004,
+            )
+        elif sys.platform.startswith("linux"):
+            rename = libc.renameat2
+            rename.argtypes = [
+                ctypes.c_int,
+                ctypes.c_char_p,
+                ctypes.c_int,
+                ctypes.c_char_p,
+                ctypes.c_uint,
+            ]
+            rename.restype = ctypes.c_int
+            result = rename(
+                source_fd,
+                os.fsencode(source),
+                destination_fd,
+                os.fsencode(destination),
+                0x00000001,
+            )
+        else:
+            raise ApprovalError("APPROVAL_UNSAFE_PATH", "atomic no-overwrite rename is unavailable")
+        if result != 0:
+            error = ctypes.get_errno()
+            raise OSError(error, os.strerror(error))
+
+    @staticmethod
+    def _checksum(raw: bytes) -> str:
+        return hashlib.sha256(raw).hexdigest()
+
+    def _state_locked(self, layout: _Layout, digest: str) -> tuple[str, _Record] | None:
+        found: list[tuple[str, _Record]] = []
+        name = self._name(digest)
+        for state in _STATE_NAMES:
+            info = self._entry_info(
+                layout.directory(state),
+                name,
+                limit=_ARTIFACT_LIMIT,
+                code="APPROVAL_MALFORMED",
+                message="malformed approval artifact",
+            )
+            if info is not None:
+                found.append((state, self._read_artifact(layout, state, digest)))
+        if len(found) > 1:
+            raise ApprovalError("APPROVAL_MALFORMED", "approval has multiple states")
+        return found[0] if found else None
+
+    def _transaction(
+        self,
+        challenge: ApprovalChallenge,
+        *,
+        operation: str,
+        source: str | None,
+        destination: str,
+        source_record: _Record | None,
+        artifact: dict[str, object],
+        result: str,
+        reason_code: str,
+        event_at: datetime,
+    ) -> dict[str, object]:
+        return {
+            "version": _VERSION,
+            "operation": operation,
+            "challenge_digest": challenge.challenge_digest,
+            "source": source,
+            "destination": destination,
+            "source_checksum": self._checksum(source_record.raw)
+            if source_record is not None
+            else None,
+            "source_identity": list(source_record.identity) if source_record is not None else None,
+            "artifact": artifact,
+            "event": self._event(challenge, result=result, reason_code=reason_code, now=event_at),
+        }
+
+    def _validate_transaction(
+        self, layout: _Layout, value: dict[str, object], digest: str
+    ) -> dict[str, object]:
+        if (
+            set(value) == {"version", "source", "destination", "challenge_digest"}
+            and value.get("version") == _VERSION
+        ):
+            return self._upgrade_legacy_transaction(layout, value, digest)
+        if (
+            set(value) != _TRANSACTION_KEYS
+            or value.get("version") != _VERSION
+            or value.get("challenge_digest") != digest
+        ):
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        operation = value.get("operation")
+        source = value.get("source")
+        destination = value.get("destination")
+        allowed = {
+            "create": (None, "pending"),
+            "grant": ("pending", "granted"),
+            "consume": ("granted", "consumed"),
+            "expire-pending": ("pending", "expired"),
+            "expire-granted": ("granted", "expired"),
+        }
+        if operation not in allowed or (source, destination) != allowed[operation]:
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        checksum = value.get("source_checksum")
+        identity = value.get("source_identity")
+        if (source is None and checksum is not None) or (
+            source is not None
+            and (not isinstance(checksum, str) or _DIGEST_RE.fullmatch(checksum) is None)
+        ):
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        if (source is None and identity is not None) or (
+            source is not None
+            and (
+                not isinstance(identity, list)
+                or len(identity) != 2
+                or any(
+                    isinstance(item, bool) or not isinstance(item, int) or item < 0
+                    for item in identity
+                )
+            )
+        ):
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        artifact = value.get("artifact")
+        if not isinstance(artifact, dict):
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        expected_kinds = {
+            "create": frozenset({"pending"}),
+            "grant": frozenset({"granted"}),
+            "consume": frozenset({"granted"}),
+            "expire-pending": frozenset({"pending"}),
+            "expire-granted": frozenset({"granted"}),
+        }
+        self._validate_artifact_value(artifact, allowed_kinds=expected_kinds[operation])
+        if artifact["challenge_digest"] != digest:
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        self._validate_event(value.get("event"), digest=digest)
+        return value
+
+    def _upgrade_legacy_transaction(
+        self, layout: _Layout, value: dict[str, object], digest: str
+    ) -> dict[str, object]:
+        source = value.get("source")
+        destination = value.get("destination")
+        if not isinstance(source, str) or not isinstance(destination, str):
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        operations = {
+            ("pending", "granted"): "grant",
+            ("granted", "consumed"): "consume",
+            ("pending", "expired"): "expire-pending",
+            ("granted", "expired"): "expire-granted",
+        }
+        operation = operations.get((source, destination))
+        if value.get("challenge_digest") != digest or operation is None:
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        source_record = (
+            self._read_artifact(layout, source, digest)
+            if self._entry_info(
+                layout.directory(source),
+                self._name(digest),
+                limit=_ARTIFACT_LIMIT,
+                code="APPROVAL_MALFORMED",
+                message="malformed approval artifact",
+            )
+            is not None
+            else None
+        )
+        destination_record = (
+            self._read_artifact(layout, destination, digest)
+            if self._entry_info(
+                layout.directory(destination),
+                self._name(digest),
+                limit=_ARTIFACT_LIMIT,
+                code="APPROVAL_MALFORMED",
+                message="malformed approval artifact",
+            )
+            is not None
+            else None
+        )
+        record = destination_record or source_record
+        if record is None:
+            raise ApprovalError("APPROVAL_MALFORMED", "approval transaction lost state")
+        artifact = record.value
+        when = artifact.get("approved_at") or artifact.get("created_at")
+        if destination == "expired":
+            when = artifact.get("expires_at")
+        event = {
+            "timestamp": when,
+            "engagement_id": artifact["engagement_id"],
+            "action_id": artifact["action_id"],
+            "challenge_digest": digest,
+            "effective_risk": int(RiskLevel.L2),
+            "result": destination,
+            "reason_code": destination.upper(),
+        }
+        upgraded = {
+            "version": _VERSION,
+            "operation": operation,
+            "challenge_digest": digest,
+            "source": source,
+            "destination": destination,
+            "source_checksum": self._checksum(source_record.raw)
+            if source_record is not None
+            else self._checksum(record.raw),
+            "source_identity": list(
+                source_record.identity if source_record is not None else record.identity
+            ),
+            "artifact": artifact,
+            "event": event,
+        }
+        self._validate_event(event, digest=digest)
+        return upgraded
+
+    def _read_transaction(self, layout: _Layout, digest: str) -> _Record | None:
+        name = self._name(digest) + ".json"
+        info = self._entry_info(
+            layout.directory("transactions"),
+            name,
+            limit=_TRANSACTION_LIMIT,
+            code="APPROVAL_MALFORMED",
+            message="malformed approval transaction",
+        )
+        if info is None:
+            return None
+        record = self._read_json(
+            layout.directory("transactions"),
+            name,
+            limit=_TRANSACTION_LIMIT,
+            code="APPROVAL_MALFORMED",
+            message="malformed approval transaction",
+        )
+        self._validate_transaction(layout, record.value, digest)
+        return record
+
+    def _apply_transaction_locked(
+        self,
+        layout: _Layout,
+        transaction: dict[str, object],
+        journal_identity: tuple[int, int],
+        *,
+        inject_crashes: bool,
+    ) -> None:
+        digest = str(transaction["challenge_digest"])
+        name = self._name(digest)
+        source_value = transaction["source"]
+        destination_value = transaction["destination"]
+        if (
+            source_value is not None
+            and not isinstance(source_value, str)
+            or not isinstance(destination_value, str)
+        ):
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        source: str | None = source_value
+        destination = destination_value
+        operation = str(transaction["operation"])
+        artifact = transaction["artifact"]
+        event = transaction["event"]
+        if not isinstance(artifact, dict) or not isinstance(event, dict):
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        desired_raw = canonical_bytes(artifact)
+        desired_checksum = self._checksum(desired_raw)
+
+        state_records: dict[str, _Record] = {}
+        for state in _STATE_NAMES:
+            if (
+                self._entry_info(
+                    layout.directory(state),
+                    name,
+                    limit=_ARTIFACT_LIMIT,
+                    code="APPROVAL_MALFORMED",
+                    message="malformed approval artifact",
+                )
+                is not None
+            ):
+                state_records[state] = self._read_artifact(layout, state, digest)
+        if any(state not in {source, destination} for state in state_records):
+            raise ApprovalError("APPROVAL_MALFORMED", "approval has multiple states")
+        source_record = state_records.get(str(source)) if source is not None else None
+        destination_record = state_records.get(destination)
+        source_checksum = transaction["source_checksum"]
+        source_identity_value = transaction["source_identity"]
+        source_identity = (
+            tuple(source_identity_value) if isinstance(source_identity_value, list) else None
+        )
+        if source_record is not None and self._checksum(source_record.raw) != source_checksum:
+            raise ApprovalError("APPROVAL_MALFORMED", "approval source was tampered")
+        if source_record is not None and source_record.identity != source_identity:
+            raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval source inode changed")
+        if (
+            destination_record is not None
+            and self._checksum(destination_record.raw) != desired_checksum
+        ):
+            raise ApprovalError("APPROVAL_MALFORMED", "approval destination was tampered")
+        if source is None and any(state != destination for state in state_records):
+            raise ApprovalError("APPROVAL_MALFORMED", "approval has multiple states")
+
+        if destination_record is None:
+            if operation == "create":
+                self._write_exclusive(layout.directory(destination), name, artifact)
+            elif operation == "grant":
+                if source_record is None:
+                    raise ApprovalError("APPROVAL_MALFORMED", "approval transaction lost state")
+                self._write_exclusive(layout.directory(destination), name, artifact)
+            else:
+                if source_record is None or source is None:
+                    raise ApprovalError("APPROVAL_MALFORMED", "approval transaction lost state")
+                if inject_crashes:
+                    self._crash_point("before_rename")
+                self._verify_identity(
+                    layout.directory(source),
+                    name,
+                    source_record.identity,
+                )
+                if (
+                    self._entry_info(
+                        layout.directory(destination),
+                        name,
+                        limit=_ARTIFACT_LIMIT,
+                        code="APPROVAL_CONSUMED",
+                        message="approval destination already exists",
+                    )
+                    is not None
+                ):
+                    raise ApprovalError("APPROVAL_CONSUMED", "approval destination already exists")
+                if inject_crashes:
+                    self._crash_point("after_destination_check")
+                try:
+                    self._rename_noreplace(
+                        layout.directory(source),
+                        name,
+                        layout.directory(destination),
+                        name,
+                    )
+                except OSError as exc:
+                    code = (
+                        "APPROVAL_CONSUMED"
+                        if exc.errno in {errno.EEXIST, errno.ENOENT}
+                        else "APPROVAL_IO"
+                    )
+                    raise ApprovalError(code, "approval state transition failed") from exc
+                if inject_crashes:
+                    self._crash_point("after_rename")
+                os.fsync(layout.directory(source))
+                os.fsync(layout.directory(destination))
+                moved = self._read_artifact(layout, destination, digest)
+                if moved.identity != source_record.identity:
+                    raise ApprovalError(
+                        "APPROVAL_UNSAFE_PATH", "approval source changed during rename"
+                    )
+            if inject_crashes:
+                self._crash_point("after_destination")
+            destination_record = self._read_artifact(layout, destination, digest)
+            if self._checksum(destination_record.raw) != desired_checksum:
+                raise ApprovalError("APPROVAL_MALFORMED", "approval destination was tampered")
+
+        if source is not None and operation == "grant":
+            source_record = (
+                self._read_artifact(layout, str(source), digest)
+                if self._entry_info(
+                    layout.directory(str(source)),
+                    name,
+                    limit=_ARTIFACT_LIMIT,
+                    code="APPROVAL_MALFORMED",
+                    message="malformed approval artifact",
+                )
+                is not None
+                else None
+            )
+            if source_record is not None:
+                if self._checksum(source_record.raw) != source_checksum:
+                    raise ApprovalError("APPROVAL_MALFORMED", "approval source was tampered")
+                self._verify_identity(layout.directory(str(source)), name, source_record.identity)
+                os.unlink(name, dir_fd=layout.directory(str(source)))
+                if inject_crashes:
+                    self._crash_point("after_source_unlink")
+                os.fsync(layout.directory(str(source)))
+        elif source is not None and source in state_records and destination in state_records:
+            duplicate = state_records[str(source)]
+            if self._checksum(duplicate.raw) != source_checksum:
+                raise ApprovalError("APPROVAL_MALFORMED", "approval source was tampered")
+            self._unlink_verified(layout.directory(str(source)), name, duplicate.identity)
+
+        self._append_event_record(layout, event, idempotent=True)
+        if inject_crashes:
+            self._crash_point("after_event")
+        journal_name = self._name(digest) + ".json"
+        self._verify_identity(layout.directory("transactions"), journal_name, journal_identity)
+        os.unlink(journal_name, dir_fd=layout.directory("transactions"))
+        if inject_crashes:
+            self._crash_point("after_journal_unlink")
+        os.fsync(layout.directory("transactions"))
+
+    def _recover_locked(self, layout: _Layout, digest: str) -> None:
+        record = self._read_transaction(layout, digest)
+        if record is None:
+            return
+        transaction = self._validate_transaction(layout, record.value, digest)
+        self._apply_transaction_locked(layout, transaction, record.identity, inject_crashes=False)
+
+    def _run_transaction_locked(self, layout: _Layout, transaction: dict[str, object]) -> None:
+        digest = str(transaction["challenge_digest"])
+        self._validate_transaction(layout, transaction, digest)
+        journal_name = self._name(digest) + ".json"
+        identity = self._write_exclusive(
+            layout.directory("transactions"),
+            journal_name,
+            transaction,
+            exists_code="APPROVAL_MALFORMED",
+            exists_message="approval transaction already exists",
+        )
+        self._crash_point("after_wal")
+        self._apply_transaction_locked(layout, transaction, identity, inject_crashes=True)
+
+    def _audit_rejection(
+        self,
+        layout: _Layout,
+        challenge: ApprovalChallenge,
+        error: ApprovalError,
+        *,
+        now: datetime,
+    ) -> None:
+        event = self._event(
+            challenge,
+            result="rejected",
+            reason_code=error.code,
+            now=now,
+        )
+        self._append_event_record(layout, event, idempotent=False)
+
+    def _audit_prevalidation_rejection(
+        self,
+        challenge: object,
+        error: ApprovalError,
+        *,
+        now: object,
+    ) -> None:
+        """Audit a tampered but safely projectable local challenge without recursion."""
+        if (
+            not isinstance(challenge, ApprovalChallenge)
+            or challenge.engagement_id != self.engagement_id
+            or challenge.engagement_path != self.engagement_path
+            or _DIGEST_RE.fullmatch(challenge.challenge_digest) is None
+            or _APPROVED_BY_RE.fullmatch(challenge.action_id) is None
+            or challenge.effective_risk is not RiskLevel.L2
+        ):
             return
         try:
-            info = journal.stat()
-            if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600:
-                raise ValueError
-            value = strict_json_loads(journal.read_text(encoding="utf-8"))
-            if (
-                not isinstance(value, dict)
-                or set(value) != {"version", "source", "destination", "challenge_digest"}
-                or value.get("version") != _VERSION
-                or value.get("challenge_digest") != digest
-                or value.get("source") not in {"pending", "granted"}
-                or value.get("destination") not in {"granted", "consumed", "expired"}
-            ):
-                raise ValueError
-        except (
-            OSError,
-            UnicodeError,
-            ValueError,
-            DuplicateJSONKeyError,
-            json.JSONDecodeError,
-        ) as exc:
-            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction") from exc
-        source = self._path(value["source"], digest)
-        destination = self._path(value["destination"], digest)
-        with self._digest_lock(digest):
-            if destination.exists() and source.exists():
-                source.unlink()
-                self._fsync_directory(source.parent)
-            elif not destination.exists() and not source.exists():
-                raise ApprovalError("APPROVAL_MALFORMED", "approval transaction lost state")
-            journal.unlink()
-            self._fsync_directory(journal.parent)
+            event_at = _utc(now, name="now")
+            event = self._event(
+                challenge,
+                result="rejected",
+                reason_code=error.code,
+                now=event_at,
+            )
+            with self._layout() as layout:
+                self._append_event_record(layout, event, idempotent=False)
+        except ApprovalError as audit_error:
+            if audit_error.code == "APPROVAL_INVALID_CLOCK":
+                return
+            raise
 
     def create_pending(
         self,
@@ -711,213 +1555,201 @@ class ApprovalStore:
             )
         challenge = build_challenge(definition, request, context, now=now, nonce=nonce)
         self._assert_local(challenge)
-        self._ensure_layout()
-        if self._state(challenge.challenge_digest) is not None:
-            raise ApprovalError("APPROVAL_EXISTS", "approval record already exists")
-        path = self._path("pending", challenge.challenge_digest)
-        owned = False
-        try:
-            self._write_exclusive(path, self._artifact(challenge, kind="pending"))
-            owned = True
-            self.append_event(
-                challenge, result="created", reason_code="CREATED", now=challenge.created_at
-            )
-        except ApprovalError:
-            if owned:
-                try:
-                    path.unlink()
-                except OSError:
-                    pass
-            raise
-        return path
+        with self._layout() as layout:
+            try:
+                with self._digest_lock(layout, challenge.challenge_digest):
+                    self._recover_locked(layout, challenge.challenge_digest)
+                    if self._state_locked(layout, challenge.challenge_digest) is not None:
+                        raise ApprovalError("APPROVAL_EXISTS", "approval record already exists")
+                    artifact = self._artifact(challenge, kind="pending")
+                    transaction = self._transaction(
+                        challenge,
+                        operation="create",
+                        source=None,
+                        destination="pending",
+                        source_record=None,
+                        artifact=artifact,
+                        result="created",
+                        reason_code="CREATED",
+                        event_at=challenge.created_at,
+                    )
+                    self._run_transaction_locked(layout, transaction)
+            except ApprovalError as error:
+                self._audit_rejection(layout, challenge, error, now=challenge.created_at)
+                raise
+        return Path(self.root) / "pending" / self._name(challenge.challenge_digest)
 
     def grant(
         self, challenge: ApprovalChallenge, *, approved_by: str, now: datetime
     ) -> ApprovalGrant:
-        self._assert_local(challenge)
-        self._ensure_layout()
+        try:
+            self._assert_local(challenge)
+        except ApprovalError as error:
+            self._audit_prevalidation_rejection(challenge, error, now=now)
+            raise
         granted_at = _utc(now, name="now")
-        if _APPROVED_BY_RE.fullmatch(approved_by) is None:
-            raise ApprovalError("APPROVAL_INVALID_OPERATOR", "operator label is invalid")
-        if granted_at < challenge.created_at:
-            raise ApprovalError(
-                "APPROVAL_INVALID_CLOCK", "approval time is before challenge creation"
-            )
-        pending_path = self._path("pending", challenge.challenge_digest)
-        state = self._state(challenge.challenge_digest)
-        if state != "pending":
-            raise ApprovalError(
-                "APPROVAL_CONSUMED" if state == "consumed" else "APPROVAL_MISSING",
-                "approval is unavailable",
-            )
-        pending = self._read_artifact(pending_path, kind="pending")
-        if not self._matches(challenge, pending):
-            if pending.get("policy_digest") != challenge.policy_digest:
-                raise ApprovalError("APPROVAL_POLICY_MISMATCH", "approval policy does not match")
-            raise ApprovalError("APPROVAL_MISMATCH", "approval challenge does not match")
-        if granted_at >= challenge.expires_at:
-            self._expire(challenge, pending_path)
-            raise ApprovalError("APPROVAL_EXPIRED", "approval has expired")
-        grant = ApprovalGrant(
-            challenge_digest=challenge.challenge_digest,
-            policy_digest=challenge.policy_digest,
-            approved_by=approved_by,
-            approved_at=granted_at,
-            expires_at=challenge.expires_at,
-        )
-        grant_path = self._path("granted", challenge.challenge_digest)
-        self._write_exclusive(grant_path, self._artifact(challenge, kind="granted", grant=grant))
-        try:
-            self.append_event(challenge, result="granted", reason_code="GRANTED", now=granted_at)
-            pending_path.unlink()
-        except (ApprovalError, OSError) as exc:
+        with self._layout() as layout:
             try:
-                grant_path.unlink()
-            except OSError:
-                pass
-            if isinstance(exc, ApprovalError):
+                with self._digest_lock(layout, challenge.challenge_digest):
+                    self._recover_locked(layout, challenge.challenge_digest)
+                    if _APPROVED_BY_RE.fullmatch(approved_by) is None:
+                        raise ApprovalError(
+                            "APPROVAL_INVALID_OPERATOR", "operator label is invalid"
+                        )
+                    if granted_at < challenge.created_at:
+                        raise ApprovalError(
+                            "APPROVAL_INVALID_CLOCK",
+                            "approval time is before challenge creation",
+                        )
+                    current = self._state_locked(layout, challenge.challenge_digest)
+                    if current is None:
+                        raise ApprovalError("APPROVAL_MISSING", "approval is unavailable")
+                    state, pending = current
+                    if state != "pending":
+                        code = "APPROVAL_CONSUMED" if state == "consumed" else "APPROVAL_MISSING"
+                        raise ApprovalError(code, "approval is unavailable")
+                    if not self._matches(challenge, pending.value):
+                        if pending.value.get("policy_digest") != challenge.policy_digest:
+                            raise ApprovalError(
+                                "APPROVAL_POLICY_MISMATCH",
+                                "approval policy does not match",
+                            )
+                        raise ApprovalError(
+                            "APPROVAL_MISMATCH",
+                            "approval challenge does not match",
+                        )
+                    if granted_at >= challenge.expires_at:
+                        transaction = self._transaction(
+                            challenge,
+                            operation="expire-pending",
+                            source="pending",
+                            destination="expired",
+                            source_record=pending,
+                            artifact=pending.value,
+                            result="expired",
+                            reason_code="EXPIRED",
+                            event_at=challenge.expires_at,
+                        )
+                        self._run_transaction_locked(layout, transaction)
+                        raise ApprovalError("APPROVAL_EXPIRED", "approval has expired")
+                    grant = ApprovalGrant(
+                        challenge_digest=challenge.challenge_digest,
+                        policy_digest=challenge.policy_digest,
+                        approved_by=approved_by,
+                        approved_at=granted_at,
+                        expires_at=challenge.expires_at,
+                    )
+                    artifact = self._artifact(challenge, kind="granted", grant=grant)
+                    transaction = self._transaction(
+                        challenge,
+                        operation="grant",
+                        source="pending",
+                        destination="granted",
+                        source_record=pending,
+                        artifact=artifact,
+                        result="granted",
+                        reason_code="GRANTED",
+                        event_at=granted_at,
+                    )
+                    self._run_transaction_locked(layout, transaction)
+                    return grant
+            except ApprovalError as error:
+                self._audit_rejection(layout, challenge, error, now=granted_at)
                 raise
-            raise ApprovalError("APPROVAL_IO", "approval grant write failed") from exc
-        return grant
-
-    def _claim(self, source: Path, destination: Path) -> None:
-        """Rename under a per-digest lock with a durable recovery journal."""
-        digest = source.stem
-        journal = Path(self.root) / "transactions" / (self._name(digest) + ".json")
-        with self._digest_lock(digest):
-            try:
-                if destination.exists() or destination.is_symlink():
-                    raise ApprovalError("APPROVAL_CONSUMED", "approval already consumed")
-                self._write_exclusive(
-                    journal,
-                    {
-                        "version": _VERSION,
-                        "source": source.parent.name,
-                        "destination": destination.parent.name,
-                        "challenge_digest": digest,
-                    },
-                )
-                os.rename(source, destination)
-                self._fsync_directory(source.parent)
-                self._fsync_directory(destination.parent)
-                journal.unlink()
-                self._fsync_directory(journal.parent)
-            except ApprovalError:
-                raise
-            except FileNotFoundError as exc:
-                raise ApprovalError("APPROVAL_CONSUMED", "approval already consumed") from exc
-            except OSError as exc:
-                raise ApprovalError("APPROVAL_IO", "approval state transition failed") from exc
-
-    def _expire(self, challenge: ApprovalChallenge, source: Path) -> None:
-        try:
-            self._claim(source, self._path("expired", challenge.challenge_digest))
-        except ApprovalError as exc:
-            if exc.code != "APPROVAL_CONSUMED":
-                raise
-        self.append_event(
-            challenge, result="expired", reason_code="EXPIRED", now=challenge.expires_at
-        )
 
     def consume(
         self, grant: ApprovalGrant, challenge: ApprovalChallenge, *, now: datetime
     ) -> ApprovalReceipt:
-        self._assert_local(challenge)
-        self._ensure_layout()
+        try:
+            self._assert_local(challenge)
+        except ApprovalError as error:
+            self._audit_prevalidation_rejection(challenge, error, now=now)
+            raise
         consumed_at = _utc(now, name="now")
-        if not isinstance(grant, ApprovalGrant):
-            raise ApprovalError("APPROVAL_MISMATCH", "approval grant does not match")
-        if (
-            grant.challenge_digest != challenge.challenge_digest
-            or grant.policy_digest != challenge.policy_digest
-        ):
-            raise ApprovalError("APPROVAL_MISMATCH", "approval grant does not match")
-        if (
-            _utc(grant.approved_at, name="grant.approved_at") > consumed_at
-            or _utc(grant.expires_at, name="grant.expires_at") != challenge.expires_at
-        ):
-            raise ApprovalError("APPROVAL_MISMATCH", "approval grant does not match")
-        source = self._path("granted", challenge.challenge_digest)
-        state = self._state(challenge.challenge_digest)
-        if state == "consumed":
-            self.append_event(challenge, result="replayed", reason_code="REPLAY", now=consumed_at)
-            raise ApprovalError("APPROVAL_CONSUMED", "approval already consumed")
-        if state == "expired":
-            raise ApprovalError("APPROVAL_EXPIRED", "approval has expired")
-        if state != "granted":
-            raise ApprovalError("APPROVAL_MISSING", "approval is unavailable")
-        artifact = self._read_artifact(source, kind="granted")
-        if not self._matches(challenge, artifact):
-            raise ApprovalError("APPROVAL_MISMATCH", "approval challenge does not match")
-        if artifact.get("approved_by") != grant.approved_by or artifact.get(
-            "approved_at"
-        ) != _timestamp(grant.approved_at):
-            raise ApprovalError("APPROVAL_MISMATCH", "approval grant does not match")
-        if consumed_at >= challenge.expires_at:
-            self._expire(challenge, source)
-            raise ApprovalError("APPROVAL_EXPIRED", "approval has expired")
-        self._claim(source, self._path("consumed", challenge.challenge_digest))
-        self.append_event(challenge, result="consumed", reason_code="CONSUMED", now=consumed_at)
-        return ApprovalReceipt("consumed")
+        with self._layout() as layout:
+            try:
+                with self._digest_lock(layout, challenge.challenge_digest):
+                    self._recover_locked(layout, challenge.challenge_digest)
+                    if not isinstance(grant, ApprovalGrant):
+                        raise ApprovalError("APPROVAL_MISMATCH", "approval grant does not match")
+                    if (
+                        grant.challenge_digest != challenge.challenge_digest
+                        or grant.policy_digest != challenge.policy_digest
+                    ):
+                        raise ApprovalError("APPROVAL_MISMATCH", "approval grant does not match")
+                    if (
+                        _utc(grant.approved_at, name="grant.approved_at") > consumed_at
+                        or _utc(grant.expires_at, name="grant.expires_at") != challenge.expires_at
+                    ):
+                        raise ApprovalError("APPROVAL_MISMATCH", "approval grant does not match")
+                    current = self._state_locked(layout, challenge.challenge_digest)
+                    if current is None:
+                        raise ApprovalError("APPROVAL_MISSING", "approval is unavailable")
+                    state, artifact = current
+                    if state == "consumed":
+                        raise ApprovalError("APPROVAL_CONSUMED", "approval already consumed")
+                    if state == "expired":
+                        raise ApprovalError("APPROVAL_EXPIRED", "approval has expired")
+                    if state != "granted":
+                        raise ApprovalError("APPROVAL_MISSING", "approval is unavailable")
+                    if not self._matches(challenge, artifact.value):
+                        if artifact.value.get("policy_digest") != challenge.policy_digest:
+                            raise ApprovalError(
+                                "APPROVAL_POLICY_MISMATCH",
+                                "approval policy does not match",
+                            )
+                        raise ApprovalError(
+                            "APPROVAL_MISMATCH",
+                            "approval challenge does not match",
+                        )
+                    if artifact.value.get("approved_by") != grant.approved_by or artifact.value.get(
+                        "approved_at"
+                    ) != _timestamp(grant.approved_at):
+                        raise ApprovalError("APPROVAL_MISMATCH", "approval grant does not match")
+                    if consumed_at >= challenge.expires_at:
+                        transaction = self._transaction(
+                            challenge,
+                            operation="expire-granted",
+                            source="granted",
+                            destination="expired",
+                            source_record=artifact,
+                            artifact=artifact.value,
+                            result="expired",
+                            reason_code="EXPIRED",
+                            event_at=challenge.expires_at,
+                        )
+                        self._run_transaction_locked(layout, transaction)
+                        raise ApprovalError("APPROVAL_EXPIRED", "approval has expired")
+                    transaction = self._transaction(
+                        challenge,
+                        operation="consume",
+                        source="granted",
+                        destination="consumed",
+                        source_record=artifact,
+                        artifact=artifact.value,
+                        result="consumed",
+                        reason_code="CONSUMED",
+                        event_at=consumed_at,
+                    )
+                    self._run_transaction_locked(layout, transaction)
+                    return ApprovalReceipt("consumed")
+            except ApprovalError as error:
+                self._audit_rejection(layout, challenge, error, now=consumed_at)
+                raise
 
     def status(self, challenge_digest: str) -> str:
-        self._ensure_layout()
-        state = self._state(challenge_digest)
-        if state is None:
-            return "missing"
-        record_kind = "pending" if state == "pending" else "granted"
-        self._read_artifact(self._path(state, challenge_digest), kind=record_kind)
-        return state
+        digest = self._name(challenge_digest).removesuffix(".json")
+        with self._layout() as layout:
+            with self._digest_lock(layout, digest):
+                self._recover_locked(layout, digest)
+                current = self._state_locked(layout, digest)
+                return "missing" if current is None else current[0]
 
     def append_event(
         self, challenge: ApprovalChallenge, *, result: str, reason_code: str, now: datetime
     ) -> None:
         """Append only the strict, secret-free audit projection under ``fcntl``."""
         self._assert_local(challenge)
-        if (
-            _EVENT_RESULT_RE.fullmatch(result) is None
-            or _EVENT_REASON_RE.fullmatch(reason_code) is None
-        ):
-            raise ApprovalError("APPROVAL_INVALID_EVENT", "invalid approval event")
-        self._ensure_layout()
-        event = {
-            "timestamp": _timestamp(_utc(now, name="now")),
-            "engagement_id": challenge.engagement_id,
-            "action_id": challenge.action_id,
-            "challenge_digest": challenge.challenge_digest,
-            "effective_risk": int(challenge.effective_risk),
-            "result": result,
-            "reason_code": reason_code,
-        }
-        payload = canonical_bytes(event) + b"\n"
-        path = Path(self.root) / "events.jsonl"
-        fd: int | None = None
-        try:
-            import fcntl  # macOS/Linux only; documented at module level.
-
-            if path.exists() and path.is_symlink():
-                raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval audit path is unsafe")
-            no_follow = getattr(os, "O_NOFOLLOW", None)
-            if no_follow is None:
-                raise ApprovalError("APPROVAL_UNSAFE_PATH", "safe audit writes are unavailable")
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | no_follow, 0o600)
-            if not stat.S_ISREG(os.fstat(fd).st_mode):
-                raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval audit path is unsafe")
-            os.chmod(path, 0o600)
-            fcntl.flock(fd, fcntl.LOCK_EX)
-            if os.write(fd, payload) != len(payload):
-                raise OSError("short audit write")
-            os.fsync(fd)
-        except ApprovalError:
-            raise
-        except OSError as exc:
-            raise ApprovalError("APPROVAL_IO", "approval audit write failed") from exc
-        finally:
-            if fd is not None:
-                try:
-                    import fcntl
-
-                    fcntl.flock(fd, fcntl.LOCK_UN)
-                except OSError:
-                    pass
-                os.close(fd)
+        event = self._event(challenge, result=result, reason_code=reason_code, now=now)
+        with self._layout() as layout:
+            self._append_event_record(layout, event, idempotent=False)
