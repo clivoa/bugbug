@@ -94,6 +94,7 @@ def test_shell_execution_is_an_absolute_l3_definition_characteristic():
         RiskLevel.L0,
         uses_external_tool=True,
         executable="/bin/sh",
+        argv_template=("/bin/sh",),
         shell_execution=True,
     )
     assert action.effective_floor is RiskLevel.L3
@@ -122,6 +123,7 @@ def test_trusted_action_characteristics_raise_the_effective_floor(field, expecte
         {"uses_external_tool": False, "executable": "/opt/nmap"},
         {"uses_external_tool": True},
         {"uses_external_tool": True, "tool_id": "nmap"},
+        {"uses_external_tool": True, "executable": "/opt/nmap"},
         {"uses_external_tool": True, "tool_id": "nmap", "executable": "/opt//nmap"},
         {"uses_external_tool": True, "executable": "/opt/../nmap"},
     ],
@@ -137,8 +139,56 @@ def test_external_tool_metadata_normalizes_windows_paths_lexically():
         RiskLevel.L0,
         uses_external_tool=True,
         executable="C:\\Tools\\Nmap.EXE",
+        argv_template=("c:/tools/nmap.exe",),
     )
     assert action.executable == "c:/tools/nmap.exe"
+
+
+@pytest.mark.parametrize(
+    "argv_template",
+    [
+        [],
+        ("/usr/bin/sqlmap", "{unknown}"),
+        ("/usr/bin/sqlmap", "--url={target}"),
+        ("/usr/bin/sqlmap", "{target}", "{target}"),
+        ("/usr/bin/other",),
+        ("/usr/bin/sqlmap", "x" * 4_097),
+        ("/usr/bin/sqlmap", "\ud800"),
+    ],
+)
+def test_external_argv_templates_are_immutable_and_unambiguous(argv_template):
+    with pytest.raises(ValueError):
+        ActionDefinition(
+            "fixture.template",
+            RiskLevel.L0,
+            uses_external_tool=True,
+            executable="/usr/bin/sqlmap",
+            argv_template=argv_template,
+        )
+
+
+def test_external_argv_template_is_frozen_and_preserves_typed_placeholders():
+    action = ActionDefinition(
+        "fixture.template",
+        RiskLevel.L0,
+        uses_external_tool=True,
+        executable="/usr/bin/sqlmap",
+        argv_template=("/usr/bin/sqlmap", "--url", "{target}", "--rate", "{rate}"),
+    )
+    assert action.argv_template == (
+        "/usr/bin/sqlmap",
+        "--url",
+        "{target}",
+        "--rate",
+        "{rate}",
+    )
+    with pytest.raises(FrozenInstanceError):
+        action.argv_template = ()
+
+
+def test_no_tool_definition_rejects_an_argv_template():
+    with pytest.raises(ValueError, match="no-tool"):
+        ActionDefinition("fixture.no-tool", RiskLevel.L0, argv_template=("/bin/sh",))
 
 
 @pytest.mark.parametrize(
@@ -146,6 +196,7 @@ def test_external_tool_metadata_normalizes_windows_paths_lexically():
     [
         "/bin/sh",
         "/usr/bin/bash",
+        "/bin/csh",
         "c:/windows/system32/cmd.exe",
         "c:/windows/system32/windowspowershell/v1.0/powershell.exe",
         "c:/program files/powershell/7/pwsh.exe",
@@ -158,12 +209,24 @@ def test_known_shell_executables_require_explicit_shell_execution(executable):
             RiskLevel.L0,
             uses_external_tool=True,
             executable=executable,
+            argv_template=(executable,),
         )
 
 
 def test_shell_execution_requires_a_trusted_external_executable():
     with pytest.raises(ValueError, match="external"):
         ActionDefinition("fixture.shell", RiskLevel.L0, shell_execution=True)
+
+
+def test_shell_command_mode_requires_shell_execution():
+    with pytest.raises(ValueError, match="shell_execution"):
+        ActionDefinition(
+            "fixture.command",
+            RiskLevel.L0,
+            uses_external_tool=True,
+            executable="/usr/bin/sqlmap",
+            argv_template=("/usr/bin/sqlmap", "-c", "{target}"),
+        )
 
 
 def test_registry_revalidates_mutated_action_definition():

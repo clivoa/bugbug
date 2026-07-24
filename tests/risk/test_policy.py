@@ -215,6 +215,7 @@ def test_prohibited_tool_uses_only_code_owned_tool_identity(engine, context, act
                     uses_external_tool=True,
                     tool_id="nmap",
                     executable="/opt/reviewed/nmap",
+                    argv_template=("/opt/reviewed/nmap",),
                 )
             ]
         )
@@ -263,6 +264,7 @@ def test_prohibited_tool_paths_use_lexical_canonicalization(context, action_requ
                     network_access=True,
                     uses_external_tool=True,
                     executable="c:/tools/nmap.exe",
+                    argv_template=("c:/tools/nmap.exe",),
                 )
             ]
         )
@@ -290,6 +292,7 @@ def test_external_action_requires_its_exact_code_owned_executable(context, actio
                     network_access=True,
                     uses_external_tool=True,
                     executable="/usr/bin/sqlmap",
+                    argv_template=("/usr/bin/sqlmap", "--batch"),
                 )
             ]
         )
@@ -304,6 +307,91 @@ def test_external_action_requires_its_exact_code_owned_executable(context, actio
         replace(action_request, argv=("/usr/bin/sqlmap", "--batch")), context
     )
     assert exact.kind is DecisionKind.ALLOW
+
+
+def test_external_argv_must_exactly_match_the_code_owned_template(context, action_request):
+    template_engine = RiskEngine(
+        ActionRegistry(
+            [
+                ActionDefinition(
+                    "fixture.l0-network",
+                    RiskLevel.L0,
+                    network_access=True,
+                    uses_external_tool=True,
+                    executable="/usr/bin/sqlmap",
+                    argv_template=(
+                        "/usr/bin/sqlmap",
+                        "--url",
+                        "{target}",
+                        "--rate",
+                        "{rate}",
+                        "--threads",
+                        "{concurrency}",
+                    ),
+                )
+            ]
+        )
+    )
+    expected = (
+        "/usr/bin/sqlmap",
+        "--url",
+        action_request.target,
+        "--rate",
+        "1",
+        "--threads",
+        "1",
+    )
+    allowed = template_engine.evaluate(replace(action_request, argv=expected), context)
+    assert allowed.kind is DecisionKind.ALLOW
+
+    extra = template_engine.evaluate(replace(action_request, argv=expected + ("--batch",)), context)
+    assert extra.reason_code == "DENY_ARGV_TEMPLATE_MISMATCH"
+
+    reordered = template_engine.evaluate(
+        replace(
+            action_request,
+            argv=(
+                "/usr/bin/sqlmap",
+                "--rate",
+                "1",
+                "--url",
+                action_request.target,
+                "--threads",
+                "1",
+            ),
+        ),
+        context,
+    )
+    assert reordered.reason_code == "DENY_ARGV_TEMPLATE_MISMATCH"
+
+    injected = template_engine.evaluate(
+        replace(
+            action_request,
+            argv=(
+                "/usr/bin/sqlmap",
+                "--url",
+                action_request.target,
+                "--batch",
+                "--rate",
+                "1",
+                "--threads",
+                "1",
+            ),
+        ),
+        context,
+    )
+    assert injected.reason_code == "DENY_ARGV_TEMPLATE_MISMATCH"
+
+
+def test_env_shell_dispatch_template_requires_l3_shell_execution():
+    with pytest.raises(ValueError, match="shell_execution"):
+        ActionDefinition(
+            "fixture.env-shell",
+            RiskLevel.L0,
+            uses_external_tool=True,
+            executable="/usr/bin/env",
+            argv_template=("/usr/bin/env", "sh", "-c", "{target}"),
+        )
 
 
 def test_no_tool_action_requires_empty_argv(engine, context, action_request):
@@ -477,6 +565,7 @@ def test_shell_execution_definition_is_absolute_l3(context, action_request):
                     network_access=True,
                     uses_external_tool=True,
                     executable="/bin/sh",
+                    argv_template=("/bin/sh",),
                     shell_execution=True,
                 )
             ]
