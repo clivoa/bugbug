@@ -21,8 +21,16 @@ from hackbot.risk.approvals import (
     build_challenge,
     canonical_bytes,
 )
-from hackbot.risk.context import load_policy_context
+from hackbot.risk.context import (
+    _canonical_policy_data,
+    _policy_digest,
+    _scope_snapshot,
+    load_policy_context,
+)
 from hackbot.risk.models import ActionDefinition, ActionRequest, ApprovalGrant, RiskLevel
+from hackbot.risk.policy import RiskEngine
+from hackbot.risk.registry import ActionRegistry
+from hackbot.scope import Scope
 
 
 class SimulatedCrash(BaseException):
@@ -98,6 +106,41 @@ def issue(definition, action_request, context, fixed_now):
         )
 
     return _issue
+
+
+def _replace_context(
+    context,
+    *,
+    scope=None,
+    program_id=None,
+    testing_policy=None,
+):
+    current_scope = context.scope if scope is None else scope
+    current_program_id = context.program_id if program_id is None else program_id
+    current_policy = context.testing_policy if testing_policy is None else testing_policy
+    scope_in, scope_out = _scope_snapshot(
+        current_scope.in_scope,
+        current_scope.out_of_scope,
+    )
+    digest = _policy_digest(
+        _canonical_policy_data(
+            engagement_id=context.engagement_id,
+            engagement_path=context.engagement_path,
+            program_id=current_program_id,
+            authorization=context.authorization,
+            scope_in=scope_in,
+            scope_out=scope_out,
+            testing_policy=current_policy,
+            active_profile=context.active_profile,
+        )
+    )
+    return replace(
+        context,
+        scope=current_scope,
+        program_id=current_program_id,
+        testing_policy=current_policy,
+        policy_digest=digest,
+    )
 
 
 def test_canonical_bytes_are_deterministic_and_reject_nonfinite_values():
@@ -413,6 +456,166 @@ def test_challenge_rejects_separator_variant_credential_header_names(
         )
     assert captured.value.code == "APPROVAL_SECRET"
     assert header_name not in str(captured.value)
+
+
+@pytest.mark.parametrize("scope_side", ("in_scope", "out_of_scope"))
+def test_challenge_rejects_url_userinfo_anywhere_in_scope_snapshot_without_echo(
+    definition,
+    action_request,
+    context,
+    fixed_now,
+    scope_side,
+):
+    secret_rule = "https://dbuser:dbpass@hidden.example/private"
+    in_scope = context.scope.in_scope
+    out_of_scope = context.scope.out_of_scope
+    if scope_side == "in_scope":
+        in_scope = (*in_scope, secret_rule)
+    else:
+        out_of_scope = (*out_of_scope, secret_rule)
+    secret_scope = Scope(in_scope, out_of_scope)
+    secret_context = _replace_context(context, scope=secret_scope)
+
+    with pytest.raises(ApprovalError) as captured:
+        build_challenge(
+            definition,
+            action_request,
+            secret_context,
+            now=fixed_now,
+            nonce="abc123",
+        )
+
+    assert captured.value.code == "APPROVAL_SECRET"
+    assert secret_rule not in str(captured.value)
+
+
+def test_engine_maps_canonical_scope_secret_to_stable_denial(
+    definition,
+    action_request,
+    context,
+    fixed_now,
+):
+    secret_rule = "https://dbuser:dbpass@hidden.example/private"
+    secret_scope = Scope((*context.scope.in_scope, secret_rule), context.scope.out_of_scope)
+    secret_context = _replace_context(context, scope=secret_scope)
+    engine = RiskEngine(ActionRegistry([definition]))
+
+    decision = engine.evaluate(action_request, secret_context, now=fixed_now)
+
+    assert decision.reason_code == "DENY_APPROVAL_SECRET"
+    assert decision.challenge is None
+    assert secret_rule not in decision.explanation
+
+
+@pytest.mark.parametrize(
+    ("source", "secret_value"),
+    (
+        ("program_id", "client-secret"),
+        ("tool_id", "client-secret"),
+    ),
+)
+def test_challenge_rejects_secret_like_text_in_non_request_canonical_metadata(
+    definition,
+    action_request,
+    context,
+    fixed_now,
+    source,
+    secret_value,
+):
+    current_definition = definition
+    current_context = context
+    if source == "program_id":
+        current_context = _replace_context(context, program_id=secret_value)
+    else:
+        current_definition = replace(definition, tool_id=secret_value)
+
+    with pytest.raises(ApprovalError) as captured:
+        build_challenge(
+            current_definition,
+            action_request,
+            current_context,
+            now=fixed_now,
+            nonce="abc123",
+        )
+
+    assert captured.value.code == "APPROVAL_SECRET"
+    assert secret_value not in str(captured.value)
+
+
+def test_failed_pending_issue_leaves_no_secret_in_files_or_audit(
+    store,
+    definition,
+    action_request,
+    context,
+    fixed_now,
+):
+    secret_rule = "https://dbuser:dbpass@hidden.example/private"
+    secret_scope = Scope((*context.scope.in_scope, secret_rule), context.scope.out_of_scope)
+    secret_context = _replace_context(context, scope=secret_scope)
+
+    with pytest.raises(ApprovalError) as captured:
+        store.create_pending(
+            definition,
+            action_request,
+            secret_context,
+            now=fixed_now,
+            nonce="abc123",
+        )
+
+    assert captured.value.code == "APPROVAL_SECRET"
+    approval_root = Path(store.root)
+    pending = approval_root / "pending"
+    assert not pending.exists() or not tuple(pending.iterdir())
+    if approval_root.exists():
+        for path in approval_root.rglob("*"):
+            if path.is_file():
+                assert secret_rule.encode() not in path.read_bytes()
+
+
+def test_safe_scope_rule_is_still_allowed_in_canonical_binding(
+    definition,
+    action_request,
+    context,
+    fixed_now,
+):
+    safe_rule = "https://hidden.example/private"
+    safe_scope = Scope((*context.scope.in_scope, safe_rule), context.scope.out_of_scope)
+    safe_context = _replace_context(context, scope=safe_scope)
+
+    challenge = build_challenge(
+        definition,
+        action_request,
+        safe_context,
+        now=fixed_now,
+        nonce="abc123",
+    )
+
+    assert safe_rule.encode() in challenge.binding
+
+
+def test_nonpersisted_policy_text_remains_digest_only(
+    definition,
+    action_request,
+    context,
+    fixed_now,
+):
+    policy_marker = "client-secret"
+    policy = replace(
+        context.testing_policy,
+        prohibited_vulnerability_types=(policy_marker,),
+    )
+    changed_context = _replace_context(context, testing_policy=policy)
+
+    challenge = build_challenge(
+        definition,
+        action_request,
+        changed_context,
+        now=fixed_now,
+        nonce="abc123",
+    )
+
+    assert policy_marker.encode() not in challenge.binding
+    assert challenge.policy_digest == changed_context.policy_digest
 
 
 def test_build_challenge_converts_expiry_overflow_to_approval_error(
