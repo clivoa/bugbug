@@ -151,3 +151,56 @@ Final verification after the remediation commit:
 - `git diff --check`: passed.
 - Repository-wide `ruff format --check .` still reports only the pre-existing
   root `conftest.py`; 74 other files, including both Task 4 files, are formatted.
+
+## Final review remediation — crash durability and strict recovery
+
+This remediation closes the remaining Task 4 durability, validation, and
+platform-boundary findings.
+
+- Recovery now fsyncs every transition's source and destination state
+  directories before touching the audit log or removing the WAL, including
+  transitions that recovery observes as already complete after an earlier
+  crash. Newly created approval directories likewise fsync their parent
+  descriptor immediately. Second-crash tests verify that the WAL survives a
+  failed recovery fsync and that both state-directory flushes precede audit and
+  journal cleanup.
+- Audit recovery now fsyncs the audit descriptor even when the exact
+  idempotent line already exists. A crash seam after the audit write and before
+  its fsync verifies that a subsequent recovery durably flushes the existing
+  line before deleting the WAL.
+- WAL records carry an independent transition timestamp and enforce an exact
+  operation/source/destination/artifact-kind mapping. Recovery also requires
+  the exact result/reason pair, matches the event's engagement, action, digest,
+  and risk to the validated artifact, and binds event time to the transition
+  and artifact lifecycle. Forged or non-scalar transaction fields fail closed
+  and produce the fixed seven-field rejection audit projection.
+- Secret screening now recognizes Cookie and Set-Cookie material, session and
+  auth-session identifiers, JWTs, all Authorization and Proxy-Authorization
+  header schemes, token headers, and sensitive required-header names. Recursive
+  mapping checks cover keys and values; denials never echo the rejected input.
+- Challenge construction, grant, consume, recovery, and status convert
+  datetime overflow, non-finite canonical JSON, malformed binding types, and
+  malformed artifact/transaction values into controlled `ApprovalError`s.
+  Constructor failures after engagement-descriptor acquisition close that
+  descriptor.
+- Atomic no-overwrite transitions fail closed when the native symbol or syscall
+  is unavailable. The runtime requirement is documented in both
+  `approvals.py` and the design specification: supported macOS/Linux approval
+  stores require `fcntl` plus `renameatx_np`/`renameat2`; Windows remains
+  unsupported.
+
+RED evidence included missing state-directory fsyncs during observed-complete
+recovery, no audit crash seam or idempotent-line fsync, eight newly enumerated
+credential forms being accepted, forged WAL event fields being accepted,
+uncaught timestamp/canonicalization exceptions, missing native-symbol
+`AttributeError`, and leaked constructor descriptors. Each focused reproduction
+was observed before its implementation change.
+
+Final verification:
+
+- Focused approval suite: `104 passed in 0.55s`.
+- Full suite: `438 passed in 3.31s`.
+- `ruff check .`: passed.
+- `mypy src`: passed for 33 source files.
+- Changed-file `ruff format --check`: passed.
+- `git diff --check`: passed.

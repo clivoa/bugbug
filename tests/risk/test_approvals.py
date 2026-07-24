@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import errno
+import hashlib
 import json
 import os
 import shutil
@@ -250,6 +252,98 @@ def test_challenge_rejects_secret_bearing_review_text(
         )
 
 
+@pytest.mark.parametrize(
+    "secret_text",
+    (
+        "Cookie: sessionid=0123456789abcdef",
+        "Set-Cookie: auth_session=0123456789abcdef; Secure",
+        "session_id=0123456789abcdef",
+        "auth-session-id: 0123456789abcdef",
+        "Authorization: Digest username=operator,response=abcdef",
+        "Authorization: Negotiate YIIG7QYGKwYBBQUCoIIG4jCCBuKg",
+        "Proxy-Authorization: NTLM TlRMTVNTUAABAAA",
+        "X-Auth-Token: 0123456789abcdef",
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signaturevalue",
+    ),
+)
+def test_challenge_rejects_common_auth_and_session_secrets_without_echo(
+    definition, action_request, context, fixed_now, secret_text
+):
+    with pytest.raises(ApprovalError) as captured:
+        build_challenge(
+            definition,
+            replace(action_request, rationale=f"review input {secret_text}"),
+            context,
+            now=fixed_now,
+            nonce="abc123",
+        )
+    assert captured.value.code == "APPROVAL_SECRET"
+    assert secret_text not in str(captured.value)
+
+
+@pytest.mark.parametrize(
+    "header_name",
+    (
+        "authorization",
+        "proxy-authorization",
+        "cookie",
+        "set-cookie",
+        "x-auth-token",
+    ),
+)
+def test_challenge_rejects_sensitive_required_header_names(
+    definition, action_request, context, fixed_now, header_name
+):
+    with pytest.raises(ApprovalError) as captured:
+        build_challenge(
+            definition,
+            replace(action_request, required_headers=(header_name,)),
+            context,
+            now=fixed_now,
+            nonce="abc123",
+        )
+    assert captured.value.code == "APPROVAL_SECRET"
+    assert header_name not in str(captured.value)
+
+
+def test_build_challenge_converts_expiry_overflow_to_approval_error(
+    definition, action_request, context
+):
+    with pytest.raises(ApprovalError) as captured:
+        build_challenge(
+            definition,
+            action_request,
+            context,
+            now=datetime.max.replace(tzinfo=UTC),
+            nonce="abc123",
+        )
+    assert captured.value.code == "APPROVAL_INVALID_CLOCK"
+
+
+def test_build_challenge_converts_nonfinite_canonical_data_to_approval_error(
+    definition, action_request, context, fixed_now, monkeypatch
+):
+    import hackbot.risk.approvals as approvals
+
+    original = approvals._challenge_fields
+
+    def nonfinite_fields(*args, **kwargs):
+        fields = original(*args, **kwargs)
+        fields["nonfinite"] = float("nan")
+        return fields
+
+    monkeypatch.setattr(approvals, "_challenge_fields", nonfinite_fields)
+    with pytest.raises(ApprovalError) as captured:
+        build_challenge(
+            definition,
+            action_request,
+            context,
+            now=fixed_now,
+            nonce="abc123",
+        )
+    assert captured.value.code == "APPROVAL_INVALID_CHALLENGE"
+
+
 def test_create_pending_requires_trusted_inputs(store, challenge):
     with pytest.raises(ApprovalError, match="trusted"):
         store.create_pending(challenge)
@@ -393,6 +487,83 @@ def test_status_rejects_wrong_artifact_mode(store, challenge, issue):
         store.status(challenge.challenge_digest)
 
 
+def _nonfinite_binding(challenge):
+    raw = b'{"request":NaN}'
+    return replace(
+        challenge,
+        binding=raw,
+        challenge_digest=hashlib.sha256(raw).hexdigest(),
+    )
+
+
+def test_grant_and_consume_convert_nonfinite_binding_to_approval_error(
+    store, challenge, fixed_now, issue
+):
+    issue(store)
+    grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+    malformed = _nonfinite_binding(challenge)
+    with pytest.raises(ApprovalError):
+        store.grant(malformed, approved_by="operator", now=fixed_now)
+    with pytest.raises(ApprovalError):
+        store.consume(grant, malformed, now=fixed_now)
+
+
+def test_grant_converts_malformed_binding_types_to_approval_error(
+    store, challenge, fixed_now, issue
+):
+    issue(store)
+    raw = json.loads(challenge.binding)
+    raw["request"]["argv"] = 1
+    malformed_raw = canonical_bytes(raw)
+    malformed_argv = replace(
+        challenge,
+        binding=malformed_raw,
+        challenge_digest=hashlib.sha256(malformed_raw).hexdigest(),
+    )
+    with pytest.raises(ApprovalError):
+        store.grant(malformed_argv, approved_by="operator", now=fixed_now)
+
+    nonbytes = replace(challenge, challenge_digest=hashlib.sha256(b"{}").hexdigest())
+    object.__setattr__(nonbytes, "binding", "{}")
+    with pytest.raises(ApprovalError):
+        store.grant(nonbytes, approved_by="operator", now=fixed_now)
+
+
+def test_status_converts_nonfinite_and_overflowing_artifacts_to_approval_error(
+    store, challenge, issue
+):
+    pending = issue(store)
+    value = json.loads(pending.read_text(encoding="utf-8"))
+    value["challenge"] = {"request": float("nan")}
+    pending.write_text(
+        json.dumps(value, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    with pytest.raises(ApprovalError):
+        store.status(challenge.challenge_digest)
+
+    pending.unlink()
+    value = json.loads(
+        canonical_bytes(
+            {
+                **ApprovalStore._artifact(challenge, kind="pending"),
+            }
+        )
+    )
+    maximum = "9999-12-31T23:59:59.999999Z"
+    value["challenge"]["created_at"] = maximum
+    value["challenge"]["expires_at"] = maximum
+    digest = hashlib.sha256(canonical_bytes(value["challenge"])).hexdigest()
+    value["challenge_digest"] = digest
+    value["created_at"] = maximum
+    value["expires_at"] = maximum
+    overflow_path = pending.with_name(f"{digest}.json")
+    overflow_path.write_bytes(canonical_bytes(value))
+    overflow_path.chmod(0o600)
+    with pytest.raises(ApprovalError):
+        store.status(digest)
+
+
 def test_status_recovers_interrupted_transition_without_dual_state(
     store, challenge, fixed_now, issue
 ):
@@ -527,6 +698,99 @@ def test_atomic_rename_never_overwrites_a_late_destination(
         store.consume(grant, challenge, now=fixed_now)
 
     assert destination.read_bytes() == sentinel
+
+
+def test_missing_native_no_replace_symbol_fails_closed(
+    store, challenge, fixed_now, issue, monkeypatch
+):
+    import hackbot.risk.approvals as approvals
+
+    issue(store)
+    grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+    monkeypatch.setattr(approvals.ctypes, "CDLL", lambda *_args, **_kwargs: object())
+    with pytest.raises(ApprovalError) as captured:
+        store.consume(grant, challenge, now=fixed_now)
+    assert captured.value.code in {"APPROVAL_IO", "APPROVAL_UNSAFE_PATH"}
+    name = f"{challenge.challenge_digest}.json"
+    assert (Path(store.root) / "granted" / name).is_file()
+    assert not (Path(store.root) / "consumed" / name).exists()
+
+
+def test_unsupported_native_no_replace_syscall_fails_closed(
+    store, challenge, fixed_now, issue, monkeypatch
+):
+    import hackbot.risk.approvals as approvals
+
+    class UnsupportedRename:
+        argtypes = None
+        restype = None
+
+        def __call__(self, *_args) -> int:
+            return -1
+
+    class UnsupportedLibrary:
+        renameatx_np = UnsupportedRename()
+        renameat2 = UnsupportedRename()
+
+    issue(store)
+    grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+    monkeypatch.setattr(
+        approvals.ctypes,
+        "CDLL",
+        lambda *_args, **_kwargs: UnsupportedLibrary(),
+    )
+    monkeypatch.setattr(approvals.ctypes, "get_errno", lambda: errno.ENOSYS)
+    with pytest.raises(ApprovalError) as captured:
+        store.consume(grant, challenge, now=fixed_now)
+    assert captured.value.code in {"APPROVAL_IO", "APPROVAL_UNSAFE_PATH"}
+    name = f"{challenge.challenge_digest}.json"
+    assert (Path(store.root) / "granted" / name).is_file()
+    assert not (Path(store.root) / "consumed" / name).exists()
+
+
+@pytest.mark.parametrize("failure_step", ("fstat", "stat"))
+def test_constructor_closes_engagement_fd_on_post_open_failure(context, monkeypatch, failure_step):
+    import hackbot.risk.approvals as approvals
+
+    real_open = approvals.os.open
+    real_close = approvals.os.close
+    real_fstat = approvals.os.fstat
+    real_stat = approvals.os.stat
+    opened: list[int] = []
+    closed: list[int] = []
+    monkeypatch.setattr(
+        approvals,
+        "canonical_engagement_identity",
+        lambda _path: (context.engagement_path, context.engagement_id),
+    )
+
+    def record_open(*args, **kwargs) -> int:
+        fd = real_open(*args, **kwargs)
+        opened.append(fd)
+        return fd
+
+    def record_close(fd: int) -> None:
+        closed.append(fd)
+        real_close(fd)
+
+    def maybe_fail_fstat(fd: int):
+        if failure_step == "fstat":
+            raise OSError("simulated fstat failure")
+        return real_fstat(fd)
+
+    def maybe_fail_stat(*args, **kwargs):
+        if failure_step == "stat":
+            raise OSError("simulated stat failure")
+        return real_stat(*args, **kwargs)
+
+    monkeypatch.setattr(approvals.os, "open", record_open)
+    monkeypatch.setattr(approvals.os, "close", record_close)
+    monkeypatch.setattr(approvals.os, "fstat", maybe_fail_fstat)
+    monkeypatch.setattr(approvals.os, "stat", maybe_fail_stat)
+    with pytest.raises(ApprovalError):
+        ApprovalStore(context.engagement_path)
+    assert opened
+    assert set(opened) <= set(closed)
 
 
 def test_artifact_and_audit_hardlinks_are_rejected(store, challenge, fixed_now, issue, tmp_path):
@@ -711,6 +975,315 @@ def test_wal_recovery_is_idempotent_at_every_phase(
     ]
     assert len(matching) == 1
     assert not list((Path(store.root) / "transactions").iterdir())
+
+
+def test_first_use_fsyncs_each_new_directory_parent(store, issue, monkeypatch):
+    import hackbot.risk.approvals as approvals
+
+    calls: list[tuple[str, object, int | None]] = []
+    real_mkdir = approvals.os.mkdir
+    real_fsync = approvals.os.fsync
+
+    def record_mkdir(
+        path: str,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> None:
+        calls.append(("mkdir", path, dir_fd))
+        real_mkdir(path, mode, dir_fd=dir_fd)
+
+    def record_fsync(fd: int) -> None:
+        calls.append(("fsync", fd, None))
+        real_fsync(fd)
+
+    monkeypatch.setattr(approvals.os, "mkdir", record_mkdir)
+    monkeypatch.setattr(approvals.os, "fsync", record_fsync)
+    issue(store)
+
+    mkdir_indexes = [index for index, call in enumerate(calls) if call[0] == "mkdir"]
+    assert [calls[index][1] for index in mkdir_indexes] == [
+        "approvals",
+        "pending",
+        "granted",
+        "consumed",
+        "expired",
+        "locks",
+        "transactions",
+    ]
+    for position, index in enumerate(mkdir_indexes):
+        next_index = (
+            mkdir_indexes[position + 1] if position + 1 < len(mkdir_indexes) else len(calls)
+        )
+        parent_fd = calls[index][2]
+        assert ("fsync", parent_fd, None) in calls[index + 1 : next_index]
+
+
+def _crash_after_transition(
+    store: ApprovalStore,
+    challenge,
+    fixed_now: datetime,
+    issue,
+    monkeypatch,
+    operation: str,
+) -> tuple[str, str, str]:
+    grant = None
+    if operation in {"grant", "consume"}:
+        issue(store)
+    if operation == "consume":
+        grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+    crash_phase = "after_source_unlink" if operation == "grant" else "after_rename"
+
+    def crash(point: str) -> None:
+        if point == crash_phase:
+            raise SimulatedCrash(point)
+
+    monkeypatch.setattr(store, "_crash_point", crash)
+    with pytest.raises(SimulatedCrash, match=crash_phase):
+        if operation == "grant":
+            store.grant(challenge, approved_by="operator", now=fixed_now)
+        else:
+            assert grant is not None
+            store.consume(grant, challenge, now=fixed_now)
+    monkeypatch.setattr(store, "_crash_point", lambda _phase: None)
+    if operation == "grant":
+        return "pending", "granted", "granted"
+    return "granted", "consumed", "consumed"
+
+
+@pytest.mark.parametrize("operation", ("grant", "consume"))
+def test_recovery_second_crash_during_state_fsync_keeps_wal(
+    store, challenge, fixed_now, issue, monkeypatch, operation
+):
+    import hackbot.risk.approvals as approvals
+
+    source, destination, expected = _crash_after_transition(
+        store, challenge, fixed_now, issue, monkeypatch, operation
+    )
+    root = Path(store.root)
+    state_inodes = {
+        (root / source).stat().st_ino,
+        (root / destination).stat().st_ino,
+    }
+    journal = root / "transactions" / f"{challenge.challenge_digest}.json.json"
+    real_fsync = approvals.os.fsync
+    crashed = False
+
+    def crash_state_fsync(fd: int) -> None:
+        nonlocal crashed
+        if not crashed and os.fstat(fd).st_ino in state_inodes:
+            crashed = True
+            raise SimulatedCrash("second recovery crash")
+        real_fsync(fd)
+
+    monkeypatch.setattr(approvals.os, "fsync", crash_state_fsync)
+    with pytest.raises(SimulatedCrash, match="second recovery crash"):
+        store.status(challenge.challenge_digest)
+    assert journal.is_file()
+
+    monkeypatch.setattr(approvals.os, "fsync", real_fsync)
+    assert store.status(challenge.challenge_digest) == expected
+    assert len(_state_paths(store, challenge.challenge_digest)) == 1
+
+
+@pytest.mark.parametrize("operation", ("grant", "consume"))
+def test_recovery_fsyncs_both_state_dirs_before_audit_and_wal_removal(
+    store, challenge, fixed_now, issue, monkeypatch, operation
+):
+    import hackbot.risk.approvals as approvals
+
+    source, destination, expected = _crash_after_transition(
+        store, challenge, fixed_now, issue, monkeypatch, operation
+    )
+    root = Path(store.root)
+    inode_labels = {
+        (root / source).stat().st_ino: source,
+        (root / destination).stat().st_ino: destination,
+        (root / "transactions").stat().st_ino: "transactions",
+        (root / "events.jsonl").stat().st_ino: "audit",
+    }
+    calls: list[str] = []
+    real_fsync = approvals.os.fsync
+    real_write = approvals.os.write
+    real_unlink = approvals.os.unlink
+
+    def record_fsync(fd: int) -> None:
+        label = inode_labels.get(os.fstat(fd).st_ino)
+        if label is not None:
+            calls.append(f"fsync:{label}")
+        real_fsync(fd)
+
+    def record_write(fd: int, payload: bytes | memoryview) -> int:
+        if inode_labels.get(os.fstat(fd).st_ino) == "audit":
+            calls.append("audit-write")
+        return real_write(fd, payload)
+
+    def record_unlink(path: str, *, dir_fd: int | None = None) -> None:
+        if dir_fd is not None and inode_labels.get(os.fstat(dir_fd).st_ino) == "transactions":
+            calls.append("wal-unlink")
+        real_unlink(path, dir_fd=dir_fd)
+
+    monkeypatch.setattr(approvals.os, "fsync", record_fsync)
+    monkeypatch.setattr(approvals.os, "write", record_write)
+    monkeypatch.setattr(approvals.os, "unlink", record_unlink)
+
+    assert store.status(challenge.challenge_digest) == expected
+    audit_index = calls.index("audit-write")
+    wal_index = calls.index("wal-unlink")
+    assert calls.index(f"fsync:{source}") < audit_index
+    assert calls.index(f"fsync:{destination}") < audit_index
+    assert audit_index < wal_index
+
+
+def test_recovery_fsyncs_an_existing_audit_event_before_wal_removal(
+    store, challenge, fixed_now, issue, monkeypatch
+):
+    import hackbot.risk.approvals as approvals
+
+    issue(store)
+    grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+
+    def crash_after_write(point: str) -> None:
+        if point == "after_event_write":
+            raise SimulatedCrash(point)
+
+    monkeypatch.setattr(store, "_crash_point", crash_after_write)
+    with pytest.raises(SimulatedCrash, match="after_event_write"):
+        store.consume(grant, challenge, now=fixed_now)
+
+    monkeypatch.setattr(store, "_crash_point", lambda _phase: None)
+    root = Path(store.root)
+    audit_inode = (root / "events.jsonl").stat().st_ino
+    transaction_inode = (root / "transactions").stat().st_ino
+    calls: list[str] = []
+    real_fsync = approvals.os.fsync
+    real_unlink = approvals.os.unlink
+
+    def record_fsync(fd: int) -> None:
+        if os.fstat(fd).st_ino == audit_inode:
+            calls.append("audit-fsync")
+        real_fsync(fd)
+
+    def record_unlink(path: str, *, dir_fd: int | None = None) -> None:
+        if dir_fd is not None and os.fstat(dir_fd).st_ino == transaction_inode:
+            calls.append("wal-unlink")
+        real_unlink(path, dir_fd=dir_fd)
+
+    monkeypatch.setattr(approvals.os, "fsync", record_fsync)
+    monkeypatch.setattr(approvals.os, "unlink", record_unlink)
+    assert store.status(challenge.challenge_digest) == "consumed"
+    assert calls.index("audit-fsync") < calls.index("wal-unlink")
+
+
+@pytest.mark.parametrize(
+    ("field", "forged_value"),
+    (
+        ("result", "created"),
+        ("reason_code", "CREATED"),
+        ("engagement_id", "f" * 64),
+        ("action_id", "forged.action"),
+        ("effective_risk", 3),
+        ("timestamp", "2026-07-24T12:00:01Z"),
+    ),
+)
+def test_forged_wal_event_semantics_are_rejected_and_safely_audited(
+    store,
+    challenge,
+    fixed_now,
+    issue,
+    monkeypatch,
+    field,
+    forged_value,
+):
+    issue(store)
+    grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+
+    def crash_after_wal(point: str) -> None:
+        if point == "after_wal":
+            raise SimulatedCrash(point)
+
+    monkeypatch.setattr(store, "_crash_point", crash_after_wal)
+    with pytest.raises(SimulatedCrash, match="after_wal"):
+        store.consume(grant, challenge, now=fixed_now)
+
+    journal = Path(store.root) / "transactions" / f"{challenge.challenge_digest}.json.json"
+    transaction = json.loads(journal.read_text(encoding="utf-8"))
+    transaction["event"][field] = forged_value
+    journal.write_bytes(canonical_bytes(transaction))
+    monkeypatch.setattr(store, "_crash_point", lambda _phase: None)
+
+    with pytest.raises(ApprovalError) as captured:
+        store.consume(grant, challenge, now=fixed_now)
+    assert captured.value.code == "APPROVAL_MALFORMED"
+    rejection = _audit_events(store)[-1]
+    assert rejection["reason_code"] == "APPROVAL_MALFORMED"
+    assert rejection["engagement_id"] == challenge.engagement_id
+    assert rejection["action_id"] == challenge.action_id
+    assert set(rejection) == {
+        "action_id",
+        "challenge_digest",
+        "effective_risk",
+        "engagement_id",
+        "reason_code",
+        "result",
+        "timestamp",
+    }
+
+
+def test_wal_operation_requires_exact_source_destination_and_artifact_kind(
+    store, challenge, fixed_now, issue, monkeypatch
+):
+    issue(store)
+    grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+
+    def crash_after_wal(point: str) -> None:
+        if point == "after_wal":
+            raise SimulatedCrash(point)
+
+    monkeypatch.setattr(store, "_crash_point", crash_after_wal)
+    with pytest.raises(SimulatedCrash, match="after_wal"):
+        store.consume(grant, challenge, now=fixed_now)
+    journal = Path(store.root) / "transactions" / f"{challenge.challenge_digest}.json.json"
+    transaction = json.loads(journal.read_text(encoding="utf-8"))
+    transaction["operation"] = "expire-pending"
+    transaction["source"] = "pending"
+    transaction["artifact"]["kind"] = "pending"
+    transaction["artifact"].pop("approved_at")
+    transaction["artifact"].pop("approved_by")
+    journal.write_bytes(canonical_bytes(transaction))
+    monkeypatch.setattr(store, "_crash_point", lambda _phase: None)
+
+    with pytest.raises(ApprovalError) as captured:
+        store.consume(grant, challenge, now=fixed_now)
+    assert captured.value.code == "APPROVAL_MALFORMED"
+
+
+@pytest.mark.parametrize("field", ("operation", "artifact-kind"))
+def test_wal_rejects_non_scalar_operation_and_artifact_kind(
+    store, challenge, fixed_now, issue, monkeypatch, field
+):
+    issue(store)
+    grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+
+    def crash_after_wal(point: str) -> None:
+        if point == "after_wal":
+            raise SimulatedCrash(point)
+
+    monkeypatch.setattr(store, "_crash_point", crash_after_wal)
+    with pytest.raises(SimulatedCrash, match="after_wal"):
+        store.consume(grant, challenge, now=fixed_now)
+    journal = Path(store.root) / "transactions" / f"{challenge.challenge_digest}.json.json"
+    transaction = json.loads(journal.read_text(encoding="utf-8"))
+    if field == "operation":
+        transaction["operation"] = []
+    else:
+        transaction["artifact"]["kind"] = []
+    journal.write_bytes(canonical_bytes(transaction))
+    monkeypatch.setattr(store, "_crash_point", lambda _phase: None)
+
+    with pytest.raises(ApprovalError) as captured:
+        store.consume(grant, challenge, now=fixed_now)
+    assert captured.value.code == "APPROVAL_MALFORMED"
 
 
 def test_all_local_lifecycle_rejections_are_audited(
