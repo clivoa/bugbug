@@ -100,3 +100,54 @@ and a journal with only source rolls back the unperformed transition. Missing
 both artifacts is a controlled malformed-state failure. The new adversarial
 test creates a valid dual-state crash image and verifies that `status` produces
 the destination state with no remaining source file.
+
+## Final remediation — descriptor-owned POSIX store and rejection audit
+
+Commit: `25d98a13d1ccf0b382f93bbac032ebd314cb8adb`
+(`fix: make approval storage descriptor-owned`).
+
+- `ApprovalStore` now anchors the canonical engagement directory with an owned
+  descriptor. After that bootstrap, approval root, state, lock, transaction,
+  artifact, and audit access uses verified directory descriptors plus relative
+  `open`, `stat`, `unlink`, and no-overwrite rename operations. Directories must
+  be current-UID `0700`; regular files must be current-UID `0600`, have one
+  link, and satisfy their size and strict-schema limits.
+- Every descriptor open uses `O_NOFOLLOW`; per-digest locks are regular,
+  single-link `0600` files. macOS uses `renameatx_np(RENAME_EXCL)` and Linux
+  uses `renameat2(RENAME_NOREPLACE)` for atomic consume/expire transitions.
+  Source device/inode and content checks reject read-to-rename replacement,
+  while late destinations are never overwritten.
+- Create, grant, consume, pending expiry, and granted expiry are all durable WAL
+  transactions. The journal is fsynced before mutation; source and destination
+  directories are fsynced; and recovery deterministically completes forward,
+  writes the required event once, removes the journal, and leaves exactly one
+  state. Both pending-origin and granted-origin expired artifacts have strict
+  readable schemas.
+- Lifecycle calls serialize state inspection, recovery, and mutation under the
+  digest lock. Every safely projectable local rejection is appended through a
+  non-recursive audit path, including invalid operator, missing state,
+  challenge/grant mismatch, policy mismatch, malformed/tampered state, replay,
+  and expiry. Audit events retain exactly the seven fixed secret-free fields;
+  transaction recovery checks for the exact event under the audit lock before
+  appending, making replayed recovery idempotent.
+- Secret screening now covers every operator-reviewed request field, including
+  hypothesis, expected impact, stop condition, cleanup plan, and program rule,
+  in addition to target, argv, rationale, data touched, and header names.
+- Adversarial coverage includes engagement-ancestor and state-directory swaps,
+  source replacement after read, late destination creation, artifact/audit/lock
+  hardlinks, lock symlinks, unsafe directory modes, grant/consume/expire races,
+  pending expiry schema, every transaction crash phase, audit completeness, and
+  the invariant that recovery/races leave no dual state. The nofollow-lock test
+  was also mutation-checked: removing `O_NOFOLLOW` reproduced the unsafe grant,
+  and restoring it returned the test to green.
+
+Final verification after the remediation commit:
+
+- Focused approval suite: `66 passed`.
+- Full suite: `400 passed in 3.30s`.
+- `ruff check .`: passed.
+- `mypy src`: passed for 33 source files.
+- Changed-file `ruff format --check`: passed.
+- `git diff --check`: passed.
+- Repository-wide `ruff format --check .` still reports only the pre-existing
+  root `conftest.py`; 74 other files, including both Task 4 files, are formatted.
