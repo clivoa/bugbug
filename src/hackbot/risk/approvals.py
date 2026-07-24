@@ -1,8 +1,10 @@
 """Canonical, local-only storage for exact five-minute L2 approvals.
 
-The audit lock uses :mod:`fcntl`, so the locking guarantee currently applies to
-the supported macOS/Linux runtime.  Windows is intentionally not claimed as a
-supported approval-store platform until it has an equivalent lock primitive.
+The supported macOS/Linux runtime requires both :mod:`fcntl` locking and a
+native atomic no-overwrite rename primitive (``renameatx_np`` on macOS or
+``renameat2`` on Linux).  The store fails closed when either capability is
+unavailable.  Windows is intentionally not claimed as a supported
+approval-store platform until it has equivalent primitives.
 """
 
 from __future__ import annotations
@@ -39,8 +41,20 @@ _APPROVED_BY_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$", re.ASCII)
 _EVENT_RESULT_RE = re.compile(r"^[a-z][a-z-]{0,63}$", re.ASCII)
 _EVENT_REASON_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,127}$", re.ASCII)
 _SECRET_RE = re.compile(
-    r"(?i)(authorization\s*:\s*(?:bearer|basic)|\b(?:api[ _-]?key|token|secret|"
-    r"password|private[ _-]?key)\s*[:=]|\b(?:sk|ghp|xox[baprs])_[A-Za-z0-9_-]{12,})"
+    r"(?ix)("
+    r"(?:proxy-)?authorization\s*:\s*\S+"
+    r"|(?:cookie|set-cookie|x-auth-token|x-api-key|authentication-info)\s*:\s*\S+"
+    r"|\b(?:session(?:[ _-]?id)?|sessionid|auth[ _-]?session(?:[ _-]?id)?)"
+    r"\s*[:=]\s*\S+"
+    r"|\b(?:api[ _-]?key|token|secret|password|private[ _-]?key)\s*[:=]\s*\S+"
+    r"|\beyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\b"
+    r"|\b(?:sk|ghp|xox[baprs])[_-][A-Za-z0-9_-]{12,}"
+    r")"
+)
+_SECRET_NAME_RE = re.compile(
+    r"(?i)^(?:authorization|proxy-authorization|cookie|set-cookie|x-auth-token|"
+    r"x-api-key|authentication-info|session(?:[ _-]?id)?|sessionid|"
+    r"auth[ _-]?session(?:[ _-]?id)?)$"
 )
 _ARTIFACT_LIMIT = 65_536
 _TRANSACTION_LIMIT = 196_608
@@ -69,6 +83,7 @@ _TRANSACTION_KEYS = frozenset(
         "source_identity",
         "artifact",
         "event",
+        "transition_at",
     }
 )
 _ARTIFACT_KEYS = frozenset(
@@ -124,11 +139,11 @@ def _utc(value: object, *, name: str) -> datetime:
     try:
         if value.utcoffset() != timedelta(0):
             raise ApprovalError("APPROVAL_INVALID_CLOCK", f"{name} must be an aware UTC timestamp")
+        return value.astimezone(UTC)
     except (OverflowError, TypeError, ValueError) as exc:
         raise ApprovalError(
             "APPROVAL_INVALID_CLOCK", f"{name} must be an aware UTC timestamp"
         ) from exc
-    return value.astimezone(UTC)
 
 
 def _timestamp(value: datetime) -> str:
@@ -140,7 +155,7 @@ def _parse_timestamp(value: object, *, name: str) -> datetime:
         raise ApprovalError("APPROVAL_MALFORMED", f"malformed {name}")
     try:
         parsed = datetime.fromisoformat(value[:-1] + "+00:00")
-    except ValueError as exc:
+    except (OverflowError, ValueError) as exc:
         raise ApprovalError("APPROVAL_MALFORMED", f"malformed {name}") from exc
     return _utc(parsed, name=name)
 
@@ -230,11 +245,12 @@ def _challenge_fields(
 def _reject_secrets(value: object) -> None:
     """Reject likely credentials without retaining or echoing their values."""
     if isinstance(value, str):
-        if _SECRET_RE.search(value):
+        if _SECRET_RE.search(value) or _SECRET_NAME_RE.fullmatch(value.strip()):
             raise ApprovalError("APPROVAL_SECRET", "secret-bearing challenge data is not allowed")
         return
     if isinstance(value, Mapping):
-        for item in value.values():
+        for key, item in value.items():
+            _reject_secrets(key)
             _reject_secrets(item)
     elif isinstance(value, (tuple, list)):
         for item in value:
@@ -336,7 +352,12 @@ def build_challenge(
     definition, request, context, created_at, checked_nonce = _validate_inputs(
         definition, request, context, now, supplied_nonce
     )
-    expires_at = created_at + timedelta(minutes=5)
+    try:
+        expires_at = created_at + timedelta(minutes=5)
+    except OverflowError as exc:
+        raise ApprovalError(
+            "APPROVAL_INVALID_CLOCK", "challenge expiry is outside the supported range"
+        ) from exc
     try:
         fields = _challenge_fields(
             definition,
@@ -380,17 +401,27 @@ def build_challenge(
 def _validate_challenge(challenge: object) -> ApprovalChallenge:
     if not isinstance(challenge, ApprovalChallenge):
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "invalid approval challenge")
-    if not challenge.engagement_path:
+    if not isinstance(challenge.engagement_path, str) or not challenge.engagement_path:
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge lacks engagement path")
-    if not _DIGEST_RE.fullmatch(challenge.challenge_digest):
-        raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge digest is malformed")
-    if not _DIGEST_RE.fullmatch(challenge.policy_digest) or not _DIGEST_RE.fullmatch(
-        challenge.scope_digest
+    if (
+        not isinstance(challenge.challenge_digest, str)
+        or _DIGEST_RE.fullmatch(challenge.challenge_digest) is None
     ):
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge digest is malformed")
-    if _NONCE_RE.fullmatch(challenge.nonce) is None:
+    if (
+        not isinstance(challenge.policy_digest, str)
+        or _DIGEST_RE.fullmatch(challenge.policy_digest) is None
+        or not isinstance(challenge.scope_digest, str)
+        or _DIGEST_RE.fullmatch(challenge.scope_digest) is None
+    ):
+        raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge digest is malformed")
+    if not isinstance(challenge.nonce, str) or _NONCE_RE.fullmatch(challenge.nonce) is None:
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge nonce is malformed")
-    if not challenge.binding or len(challenge.binding) > _ARTIFACT_LIMIT:
+    if (
+        not isinstance(challenge.binding, bytes)
+        or not challenge.binding
+        or len(challenge.binding) > _ARTIFACT_LIMIT
+    ):
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge binding is malformed")
     try:
         binding = strict_json_loads(challenge.binding.decode("utf-8"))
@@ -402,7 +433,13 @@ def _validate_challenge(challenge: object) -> ApprovalChallenge:
         RecursionError,
     ) as exc:
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge binding is malformed") from exc
-    if not isinstance(binding, dict) or canonical_bytes(binding) != challenge.binding:
+    if not isinstance(binding, dict):
+        raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge binding is malformed")
+    try:
+        canonical_binding = canonical_bytes(binding)
+    except (TypeError, ValueError, UnicodeError, RecursionError) as exc:
+        raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge binding is malformed") from exc
+    if canonical_binding != challenge.binding:
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge binding is malformed")
     if hashlib.sha256(challenge.binding).hexdigest() != challenge.challenge_digest:
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge binding digest is malformed")
@@ -412,33 +449,43 @@ def _validate_challenge(challenge: object) -> ApprovalChallenge:
         raise ApprovalError("APPROVAL_POLICY_MISMATCH", "challenge policy binding does not match")
     if binding.get("scope_digest") != challenge.scope_digest:
         raise ApprovalError("APPROVAL_MISMATCH", "challenge scope binding does not match")
-    if (
-        not isinstance(request, dict)
-        or not isinstance(engagement, dict)
-        or engagement.get("id") != challenge.engagement_id
-        or engagement.get("path") != challenge.engagement_path
-        or binding.get("program_id") != challenge.program_id
-        or request.get("target") != challenge.target
-        or tuple(request.get("argv", ())) != challenge.argv
-        or request.get("action_id") != challenge.action_id
-        or request.get("rationale") != challenge.rationale
-        or request.get("hypothesis_id") != challenge.hypothesis_id
-        or request.get("expected_impact") != challenge.expected_impact
-        or request.get("rate") != challenge.rate
-        or request.get("concurrency") != challenge.concurrency
-        or request.get("data_touched") != challenge.data_touched
-        or request.get("stop_condition") != challenge.stop_condition
-        or request.get("program_rule") != challenge.program_rule
-        or request.get("cleanup_plan") != challenge.cleanup_plan
-        or binding.get("effective_risk") != int(challenge.effective_risk)
-        or binding.get("created_at") != _timestamp(challenge.created_at)
-        or binding.get("expires_at") != _timestamp(challenge.expires_at)
-        or binding.get("nonce") != challenge.nonce
-    ):
+    try:
+        mismatch = (
+            not isinstance(request, dict)
+            or not isinstance(engagement, dict)
+            or engagement.get("id") != challenge.engagement_id
+            or engagement.get("path") != challenge.engagement_path
+            or binding.get("program_id") != challenge.program_id
+            or request.get("target") != challenge.target
+            or tuple(request.get("argv", ())) != challenge.argv
+            or request.get("action_id") != challenge.action_id
+            or request.get("rationale") != challenge.rationale
+            or request.get("hypothesis_id") != challenge.hypothesis_id
+            or request.get("expected_impact") != challenge.expected_impact
+            or request.get("rate") != challenge.rate
+            or request.get("concurrency") != challenge.concurrency
+            or request.get("data_touched") != challenge.data_touched
+            or request.get("stop_condition") != challenge.stop_condition
+            or request.get("program_rule") != challenge.program_rule
+            or request.get("cleanup_plan") != challenge.cleanup_plan
+            or binding.get("effective_risk") != int(challenge.effective_risk)
+            or binding.get("created_at") != _timestamp(challenge.created_at)
+            or binding.get("expires_at") != _timestamp(challenge.expires_at)
+            or binding.get("nonce") != challenge.nonce
+        )
+    except (OverflowError, TypeError, ValueError) as exc:
+        raise ApprovalError(
+            "APPROVAL_INVALID_CHALLENGE", "challenge binding does not match"
+        ) from exc
+    if mismatch:
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge binding does not match")
     created_at = _utc(challenge.created_at, name="challenge.created_at")
     expires_at = _utc(challenge.expires_at, name="challenge.expires_at")
-    if expires_at != created_at + timedelta(minutes=5):
+    try:
+        expected_expiry = created_at + timedelta(minutes=5)
+    except OverflowError as exc:
+        raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge expiry is malformed") from exc
+    if expires_at != expected_expiry:
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge expiry is malformed")
     if challenge.effective_risk is not RiskLevel.L2:
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge risk is malformed")
@@ -482,6 +529,7 @@ class ApprovalStore:
     """Descriptor-owned, engagement-local, no-overwrite L2 persistence."""
 
     def __init__(self, engagement_dir: str | Path) -> None:
+        engagement_fd: int | None = None
         try:
             self.engagement_path, self.engagement_id = canonical_engagement_identity(engagement_dir)
             engagement_fd = os.open(
@@ -495,12 +543,17 @@ class ApprovalStore:
                 or info.st_uid != os.geteuid()
                 or (info.st_dev, info.st_ino) != (path_info.st_dev, path_info.st_ino)
             ):
-                os.close(engagement_fd)
                 raise OSError("unsafe engagement directory")
         except (EngagementIdentityError, OSError) as exc:
+            if engagement_fd is not None:
+                try:
+                    os.close(engagement_fd)
+                except OSError:
+                    pass
             raise ApprovalError(
                 "APPROVAL_INVALID_ENGAGEMENT", "invalid engagement directory"
             ) from exc
+        assert engagement_fd is not None
         self._engagement_fd: int | None = engagement_fd
         self.root = str(Path(self.engagement_path) / "approvals")
 
@@ -525,7 +578,7 @@ class ApprovalStore:
 
     @staticmethod
     def _name(digest: str) -> str:
-        if _DIGEST_RE.fullmatch(digest) is None:
+        if not isinstance(digest, str) or _DIGEST_RE.fullmatch(digest) is None:
             raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge digest is malformed")
         return digest + ".json"
 
@@ -576,6 +629,8 @@ class ApprovalStore:
             if created:
                 os.fchmod(fd, 0o700)
             cls._validate_directory(os.fstat(fd))
+            if created:
+                os.fsync(parent_fd)
             return fd
         except ApprovalError:
             if "fd" in locals():
@@ -807,8 +862,10 @@ class ApprovalStore:
         value: dict[str, object], *, allowed_kinds: frozenset[str]
     ) -> None:
         kind = value.get("kind")
-        if kind not in allowed_kinds or set(value) != (
-            _PENDING_KEYS if kind == "pending" else _GRANT_KEYS
+        if (
+            not isinstance(kind, str)
+            or kind not in allowed_kinds
+            or set(value) != (_PENDING_KEYS if kind == "pending" else _GRANT_KEYS)
         ):
             raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
         if value.get("version") != _VERSION:
@@ -835,7 +892,7 @@ class ApprovalStore:
             binding_bytes = canonical_bytes(binding)
             request = binding.get("request")
             engagement = binding.get("engagement")
-        except (TypeError, ValueError, UnicodeError) as exc:
+        except (TypeError, ValueError, UnicodeError, RecursionError) as exc:
             raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact") from exc
         if (
             hashlib.sha256(binding_bytes).hexdigest() != value["challenge_digest"]
@@ -852,19 +909,22 @@ class ApprovalStore:
             or binding.get("nonce") != value["nonce"]
         ):
             raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
-        created_at = _parse_timestamp(value.get("created_at"), name="created_at")
-        expires_at = _parse_timestamp(value.get("expires_at"), name="expires_at")
-        if expires_at != created_at + timedelta(minutes=5):
-            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
-        if kind == "granted":
-            approved_by = value.get("approved_by")
-            approved_at = _parse_timestamp(value.get("approved_at"), name="approved_at")
-            if (
-                not isinstance(approved_by, str)
-                or _APPROVED_BY_RE.fullmatch(approved_by) is None
-                or not created_at <= approved_at < expires_at
-            ):
+        try:
+            created_at = _parse_timestamp(value.get("created_at"), name="created_at")
+            expires_at = _parse_timestamp(value.get("expires_at"), name="expires_at")
+            if expires_at != created_at + timedelta(minutes=5):
                 raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
+            if kind == "granted":
+                approved_by = value.get("approved_by")
+                approved_at = _parse_timestamp(value.get("approved_at"), name="approved_at")
+                if (
+                    not isinstance(approved_by, str)
+                    or _APPROVED_BY_RE.fullmatch(approved_by) is None
+                    or not created_at <= approved_at < expires_at
+                ):
+                    raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
+        except (OverflowError, TypeError, ValueError) as exc:
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact") from exc
 
     def _read_artifact(self, layout: _Layout, state: str, digest: str) -> _Record:
         allowed = {
@@ -993,7 +1053,8 @@ class ApprovalStore:
             if not idempotent or not self._contains_line(fd, payload):
                 if os.write(fd, payload) != len(payload):
                     raise OSError("short audit write")
-                os.fsync(fd)
+                self._crash_point("after_event_write")
+            os.fsync(fd)
             if created:
                 os.fsync(layout.root)
         except ApprovalError:
@@ -1061,9 +1122,21 @@ class ApprovalStore:
     def _rename_noreplace(
         source_fd: int, source: str, destination_fd: int, destination: str
     ) -> None:
-        libc = ctypes.CDLL(None, use_errno=True)
+        try:
+            libc = ctypes.CDLL(None, use_errno=True)
+            if sys.platform == "darwin":
+                rename = libc.renameatx_np
+            elif sys.platform.startswith("linux"):
+                rename = libc.renameat2
+            else:
+                raise ApprovalError(
+                    "APPROVAL_UNSAFE_PATH", "atomic no-overwrite rename is unavailable"
+                )
+        except (AttributeError, OSError) as exc:
+            raise ApprovalError(
+                "APPROVAL_UNSAFE_PATH", "atomic no-overwrite rename is unavailable"
+            ) from exc
         if sys.platform == "darwin":
-            rename = libc.renameatx_np
             rename.argtypes = [
                 ctypes.c_int,
                 ctypes.c_char_p,
@@ -1079,8 +1152,7 @@ class ApprovalStore:
                 os.fsencode(destination),
                 0x00000004,
             )
-        elif sys.platform.startswith("linux"):
-            rename = libc.renameat2
+        else:
             rename.argtypes = [
                 ctypes.c_int,
                 ctypes.c_char_p,
@@ -1096,10 +1168,12 @@ class ApprovalStore:
                 os.fsencode(destination),
                 0x00000001,
             )
-        else:
-            raise ApprovalError("APPROVAL_UNSAFE_PATH", "atomic no-overwrite rename is unavailable")
         if result != 0:
             error = ctypes.get_errno()
+            if error in {errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP}:
+                raise ApprovalError(
+                    "APPROVAL_UNSAFE_PATH", "atomic no-overwrite rename is unavailable"
+                )
             raise OSError(error, os.strerror(error))
 
     @staticmethod
@@ -1148,6 +1222,7 @@ class ApprovalStore:
             "source_identity": list(source_record.identity) if source_record is not None else None,
             "artifact": artifact,
             "event": self._event(challenge, result=result, reason_code=reason_code, now=event_at),
+            "transition_at": _timestamp(event_at),
         }
 
     def _validate_transaction(
@@ -1158,6 +1233,14 @@ class ApprovalStore:
             and value.get("version") == _VERSION
         ):
             return self._upgrade_legacy_transaction(layout, value, digest)
+        if set(value) == _TRANSACTION_KEYS - {"transition_at"}:
+            legacy_event = value.get("event")
+            value = {
+                **value,
+                "transition_at": legacy_event.get("timestamp")
+                if isinstance(legacy_event, dict)
+                else None,
+            }
         if (
             set(value) != _TRANSACTION_KEYS
             or value.get("version") != _VERSION
@@ -1174,7 +1257,11 @@ class ApprovalStore:
             "expire-pending": ("pending", "expired"),
             "expire-granted": ("granted", "expired"),
         }
-        if operation not in allowed or (source, destination) != allowed[operation]:
+        if (
+            not isinstance(operation, str)
+            or operation not in allowed
+            or (source, destination) != allowed[operation]
+        ):
             raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
         checksum = value.get("source_checksum")
         identity = value.get("source_identity")
@@ -1208,7 +1295,42 @@ class ApprovalStore:
         self._validate_artifact_value(artifact, allowed_kinds=expected_kinds[operation])
         if artifact["challenge_digest"] != digest:
             raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
-        self._validate_event(value.get("event"), digest=digest)
+        event = self._validate_event(value.get("event"), digest=digest)
+        expected_events = {
+            "create": ("created", "CREATED"),
+            "grant": ("granted", "GRANTED"),
+            "consume": ("consumed", "CONSUMED"),
+            "expire-pending": ("expired", "EXPIRED"),
+            "expire-granted": ("expired", "EXPIRED"),
+        }
+        transition_value = value.get("transition_at")
+        try:
+            transition_at = _parse_timestamp(transition_value, name="transition timestamp")
+            created_at = _parse_timestamp(artifact.get("created_at"), name="created_at")
+            expires_at = _parse_timestamp(artifact.get("expires_at"), name="expires_at")
+            if (
+                (event["result"], event["reason_code"]) != expected_events[operation]
+                or event["engagement_id"] != artifact["engagement_id"]
+                or event["action_id"] != artifact["action_id"]
+                or event["challenge_digest"] != artifact["challenge_digest"]
+                or event["effective_risk"] != artifact["effective_risk"]
+                or event["timestamp"] != transition_value
+            ):
+                raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+            if operation == "create" and transition_at != created_at:
+                raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+            if operation == "grant":
+                approved_at = _parse_timestamp(artifact.get("approved_at"), name="approved_at")
+                if transition_at != approved_at:
+                    raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+            if operation.startswith("expire-") and transition_at != expires_at:
+                raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+            if operation == "consume":
+                approved_at = _parse_timestamp(artifact.get("approved_at"), name="approved_at")
+                if not approved_at <= transition_at < expires_at:
+                    raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction")
+        except (OverflowError, TypeError, ValueError) as exc:
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction") from exc
         return value
 
     def _upgrade_legacy_transaction(
@@ -1281,9 +1403,9 @@ class ApprovalStore:
             ),
             "artifact": artifact,
             "event": event,
+            "transition_at": when,
         }
-        self._validate_event(event, digest=digest)
-        return upgraded
+        return self._validate_transaction(layout, upgraded, digest)
 
     def _read_transaction(self, layout: _Layout, digest: str) -> _Record | None:
         name = self._name(digest) + ".json"
@@ -1454,6 +1576,9 @@ class ApprovalStore:
                 raise ApprovalError("APPROVAL_MALFORMED", "approval source was tampered")
             self._unlink_verified(layout.directory(str(source)), name, duplicate.identity)
 
+        if source is not None:
+            os.fsync(layout.directory(source))
+        os.fsync(layout.directory(destination))
         self._append_event_record(layout, event, idempotent=True)
         if inject_crashes:
             self._crash_point("after_event")
