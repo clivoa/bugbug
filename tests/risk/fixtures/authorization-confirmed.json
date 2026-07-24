@@ -1,0 +1,6 @@
+{
+  "confirmed": true,
+  "confirmation_timestamp": "2000-01-01T00:00:00Z",
+  "confirmed_by": "test-operator",
+  "note": "informational only"
+}
