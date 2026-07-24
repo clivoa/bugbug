@@ -165,6 +165,8 @@ class ActionRequest:
     program_rule: str
     required_headers: tuple[str, ...] = ()
     requested_risk: RiskLevel | None = None
+    vulnerability_type: str | None = None
+    impact: str | None = None
 
     def __post_init__(self) -> None:
         _text(self.engagement_id, name="engagement_id", limit=_IDENTIFIER_LIMIT)
@@ -235,6 +237,13 @@ class ActionRequest:
         )
         if self.requested_risk is not None and not isinstance(self.requested_risk, RiskLevel):
             raise ValueError("requested_risk must be a RiskLevel or None")
+        for name in ("vulnerability_type", "impact"):
+            value = getattr(self, name)
+            if value is not None:
+                normalized = _text(value, name=name, limit=_IDENTIFIER_LIMIT).strip().lower()
+                if not normalized:
+                    raise ValueError(f"{name} must not be empty")
+                object.__setattr__(self, name, normalized)
 
     def effective_risk(self, definition: ActionDefinition) -> RiskLevel:
         return max(definition.effective_floor, self.requested_risk or RiskLevel.L0)
