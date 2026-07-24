@@ -1,0 +1,3 @@
+schema_version: 99
+in_scope:
+  domains: [example.com]

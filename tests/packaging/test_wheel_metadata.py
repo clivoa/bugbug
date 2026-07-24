@@ -2,6 +2,7 @@
 Packaging tests: the built wheel's dependency metadata must reconcile with
 pyproject.toml, and the entry point must be present.
 """
+
 import glob
 import subprocess
 import sys
@@ -17,8 +18,12 @@ ROOT = Path(__file__).resolve().parents[2]
 @pytest.fixture(scope="module")
 def wheel_metadata():
     # build fresh so the test reflects current pyproject
-    subprocess.run([sys.executable, str(ROOT / "scripts/build_wheel.py")],
-                   cwd=ROOT, check=True, capture_output=True)
+    subprocess.run(
+        [sys.executable, str(ROOT / "scripts/build_wheel.py")],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
     whl = sorted(glob.glob(str(ROOT / "dist/hackbot-*.whl")))[-1]
     z = zipfile.ZipFile(whl)
     md = next(n for n in z.namelist() if n.endswith("METADATA"))
@@ -57,8 +62,9 @@ def test_keyring_is_secrets_extra_not_core(wheel_metadata):
 def test_core_has_no_runtime_deps(wheel_metadata):
     """Core CLI is stdlib-only: no bare Requires-Dist (all are extra-gated)."""
     text, _ = wheel_metadata
-    bare = [ln for ln in text.splitlines()
-            if ln.startswith("Requires-Dist:") and "; extra ==" not in ln]
+    bare = [
+        ln for ln in text.splitlines() if ln.startswith("Requires-Dist:") and "; extra ==" not in ln
+    ]
     assert bare == [], f"unexpected core deps: {bare}"
 
 

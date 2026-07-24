@@ -15,45 +15,96 @@ The default-deny philosophy: a note's HIGHEST-risk section sets its approval
 level. Discovering an asset never authorizes testing it, so ASN/CDN/cert/PTR
 follow-up that leaves named in-scope assets is demoted to L2 or disabled.
 """
+
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from typing import Any
-
 
 # ---- macOS / portability signal detection (heuristic, over the command text)
 # Each entry: (regex, short_id, severity, adaptation)
 _PORTABILITY_RULES: list[tuple[str, str, str, str]] = [
-    (r"/dev/tcp/", "bash-dev-tcp", "incompatible-zsh",
-     "zsh has no /dev/tcp; run under bash, or use `nc -z` / naabu adapter"),
-    (r"/dev/udp/", "bash-dev-udp", "incompatible-zsh",
-     "no /dev/udp in zsh; use nmap -sU adapter (L2, approval)"),
-    (r"/proc/net/arp", "proc-net-arp", "linux-only",
-     "no /proc on macOS; use `arp -an` (BSD) — Linux-runner only feature"),
-    (r"\bscapy\b|from scapy", "scapy", "needs-root+deps",
-     "raw sockets need root; prefer nmap; Linux-runner recommended"),
-    (r"\bp0f\b", "p0f", "linux-oriented",
-     "p0f rarely packaged on macOS; Linux-runner or exclude"),
-    (r"\barp-scan\b", "arp-scan", "linux-oriented",
-     "arp-scan needs libpcap+root; Linux-runner or `arp -an`"),
-    (r"\bnetexec\b|\bnxc\b|\bcrackmapexec\b", "netexec", "internal-tool",
-     "AD/internal only; disabled in bug-bounty profile"),
-    (r"\bbloodhound\b|\bwindapsearch\b|\bldapdomaindump\b", "ad-tooling", "internal-tool",
-     "Active Directory tooling; internal-recon pack only"),
+    (
+        r"/dev/tcp/",
+        "bash-dev-tcp",
+        "incompatible-zsh",
+        "zsh has no /dev/tcp; run under bash, or use `nc -z` / naabu adapter",
+    ),
+    (
+        r"/dev/udp/",
+        "bash-dev-udp",
+        "incompatible-zsh",
+        "no /dev/udp in zsh; use nmap -sU adapter (L2, approval)",
+    ),
+    (
+        r"/proc/net/arp",
+        "proc-net-arp",
+        "linux-only",
+        "no /proc on macOS; use `arp -an` (BSD) — Linux-runner only feature",
+    ),
+    (
+        r"\bscapy\b|from scapy",
+        "scapy",
+        "needs-root+deps",
+        "raw sockets need root; prefer nmap; Linux-runner recommended",
+    ),
+    (r"\bp0f\b", "p0f", "linux-oriented", "p0f rarely packaged on macOS; Linux-runner or exclude"),
+    (
+        r"\barp-scan\b",
+        "arp-scan",
+        "linux-oriented",
+        "arp-scan needs libpcap+root; Linux-runner or `arp -an`",
+    ),
+    (
+        r"\bnetexec\b|\bnxc\b|\bcrackmapexec\b",
+        "netexec",
+        "internal-tool",
+        "AD/internal only; disabled in bug-bounty profile",
+    ),
+    (
+        r"\bbloodhound\b|\bwindapsearch\b|\bldapdomaindump\b",
+        "ad-tooling",
+        "internal-tool",
+        "Active Directory tooling; internal-recon pack only",
+    ),
     # match the tool invocation (responder -I ...), not the pt-BR verb "responder"
-    (r"\bresponder(?:\.py)?\s+-[a-zA-Z]", "responder", "internal-tool",
-     "LLMNR/NBT poisoning; internal-recon pack only, never bug-bounty"),
-    (r"\bip\s+(addr|route|link|neigh)\b", "iproute2", "linux-only",
-     "iproute2 not on macOS; use ifconfig/route/arp shims"),
-    (r"\bsed\s+-r\b", "gnu-sed-r", "gnu-flag",
-     "BSD sed uses -E not -r; platform shim rewrites the flag"),
-    (r"\bgrep\s+-P\b", "gnu-grep-P", "gnu-flag",
-     "BSD grep lacks -P (PCRE); use ripgrep or -E adapter"),
-    (r"\btimeout\s", "gnu-timeout", "coreutils",
-     "macOS lacks `timeout` unless coreutils/gtimeout installed; adapter provides one"),
-    (r"\bxargs\b.*\-P", "xargs-parallel", "portable-ok",
-     "xargs -P works on both; enforce concurrency cap in adapter"),
+    (
+        r"\bresponder(?:\.py)?\s+-[a-zA-Z]",
+        "responder",
+        "internal-tool",
+        "LLMNR/NBT poisoning; internal-recon pack only, never bug-bounty",
+    ),
+    (
+        r"\bip\s+(addr|route|link|neigh)\b",
+        "iproute2",
+        "linux-only",
+        "iproute2 not on macOS; use ifconfig/route/arp shims",
+    ),
+    (
+        r"\bsed\s+-r\b",
+        "gnu-sed-r",
+        "gnu-flag",
+        "BSD sed uses -E not -r; platform shim rewrites the flag",
+    ),
+    (
+        r"\bgrep\s+-P\b",
+        "gnu-grep-P",
+        "gnu-flag",
+        "BSD grep lacks -P (PCRE); use ripgrep or -E adapter",
+    ),
+    (
+        r"\btimeout\s",
+        "gnu-timeout",
+        "coreutils",
+        "macOS lacks `timeout` unless coreutils/gtimeout installed; adapter provides one",
+    ),
+    (
+        r"\bxargs\b.*\-P",
+        "xargs-parallel",
+        "portable-ok",
+        "xargs -P works on both; enforce concurrency cap in adapter",
+    ),
 ]
 
 
@@ -62,134 +113,303 @@ _PORTABILITY_RULES: list[tuple[str, str, str, str]] = [
 _POLICY: dict[str, dict[str, Any]] = {
     # ---------- external, bug-bounty applicable ----------
     "note-consulta-dns": dict(
-        recon_type="mixed", risk_level=1, approval="auto-if-in-scope",
+        recon_type="mixed",
+        risk_level=1,
+        approval="auto-if-in-scope",
         skill_target="recon/dns-recon",
-        note="passive DNS/DoH is L0; active resolution/brute is L1; zone-transfer against 3rd parties excluded"),
+        note="passive DNS/DoH is L0; active resolution/brute is L1; zone-transfer against 3rd parties excluded",
+    ),
     "note-consulta-certificado-tls": dict(
-        recon_type="passive", risk_level=0, approval="none",
+        recon_type="passive",
+        risk_level=0,
+        approval="none",
         skill_target="recon/tls-certificate-recon",
-        note="CT logs / crt.sh / censys are passive; live openssl fetch to in-scope host is L1"),
+        note="CT logs / crt.sh / censys are passive; live openssl fetch to in-scope host is L1",
+    ),
     "note-subdomain-discovery": dict(
-        recon_type="mixed", risk_level=1, approval="auto-if-in-scope",
+        recon_type="mixed",
+        risk_level=1,
+        approval="auto-if-in-scope",
         skill_target="recon/subdomain-discovery",
-        note="passive sources L0; DNS bruteforce L1 rate-limited; validation httpx L1"),
+        note="passive sources L0; DNS bruteforce L1 rate-limited; validation httpx L1",
+    ),
     "note-github-recon": dict(
-        recon_type="passive", risk_level=0, approval="none",
+        recon_type="passive",
+        risk_level=0,
+        approval="none",
         skill_target="recon/github-recon",
-        note="public code search/secret discovery is L0; exposed .git fetch to in-scope host is L1"),
+        note="public code search/secret discovery is L0; exposed .git fetch to in-scope host is L1",
+    ),
     "note-google-dorking": dict(
-        recon_type="passive", risk_level=0, approval="none",
+        recon_type="passive",
+        risk_level=0,
+        approval="none",
         skill_target="recon/osint",
-        note="search-engine dorking is fully passive"),
+        note="search-engine dorking is fully passive",
+    ),
     "note-osint-tools": dict(
-        recon_type="passive", risk_level=0, approval="none",
+        recon_type="passive",
+        risk_level=0,
+        approval="none",
         skill_target="recon/osint",
-        note="OSINT aggregation; Shodan/censys via adapters; no active probing"),
+        note="OSINT aggregation; Shodan/censys via adapters; no active probing",
+    ),
     "note-js-analysis": dict(
-        recon_type="mixed", risk_level=1, approval="auto-if-in-scope",
+        recon_type="mixed",
+        risk_level=1,
+        approval="auto-if-in-scope",
         skill_target="recon/javascript-analysis",
-        note="collecting JS from in-scope host is L1; local secret extraction is L0"),
+        note="collecting JS from in-scope host is L1; local secret extraction is L0",
+    ),
     "note-web-crawling": dict(
-        recon_type="mixed", risk_level=1, approval="auto-if-in-scope",
+        recon_type="mixed",
+        risk_level=1,
+        approval="auto-if-in-scope",
         skill_target="recon/web-crawling",
-        note="wayback/gau L0; live crawl (katana) L1 with strict scope + rate limit"),
+        note="wayback/gau L0; live crawl (katana) L1 with strict scope + rate limit",
+    ),
     "note-waf-cdn-detection": dict(
-        recon_type="mixed", risk_level=1, approval="auto-if-in-scope",
+        recon_type="mixed",
+        risk_level=1,
+        approval="auto-if-in-scope",
         skill_target="recon/waf-cdn-detection",
         note="passive WAF/CDN detection L1; ORIGIN-IP BYPASS sections DISABLED (defeats protection)",
-        disabled_sections=["origin ip discovery (bypass do cdn)", "bypass via host header"]),
+        disabled_sections=["origin ip discovery (bypass do cdn)", "bypass via host header"],
+    ),
     "note-recon-pipeline": dict(
-        recon_type="mixed", risk_level=1, approval="auto-if-in-scope",
+        recon_type="mixed",
+        risk_level=1,
+        approval="auto-if-in-scope",
         skill_target="recon/recon-pipeline",
-        note="passive pipeline L0; active pipeline L1; ASN+netblock stage inherits L2/disabled"),
+        note="passive pipeline L0; active pipeline L1; ASN+netblock stage inherits L2/disabled",
+    ),
     # ---------- external but L2 (explicit approval) ----------
     "note-asn-netblock": dict(
-        recon_type="active", risk_level=2, approval="explicit",
+        recon_type="active",
+        risk_level=2,
+        approval="explicit",
         skill_target="recon/asn-netblock-analysis",
         note="ASN/netblock is a HYPOTHESIS source; probing ranges = L2; CDN/cloud ranges DISABLED; favicon-hash is L0 evidence only",
-        disabled_sections=["5. cloud & cdn (cuidado com escopo)", "scan nos ranges descobertos"]),
+        disabled_sections=["5. cloud & cdn (cuidado com escopo)", "scan nos ranges descobertos"],
+    ),
     "note-banner-scanning": dict(
-        recon_type="active", risk_level=2, approval="explicit",
+        recon_type="active",
+        risk_level=2,
+        approval="explicit",
         skill_target="recon/service-fingerprinting",
-        note="active banner grabbing across ports needs explicit approval"),
+        note="active banner grabbing across ports needs explicit approval",
+    ),
     "note-port-scanning-bash": dict(
-        recon_type="active", risk_level=2, approval="explicit",
+        recon_type="active",
+        risk_level=2,
+        approval="explicit",
         skill_target="recon/service-fingerprinting",
-        note="port scanning is L2; /dev/tcp & /dev/udp need macOS adaptation or naabu/nmap adapter"),
+        note="port scanning is L2; /dev/tcp & /dev/udp need macOS adaptation or naabu/nmap adapter",
+    ),
     "note-tcp-fin-fingerprint": dict(
-        recon_type="active", risk_level=2, approval="explicit",
+        recon_type="active",
+        risk_level=2,
+        approval="explicit",
         skill_target="recon/service-fingerprinting",
-        note="TCP FIN/JARM/JA3 active fingerprinting = L2; scapy needs root/Linux-runner; JA3/JARM passive-ish subset L1"),
+        note="TCP FIN/JARM/JA3 active fingerprinting = L2; scapy needs root/Linux-runner; JA3/JARM passive-ish subset L1",
+    ),
     "note-param-fuzzing": dict(
-        recon_type="active", risk_level=2, approval="explicit",
+        recon_type="active",
+        risk_level=2,
+        approval="explicit",
         skill_target="recon/parameter-discovery",
-        note="parameter/endpoint fuzzing = L2 (high request volume); only when program allows automated testing"),
+        note="parameter/endpoint fuzzing = L2 (high request volume); only when program allows automated testing",
+    ),
     "note-enumeracao-diretorios": dict(
-        recon_type="active", risk_level=2, approval="explicit",
+        recon_type="active",
+        risk_level=2,
+        approval="explicit",
         skill_target="recon/parameter-discovery",
-        note="directory brute-force = L2 high-volume; low-rate limited discovery may be L1 if program allows"),
+        note="directory brute-force = L2 high-volume; low-rate limited discovery may be L1 if program allows",
+    ),
     # ---------- internal pack (disabled by default) ----------
     "note-descoberta-hosts-rede-interna": dict(
-        recon_type="active", risk_level="disabled", approval="forbidden-by-default",
-        skill_target="internal-recon/internal-host-discovery", internal=True,
-        note="internal network host discovery; requires private-pentest/local-lab profile + explicit auth"),
+        recon_type="active",
+        risk_level="disabled",
+        approval="forbidden-by-default",
+        skill_target="internal-recon/internal-host-discovery",
+        internal=True,
+        note="internal network host discovery; requires private-pentest/local-lab profile + explicit auth",
+    ),
     "note-enumeracao-ldap": dict(
-        recon_type="active", risk_level="disabled", approval="forbidden-by-default",
-        skill_target="internal-recon/ldap-enumeration", internal=True,
-        note="AD/LDAP enumeration; internal only; never enabled by an internal hostname appearing in data"),
+        recon_type="active",
+        risk_level="disabled",
+        approval="forbidden-by-default",
+        skill_target="internal-recon/ldap-enumeration",
+        internal=True,
+        note="AD/LDAP enumeration; internal only; never enabled by an internal hostname appearing in data",
+    ),
     "note-enumeracao-linux": dict(
-        recon_type="active", risk_level="disabled", approval="forbidden-by-default",
-        skill_target="internal-recon/linux-enumeration", internal=True,
-        note="internal Linux host/network enumeration; internal profile only"),
+        recon_type="active",
+        risk_level="disabled",
+        approval="forbidden-by-default",
+        skill_target="internal-recon/linux-enumeration",
+        internal=True,
+        note="internal Linux host/network enumeration; internal profile only",
+    ),
 }
 
 
 # ---- Operational attributes per note: tools, API keys, noise, volume, scope
 #      risk, third-party impact. Values are conservative defaults for planning.
 _ATTRS: dict[str, dict[str, Any]] = {
-    "note-consulta-dns": dict(tools=["dig", "dnsx", "dog", "massdns"], api_keys=[],
-        noise="low", volume="low", scope_risk="low", third_party="none"),
-    "note-consulta-certificado-tls": dict(tools=["curl", "openssl", "tlsx", "certspotter"],
-        api_keys=["censys(optional)"], noise="none", volume="low", scope_risk="low", third_party="none"),
-    "note-subdomain-discovery": dict(tools=["subfinder", "amass", "dnsx", "httpx", "puredns"],
-        api_keys=["various-passive-sources(optional)"], noise="low", volume="medium",
-        scope_risk="medium", third_party="possible"),
-    "note-github-recon": dict(tools=["gh", "trufflehog", "gitleaks", "github-subdomains"],
-        api_keys=["GITHUB_TOKEN"], noise="none", volume="low", scope_risk="low", third_party="none"),
-    "note-google-dorking": dict(tools=["browser", "curl"], api_keys=[],
-        noise="none", volume="low", scope_risk="low", third_party="none"),
-    "note-osint-tools": dict(tools=["shodan", "theHarvester", "amass"],
-        api_keys=["SHODAN_API_KEY", "censys(optional)"], noise="none", volume="low",
-        scope_risk="low", third_party="none"),
-    "note-js-analysis": dict(tools=["katana", "gau", "subjs", "linkfinder", "jsluice"],
-        api_keys=[], noise="low", volume="medium", scope_risk="low", third_party="none"),
-    "note-web-crawling": dict(tools=["katana", "gau", "waybackurls", "httpx", "hakrawler"],
-        api_keys=[], noise="low", volume="medium", scope_risk="medium", third_party="possible"),
-    "note-waf-cdn-detection": dict(tools=["wafw00f", "httpx", "dig", "whatweb"],
-        api_keys=[], noise="low", volume="low", scope_risk="high",
-        third_party="likely (CDN/shared infra)"),
-    "note-recon-pipeline": dict(tools=["subfinder", "dnsx", "httpx", "katana", "nuclei"],
-        api_keys=["SHODAN_API_KEY(optional)"], noise="medium", volume="medium",
-        scope_risk="medium", third_party="possible"),
-    "note-asn-netblock": dict(tools=["whois", "amass", "asnmap", "mapcidr", "dnsx"],
-        api_keys=["SHODAN_API_KEY(optional)"], noise="high", volume="high",
-        scope_risk="high", third_party="likely (ranges may not belong to target)"),
-    "note-banner-scanning": dict(tools=["nc", "nmap", "httpx"], api_keys=[],
-        noise="high", volume="medium", scope_risk="medium", third_party="possible"),
-    "note-port-scanning-bash": dict(tools=["nc", "naabu", "nmap"], api_keys=[],
-        noise="high", volume="high", scope_risk="medium", third_party="possible"),
-    "note-tcp-fin-fingerprint": dict(tools=["nmap", "scapy", "p0f", "jarm"], api_keys=[],
-        noise="high", volume="medium", scope_risk="medium", third_party="possible"),
-    "note-param-fuzzing": dict(tools=["arjun", "ffuf", "x8", "paramspider"], api_keys=[],
-        noise="high", volume="high", scope_risk="medium", third_party="none"),
-    "note-enumeracao-diretorios": dict(tools=["ffuf", "feroxbuster", "gobuster", "dirb"],
-        api_keys=[], noise="high", volume="high", scope_risk="medium", third_party="none"),
-    "note-descoberta-hosts-rede-interna": dict(tools=["nmap", "arp-scan", "netdiscover", "fping"],
-        api_keys=[], noise="high", volume="high", scope_risk="internal-only", third_party="n/a"),
-    "note-enumeracao-ldap": dict(tools=["ldapsearch", "nmap", "netexec", "bloodhound"],
-        api_keys=[], noise="high", volume="high", scope_risk="internal-only", third_party="n/a"),
-    "note-enumeracao-linux": dict(tools=["nmap", "ss", "arp"], api_keys=[],
-        noise="high", volume="medium", scope_risk="internal-only", third_party="n/a"),
+    "note-consulta-dns": dict(
+        tools=["dig", "dnsx", "dog", "massdns"],
+        api_keys=[],
+        noise="low",
+        volume="low",
+        scope_risk="low",
+        third_party="none",
+    ),
+    "note-consulta-certificado-tls": dict(
+        tools=["curl", "openssl", "tlsx", "certspotter"],
+        api_keys=["censys(optional)"],
+        noise="none",
+        volume="low",
+        scope_risk="low",
+        third_party="none",
+    ),
+    "note-subdomain-discovery": dict(
+        tools=["subfinder", "amass", "dnsx", "httpx", "puredns"],
+        api_keys=["various-passive-sources(optional)"],
+        noise="low",
+        volume="medium",
+        scope_risk="medium",
+        third_party="possible",
+    ),
+    "note-github-recon": dict(
+        tools=["gh", "trufflehog", "gitleaks", "github-subdomains"],
+        api_keys=["GITHUB_TOKEN"],
+        noise="none",
+        volume="low",
+        scope_risk="low",
+        third_party="none",
+    ),
+    "note-google-dorking": dict(
+        tools=["browser", "curl"],
+        api_keys=[],
+        noise="none",
+        volume="low",
+        scope_risk="low",
+        third_party="none",
+    ),
+    "note-osint-tools": dict(
+        tools=["shodan", "theHarvester", "amass"],
+        api_keys=["SHODAN_API_KEY", "censys(optional)"],
+        noise="none",
+        volume="low",
+        scope_risk="low",
+        third_party="none",
+    ),
+    "note-js-analysis": dict(
+        tools=["katana", "gau", "subjs", "linkfinder", "jsluice"],
+        api_keys=[],
+        noise="low",
+        volume="medium",
+        scope_risk="low",
+        third_party="none",
+    ),
+    "note-web-crawling": dict(
+        tools=["katana", "gau", "waybackurls", "httpx", "hakrawler"],
+        api_keys=[],
+        noise="low",
+        volume="medium",
+        scope_risk="medium",
+        third_party="possible",
+    ),
+    "note-waf-cdn-detection": dict(
+        tools=["wafw00f", "httpx", "dig", "whatweb"],
+        api_keys=[],
+        noise="low",
+        volume="low",
+        scope_risk="high",
+        third_party="likely (CDN/shared infra)",
+    ),
+    "note-recon-pipeline": dict(
+        tools=["subfinder", "dnsx", "httpx", "katana", "nuclei"],
+        api_keys=["SHODAN_API_KEY(optional)"],
+        noise="medium",
+        volume="medium",
+        scope_risk="medium",
+        third_party="possible",
+    ),
+    "note-asn-netblock": dict(
+        tools=["whois", "amass", "asnmap", "mapcidr", "dnsx"],
+        api_keys=["SHODAN_API_KEY(optional)"],
+        noise="high",
+        volume="high",
+        scope_risk="high",
+        third_party="likely (ranges may not belong to target)",
+    ),
+    "note-banner-scanning": dict(
+        tools=["nc", "nmap", "httpx"],
+        api_keys=[],
+        noise="high",
+        volume="medium",
+        scope_risk="medium",
+        third_party="possible",
+    ),
+    "note-port-scanning-bash": dict(
+        tools=["nc", "naabu", "nmap"],
+        api_keys=[],
+        noise="high",
+        volume="high",
+        scope_risk="medium",
+        third_party="possible",
+    ),
+    "note-tcp-fin-fingerprint": dict(
+        tools=["nmap", "scapy", "p0f", "jarm"],
+        api_keys=[],
+        noise="high",
+        volume="medium",
+        scope_risk="medium",
+        third_party="possible",
+    ),
+    "note-param-fuzzing": dict(
+        tools=["arjun", "ffuf", "x8", "paramspider"],
+        api_keys=[],
+        noise="high",
+        volume="high",
+        scope_risk="medium",
+        third_party="none",
+    ),
+    "note-enumeracao-diretorios": dict(
+        tools=["ffuf", "feroxbuster", "gobuster", "dirb"],
+        api_keys=[],
+        noise="high",
+        volume="high",
+        scope_risk="medium",
+        third_party="none",
+    ),
+    "note-descoberta-hosts-rede-interna": dict(
+        tools=["nmap", "arp-scan", "netdiscover", "fping"],
+        api_keys=[],
+        noise="high",
+        volume="high",
+        scope_risk="internal-only",
+        third_party="n/a",
+    ),
+    "note-enumeracao-ldap": dict(
+        tools=["ldapsearch", "nmap", "netexec", "bloodhound"],
+        api_keys=[],
+        noise="high",
+        volume="high",
+        scope_risk="internal-only",
+        third_party="n/a",
+    ),
+    "note-enumeracao-linux": dict(
+        tools=["nmap", "ss", "arp"],
+        api_keys=[],
+        noise="high",
+        volume="medium",
+        scope_risk="internal-only",
+        third_party="n/a",
+    ),
 }
 
 
@@ -198,9 +418,9 @@ class NoteClassification:
     note_id: str
     title: str
     recon_type: str
-    assessment: str           # external | internal
-    bug_bounty: str           # applicable | restricted | disabled
-    risk_level: Any           # 0 | 1 | 2 | "disabled"
+    assessment: str  # external | internal
+    bug_bounty: str  # applicable | restricted | disabled
+    risk_level: Any  # 0 | 1 | 2 | "disabled"
     approval_level: str
     skill_target: str
     internal_pack: bool
@@ -232,9 +452,16 @@ def detect_portability(commands: list[str]) -> list[dict[str, str]]:
 
 def classify(note: Any) -> NoteClassification:
     """Classify a parsed ReconNote (duck-typed: needs .note_id/.title/.commands)."""
-    pol = _POLICY.get(note.note_id, dict(
-        recon_type="active", risk_level=2, approval="explicit",
-        skill_target="recon/uncategorized", note="unmapped note -> conservative L2"))
+    pol = _POLICY.get(
+        note.note_id,
+        dict(
+            recon_type="active",
+            risk_level=2,
+            approval="explicit",
+            skill_target="recon/uncategorized",
+            note="unmapped note -> conservative L2",
+        ),
+    )
     attrs = _ATTRS.get(note.note_id, {})
     internal = bool(pol.get("internal", False))
     risk = pol["risk_level"]

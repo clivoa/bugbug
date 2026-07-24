@@ -47,7 +47,21 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S"]
-ignore = ["S101"]  # asserts allowed in tests
+ignore = [
+    "S101",  # asserts are allowed (tests, and internal invariants)
+    "S105",  # false positive: flags secret NAME constants, not secret values
+    "S603",  # subprocess is used only with fixed argv arrays (never shell strings)
+    "S607",  # diagnostic tools are invoked by name via PATH (doctor.py)
+    "UP042", # str+Enum is intentional (stable JSON serialization of ScopeKind)
+    "S110",  # try/except/pass is intentional in best-effort cleanup paths
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S"]  # tests may use subprocess/tmp freely
+# data-heavy files: long policy-note / markdown-table string literals
+"src/hackbot/skills/bundle_classify.py" = ["E501"]
+"scripts/generate_recon_bundle.py" = ["E501", "E402"]
+"scripts/generate_recon_docs.py" = ["E501", "E402"]
 
 [tool.mypy]
 python_version = "3.11"

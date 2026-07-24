@@ -2,10 +2,12 @@
 Secret-hygiene tests. Verify alias resolution, existence-only disclosure, empty
 rejection, and that values never appear in repr/status.
 """
+
 import pytest
 
 from hackbot.security.secrets import (
     InMemoryBackend,
+    SecretError,
     SecretManager,
     UnknownSecretName,
     canonical_name,
@@ -46,7 +48,7 @@ def test_set_get_roundtrip(mgr):
 
 
 def test_empty_secret_rejected(mgr):
-    with pytest.raises(Exception):
+    with pytest.raises(SecretError):
         mgr.set("shodan", "   ")
 
 

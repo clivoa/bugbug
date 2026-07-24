@@ -8,6 +8,7 @@ skipped when ``no_net=True``.
 
 Cross-platform (macOS + Linux). Exposed as ``hackbot doctor``.
 """
+
 from __future__ import annotations
 
 import json
@@ -15,15 +16,39 @@ import platform
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 
 MIN_PY = (3, 11)
 
 SECURITY_TOOLS = [
-    "subfinder", "dnsx", "httpx", "katana", "naabu", "nuclei", "amass", "gau",
-    "waybackurls", "gowitness", "ffuf", "feroxbuster", "arjun", "dalfox",
-    "semgrep", "gitleaks", "trufflehog", "osv-scanner", "trivy", "nmap",
-    "masscan", "sqlmap", "shodan", "jq", "yq", "rg", "fd", "go",
+    "subfinder",
+    "dnsx",
+    "httpx",
+    "katana",
+    "naabu",
+    "nuclei",
+    "amass",
+    "gau",
+    "waybackurls",
+    "gowitness",
+    "ffuf",
+    "feroxbuster",
+    "arjun",
+    "dalfox",
+    "semgrep",
+    "gitleaks",
+    "trufflehog",
+    "osv-scanner",
+    "trivy",
+    "nmap",
+    "masscan",
+    "sqlmap",
+    "shodan",
+    "jq",
+    "yq",
+    "rg",
+    "fd",
+    "go",
 ]
 
 
@@ -92,26 +117,55 @@ def collect(no_net: bool = False) -> list[Check]:
         c.append(Check("python", "path_python3", f"{path_py}{note}", _py_status(pv)))
     else:
         c.append(Check("python", "path_python3", "not found", "missing"))
-    c.append(Check("python", "uv", _first_line(_run(["uv", "--version"])) or "not installed",
-                   "ok" if _has("uv") else "warn"))
-    c.append(Check("python", "pipx", _first_line(_run(["pipx", "--version"])) or "not installed",
-                   "ok" if _has("pipx") else "warn"))
+    c.append(
+        Check(
+            "python",
+            "uv",
+            _first_line(_run(["uv", "--version"])) or "not installed",
+            "ok" if _has("uv") else "warn",
+        )
+    )
+    c.append(
+        Check(
+            "python",
+            "pipx",
+            _first_line(_run(["pipx", "--version"])) or "not installed",
+            "ok" if _has("pipx") else "warn",
+        )
+    )
 
     # --- toolchains ---
     if is_mac:
-        c.append(Check("toolchain", "homebrew",
-                       (_first_line(_run(["brew", "--version"])) + " @ " + _run(["brew", "--prefix"]))
-                       if _has("brew") else "not installed",
-                       "ok" if _has("brew") else "missing"))
+        c.append(
+            Check(
+                "toolchain",
+                "homebrew",
+                (_first_line(_run(["brew", "--version"])) + " @ " + _run(["brew", "--prefix"]))
+                if _has("brew")
+                else "not installed",
+                "ok" if _has("brew") else "missing",
+            )
+        )
     node = _first_line(_run(["node", "--version"]))
     c.append(Check("toolchain", "node", node or "not found", "ok" if node else "warn"))
     go = _first_line(_run(["go", "version"]))
-    c.append(Check("toolchain", "go", go or "not installed (needed for PD tools)",
-                   "ok" if go else "warn"))
+    c.append(
+        Check(
+            "toolchain", "go", go or "not installed (needed for PD tools)", "ok" if go else "warn"
+        )
+    )
     java = _first_line(_run(["java", "-version"]))
-    java_ok = _has("java") and "unable to locate" not in java.lower() and "no java" not in java.lower()
-    c.append(Check("toolchain", "java", java if java_ok else "not installed (Burp MCP needs JRE 17/21)",
-                   "ok" if java_ok else "warn"))
+    java_ok = (
+        _has("java") and "unable to locate" not in java.lower() and "no java" not in java.lower()
+    )
+    c.append(
+        Check(
+            "toolchain",
+            "java",
+            java if java_ok else "not installed (Burp MCP needs JRE 17/21)",
+            "ok" if java_ok else "warn",
+        )
+    )
     git = _first_line(_run(["git", "--version"]))
     c.append(Check("toolchain", "git", git or "not found", "ok" if git else "missing"))
 
@@ -123,9 +177,14 @@ def collect(no_net: bool = False) -> list[Check]:
             break
     if ct == "docker":
         running_daemon = _run(["docker", "info", "--format", "{{.ServerVersion}}"])
-        c.append(Check("container", "docker",
-                       f"present, daemon {'running' if running_daemon else 'NOT running'}",
-                       "ok" if running_daemon else "warn"))
+        c.append(
+            Check(
+                "container",
+                "docker",
+                f"present, daemon {'running' if running_daemon else 'NOT running'}",
+                "ok" if running_daemon else "warn",
+            )
+        )
     elif ct:
         c.append(Check("container", ct, "present", "ok"))
     else:
@@ -136,22 +195,41 @@ def collect(no_net: bool = False) -> list[Check]:
     c.append(Check("claude", "cli", claude or "not installed", "ok" if claude else "warn"))
     if is_mac:
         burp = _run(["/bin/sh", "-c", "ls -d /Applications/Burp*.app 2>/dev/null | head -1"])
-        c.append(Check("burp", "app", burp or "not found in /Applications",
-                       "ok" if burp else "warn"))
+        c.append(
+            Check("burp", "app", burp or "not found in /Applications", "ok" if burp else "warn")
+        )
     else:
-        c.append(Check("burp", "app", "burpsuite on PATH" if _has("burpsuite") else "not detected",
-                       "ok" if _has("burpsuite") else "warn"))
+        c.append(
+            Check(
+                "burp",
+                "app",
+                "burpsuite on PATH" if _has("burpsuite") else "not detected",
+                "ok" if _has("burpsuite") else "warn",
+            )
+        )
 
     # --- security tools ---
     found = [t for t in SECURITY_TOOLS if _has(t)]
-    c.append(Check("tools", "installed", " ".join(found) if found else "none yet (clean slate)",
-                   "ok" if found else "info"))
+    c.append(
+        Check(
+            "tools",
+            "installed",
+            " ".join(found) if found else "none yet (clean slate)",
+            "ok" if found else "info",
+        )
+    )
 
     # --- network ---
     if not no_net:
         egress = _run(["/bin/sh", "-c", "curl -s --max-time 8 https://api.ipify.org"])
-        c.append(Check("network", "egress_ip",
-                       f"{egress or 'unavailable'} (baseline; re-checked per engagement)", "info"))
+        c.append(
+            Check(
+                "network",
+                "egress_ip",
+                f"{egress or 'unavailable'} (baseline; re-checked per engagement)",
+                "info",
+            )
+        )
     else:
         c.append(Check("network", "egress_ip", "skipped (--no-net)", "info"))
 
@@ -172,8 +250,13 @@ def as_dict(no_net: bool = False) -> dict:
 
 def render_text(no_net: bool = False) -> str:
     checks = collect(no_net=no_net)
-    marks = {"ok": " ok ", "warn": "warn", "missing": "MISS",
-             "incompatible": "INCOMPAT", "info": "info"}
+    marks = {
+        "ok": " ok ",
+        "warn": "warn",
+        "missing": "MISS",
+        "incompatible": "INCOMPAT",
+        "info": "info",
+    }
     lines: list[str] = []
     last_group = None
     for ch in checks:
@@ -191,7 +274,10 @@ def render_text(no_net: bool = False) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
-    p = argparse.ArgumentParser(prog="hackbot doctor", description="read-only environment diagnostic")
+
+    p = argparse.ArgumentParser(
+        prog="hackbot doctor", description="read-only environment diagnostic"
+    )
     p.add_argument("--json", action="store_true", help="machine-readable output")
     p.add_argument("--no-net", action="store_true", help="skip the egress-IP check")
     args = p.parse_args(argv)

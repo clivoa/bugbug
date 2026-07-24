@@ -1,0 +1,6 @@
+schema_version: 1
+in_scope:
+  domains: [example.com]
+  wildcard_domains: ["*.api.example.com"]
+out_of_scope:
+  domains: [internal.example.com]
