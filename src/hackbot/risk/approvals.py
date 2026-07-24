@@ -454,6 +454,7 @@ def build_challenge(
             expires_at=expires_at,
             nonce=checked_nonce,
         )
+        _reject_secrets(fields)
         binding = canonical_bytes(fields)
         digest = hashlib.sha256(binding).hexdigest()
         return ApprovalChallenge(
