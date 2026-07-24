@@ -43,8 +43,18 @@ _SHELL_EXECUTABLE_BASENAMES = frozenset(
         "powershell.exe",
         "pwsh",
         "pwsh.exe",
+        "env",
+        "env.exe",
+        "busybox",
+        "busybox.exe",
+        "csh",
+        "csh.exe",
+        "tcsh",
+        "tcsh.exe",
     }
 )
+_ARGV_PLACEHOLDERS = frozenset({"{target}", "{rate}", "{concurrency}"})
+_SHELL_COMMAND_MODES = frozenset({"-c", "--command"})
 
 
 class RiskLevel(IntEnum):
@@ -198,6 +208,29 @@ def _code_classifications(value: object, *, name: str) -> tuple[str, ...]:
     return value
 
 
+def _argv_template(value: object, *, executable: str) -> tuple[str, ...]:
+    if not isinstance(value, tuple):
+        raise ValueError("argv_template must be an immutable tuple")
+    template = _tuple_of_strings(
+        value,
+        name="argv_template",
+        item_limit=_ARGV_ITEM_LIMIT,
+        maximum_items=_ARGV_LIMIT,
+        allow_empty_items=False,
+    )
+    if not template or template[0] != executable:
+        raise ValueError("argv_template[0] must exactly equal executable")
+    placeholders: set[str] = set()
+    for token in template[1:]:
+        if "{" in token or "}" in token:
+            if token not in _ARGV_PLACEHOLDERS or token in placeholders:
+                raise ValueError(
+                    "argv_template placeholders must be unique whole-token placeholders"
+                )
+            placeholders.add(token)
+    return template
+
+
 @dataclass(frozen=True, slots=True)
 class ActionDefinition:
     action_id: str
@@ -211,6 +244,7 @@ class ActionDefinition:
     tool_id: str | None = None
     executable: str | None = None
     uses_external_tool: bool = False
+    argv_template: tuple[str, ...] = ()
     vulnerability_types: tuple[str, ...] = ()
     impacts: tuple[str, ...] = ()
     automated: bool = False
@@ -265,6 +299,12 @@ class ActionDefinition:
             raise ValueError("tool_id and executable require uses_external_tool=true")
         if self.shell_execution and (not self.uses_external_tool or self.executable is None):
             raise ValueError("shell_execution requires an external executable")
+        if self.uses_external_tool:
+            if self.executable is None:  # mypy narrowness and defense in depth
+                raise ValueError("external tools require a trusted executable")
+            _argv_template(self.argv_template, executable=self.executable)
+        elif self.argv_template != ():
+            raise ValueError("no-tool definitions must use an empty argv_template")
         if self.executable is not None:
             basenames = {
                 PurePath(self.executable).name.lower(),
@@ -272,6 +312,11 @@ class ActionDefinition:
             }
             if not basenames.isdisjoint(_SHELL_EXECUTABLE_BASENAMES) and not self.shell_execution:
                 raise ValueError("known shell executables require shell_execution=true")
+        if (
+            any(token in _SHELL_COMMAND_MODES for token in self.argv_template)
+            and not self.shell_execution
+        ):
+            raise ValueError("shell command modes require shell_execution=true")
         _code_classifications(self.vulnerability_types, name="vulnerability_types")
         _code_classifications(self.impacts, name="impacts")
 
@@ -292,6 +337,24 @@ class ActionDefinition:
             self.minimum_risk,
             RiskLevel.L2 if l2 else RiskLevel.L1 if l1 else self.minimum_risk,
         )
+
+    def render_argv(self, request: ActionRequest) -> tuple[str, ...] | None:
+        """Render the small, code-owned template without shell parsing or splitting."""
+        if not self.uses_external_tool:
+            return ()
+        if (
+            isinstance(request.rate, bool)
+            or not isinstance(request.rate, int)
+            or isinstance(request.concurrency, bool)
+            or not isinstance(request.concurrency, int)
+        ):
+            return None
+        values = {
+            "{target}": request.target,
+            "{rate}": str(request.rate),
+            "{concurrency}": str(request.concurrency),
+        }
+        return tuple(values.get(token, token) for token in self.argv_template)
 
 
 @dataclass(frozen=True, slots=True)

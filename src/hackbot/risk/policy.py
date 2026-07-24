@@ -343,6 +343,9 @@ class RiskEngine:
             return "DENY_NO_TOOL_ARGV" if request.argv else None
         if not request.argv or request.argv[0] != definition.executable:
             return "DENY_EXECUTABLE_MISMATCH"
+        expected = definition.render_argv(request)
+        if expected is None or request.argv != expected:
+            return "DENY_ARGV_TEMPLATE_MISMATCH"
         return None
 
     @staticmethod
