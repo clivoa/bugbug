@@ -190,49 +190,80 @@ def test_required_profile_must_match(engine, context, action_request):
     assert decision.reason_code == "DENY_PROGRAM_PROFILE"
 
 
-def test_prohibited_tool_matches_only_action_id_or_normalized_argv_basename(
-    engine, context, action_request
-):
-    action_id_denied = engine.evaluate(
-        action_request, _context(context, prohibited_tools=("fixture.l0-network",))
+def test_prohibited_tool_uses_only_code_owned_tool_identity(engine, context, action_request):
+    trusted_engine = RiskEngine(
+        ActionRegistry(
+            [
+                ActionDefinition(
+                    "fixture.l0-network",
+                    RiskLevel.L0,
+                    network_access=True,
+                    tool_id="nmap",
+                    executable="/opt/reviewed/nmap",
+                )
+            ]
+        )
+    )
+    action_id_denied = trusted_engine.evaluate(
+        action_request, _context(context, prohibited_tools=("nmap",))
     )
     assert action_id_denied.reason_code == "DENY_PROGRAM_PROHIBITED_TOOL"
 
-    argv_denied = engine.evaluate(
-        replace(action_request, argv=("C:\\Tools\\NMAP.EXE", "-sV")),
-        _context(context, prohibited_tools=("nmap.exe",)),
+    path_denied = trusted_engine.evaluate(
+        replace(action_request, argv=("safe-nmap-wrapper",)),
+        _context(context, prohibited_tools=("/opt/reviewed/nmap",)),
     )
-    assert argv_denied.reason_code == "DENY_PROGRAM_PROHIBITED_TOOL"
+    assert path_denied.reason_code == "DENY_PROGRAM_PROHIBITED_TOOL"
 
-    substring_not_denied = engine.evaluate(
+    wrapper_cannot_bypass = trusted_engine.evaluate(
         replace(action_request, argv=("safe-nmap-wrapper",)),
         _context(context, prohibited_tools=("nmap",)),
     )
-    assert substring_not_denied.kind is DecisionKind.ALLOW
+    assert wrapper_cannot_bypass.reason_code == "DENY_PROGRAM_PROHIBITED_TOOL"
+
+    executable_mismatch = trusted_engine.evaluate(
+        replace(action_request, argv=("safe-nmap-wrapper",)), context
+    )
+    assert executable_mismatch.reason_code == "DENY_EXECUTABLE_MISMATCH"
 
 
-def test_vulnerability_and_impact_restrictions_use_typed_names_only(
+def test_vulnerability_and_impact_restrictions_use_code_owned_classifications(
     engine, context, action_request
 ):
-    vulnerability_denied = engine.evaluate(
-        replace(action_request, vulnerability_type=" XSS "),
+    trusted_engine = RiskEngine(
+        ActionRegistry(
+            [
+                ActionDefinition(
+                    "fixture.l0-network",
+                    RiskLevel.L0,
+                    network_access=True,
+                    vulnerability_types=("xss",),
+                    impacts=("availability",),
+                )
+            ]
+        )
+    )
+    vulnerability_denied = trusted_engine.evaluate(
+        action_request,
         _context(context, prohibited_vulnerability_types=("xss",)),
     )
     assert vulnerability_denied.reason_code == "DENY_PROGRAM_PROHIBITED_VULNERABILITY_TYPE"
 
-    impact_denied = engine.evaluate(
-        replace(action_request, impact=" Availability "),
+    impact_denied = trusted_engine.evaluate(
+        action_request,
         _context(context, excluded_impacts=("availability",)),
     )
     assert impact_denied.reason_code == "DENY_PROGRAM_EXCLUDED_IMPACT"
 
     unspecified_vulnerability = engine.evaluate(
-        action_request, _context(context, prohibited_vulnerability_types=("xss",))
+        action_request,
+        _context(context, prohibited_vulnerability_types=("xss",)),
     )
     assert unspecified_vulnerability.reason_code == "DENY_PROGRAM_VULNERABILITY_TYPE_UNSPECIFIED"
 
     unspecified_impact = engine.evaluate(
-        action_request, _context(context, excluded_impacts=("availability",))
+        action_request,
+        _context(context, excluded_impacts=("availability",)),
     )
     assert unspecified_impact.reason_code == "DENY_PROGRAM_IMPACT_UNSPECIFIED"
 
@@ -241,13 +272,130 @@ def test_required_program_headers_are_a_subset_of_request_declared_names(
     engine, context, action_request
 ):
     denied = engine.evaluate(action_request, _context(context, required_headers=("x-research-id",)))
-    assert denied.reason_code == "DENY_PROGRAM_REQUIRED_HEADERS"
+    assert denied.reason_code == "DENY_PROGRAM_REQUIRED_HEADERS_UNSUPPORTED"
 
-    allowed = engine.evaluate(
+    request_declaration_does_not_authorize = engine.evaluate(
         replace(action_request, required_headers=("X-Research-ID", "X-Optional")),
         _context(context, required_headers=("x-research-id",)),
     )
-    assert allowed.kind is DecisionKind.ALLOW
+    assert (
+        request_declaration_does_not_authorize.reason_code
+        == "DENY_PROGRAM_REQUIRED_HEADERS_UNSUPPORTED"
+    )
+
+
+def test_required_program_headers_need_code_owned_adapter_capability(context, action_request):
+    headers_engine = RiskEngine(
+        ActionRegistry(
+            [
+                ActionDefinition(
+                    "fixture.l0-network",
+                    RiskLevel.L0,
+                    network_access=True,
+                    honors_required_headers=True,
+                )
+            ]
+        )
+    )
+    decision = headers_engine.evaluate(
+        action_request,
+        _context(context, required_headers=("x-research-id",)),
+    )
+    assert decision.kind is DecisionKind.ALLOW
+
+
+@pytest.mark.parametrize(
+    ("field", "permission", "reason_code"),
+    [
+        ("automated", "automated_scanning_allowed", "DENY_PROGRAM_AUTOMATED_NOT_ALLOWED"),
+        (
+            "authenticated",
+            "authenticated_testing_allowed",
+            "DENY_PROGRAM_AUTHENTICATED_NOT_ALLOWED",
+        ),
+        (
+            "creates_account",
+            "account_creation_allowed",
+            "DENY_PROGRAM_ACCOUNT_CREATION_NOT_ALLOWED",
+        ),
+        (
+            "uses_multiple_accounts",
+            "multiple_accounts_allowed",
+            "DENY_PROGRAM_MULTIPLE_ACCOUNTS_NOT_ALLOWED",
+        ),
+        ("out_of_band", "out_of_band_testing_allowed", "DENY_PROGRAM_OUT_OF_BAND_NOT_ALLOWED"),
+    ],
+)
+def test_applicable_program_permissions_deny_l2_actions(
+    context, action_request, field, permission, reason_code
+):
+    permissions = {permission: False}
+    permission_context = _context(context, **permissions)
+    definition = ActionDefinition(
+        "fixture.l2",
+        RiskLevel.L1,
+        network_access=True,
+        state_changing=True,
+        **{field: True},
+    )
+    permission_engine = RiskEngine(ActionRegistry([definition]))
+    decision = permission_engine.evaluate(
+        replace(action_request, action_id="fixture.l2"), permission_context, grant=object()
+    )
+    assert decision.kind is DecisionKind.DENY
+    assert decision.reason_code == reason_code
+
+
+def test_source_ip_requirements_fail_closed_without_a_trusted_runtime_fact(
+    engine, context, action_request
+):
+    decision = engine.evaluate(
+        action_request,
+        _context(context, source_ip_requirements=("office-ip",)),
+    )
+    assert decision.reason_code == "DENY_PROGRAM_SOURCE_IP_UNVERIFIED"
+
+
+def test_unverified_source_ip_precedes_other_program_permission_denials(context, action_request):
+    constrained_engine = RiskEngine(
+        ActionRegistry(
+            [
+                ActionDefinition(
+                    "fixture.l2",
+                    RiskLevel.L2,
+                    network_access=True,
+                    automated=True,
+                )
+            ]
+        )
+    )
+    decision = constrained_engine.evaluate(
+        replace(action_request, action_id="fixture.l2"),
+        _context(
+            context,
+            automated_scanning_allowed=False,
+            source_ip_requirements=("office-ip",),
+        ),
+    )
+    assert decision.reason_code == "DENY_PROGRAM_SOURCE_IP_UNVERIFIED"
+
+
+def test_shell_execution_definition_is_absolute_l3(context, action_request):
+    shell_engine = RiskEngine(
+        ActionRegistry(
+            [
+                ActionDefinition(
+                    "fixture.l0-network",
+                    RiskLevel.L0,
+                    network_access=True,
+                    shell_execution=True,
+                )
+            ]
+        )
+    )
+    decision = shell_engine.evaluate(action_request, context, grant=object())
+    assert decision.kind is DecisionKind.DENY
+    assert decision.reason_code == "DENY_PROHIBITED"
 
 
 @pytest.mark.parametrize(

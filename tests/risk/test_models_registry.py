@@ -47,10 +47,70 @@ def test_action_definition_is_frozen_and_characteristics_raise_floor():
         action.action_id = "changed"
 
 
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"action_id": " Not Canonical "},
+        {"minimum_risk": 1},
+        {"network_access": 1},
+        {"tool_id": " Nmap "},
+        {"executable": "nmap"},
+        {"vulnerability_types": ("XSS", "xss")},
+        {"impacts": (" availability ",)},
+    ],
+)
+def test_action_definitions_strictly_validate_code_owned_fields(changes):
+    values = {"action_id": "fixture.scan", "minimum_risk": RiskLevel.L1}
+    values.update(changes)
+    with pytest.raises(ValueError):
+        ActionDefinition(**values)
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "network_access",
+        "low_impact_allowlisted",
+        "state_changing",
+        "high_volume",
+        "touches_third_party",
+        "automated",
+        "authenticated",
+        "creates_account",
+        "uses_multiple_accounts",
+        "out_of_band",
+        "honors_required_headers",
+        "shell_execution",
+    ],
+)
+def test_action_definition_requires_exact_boolean_characteristics(field):
+    with pytest.raises(ValueError, match=field):
+        ActionDefinition("fixture.scan", RiskLevel.L1, **{field: 1})
+
+
+def test_shell_execution_is_an_absolute_l3_definition_characteristic():
+    action = ActionDefinition("fixture.shell", RiskLevel.L0, shell_execution=True)
+    assert action.effective_floor is RiskLevel.L3
+
+
+def test_registry_revalidates_mutated_action_definition():
+    action = ActionDefinition("fixture.scan", RiskLevel.L1)
+    object.__setattr__(action, "network_access", 1)
+    with pytest.raises(RegistryError, match="invalid"):
+        ActionRegistry([action])
+
+
 def test_request_cannot_lower_registered_floor(tmp_path):
     action = ActionDefinition("fixture.scan", RiskLevel.L2)
     request = ActionRequest(**_request_values(tmp_path), requested_risk=RiskLevel.L0)
     assert request.effective_risk(action) == RiskLevel.L2
+
+
+def test_request_cannot_declare_trusted_vulnerability_or_impact_classifications(tmp_path):
+    with pytest.raises(TypeError):
+        ActionRequest(**_request_values(tmp_path), vulnerability_type="xss")
+    with pytest.raises(TypeError):
+        ActionRequest(**_request_values(tmp_path), impact="availability")
 
 
 @pytest.mark.parametrize("field", ["hypothesis_id", "stop_condition", "cleanup_plan"])
