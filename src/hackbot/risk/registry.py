@@ -16,6 +16,12 @@ class ActionRegistry:
     def __init__(self, definitions: Iterable[ActionDefinition]) -> None:
         items: dict[str, ActionDefinition] = {}
         for definition in definitions:
+            if not isinstance(definition, ActionDefinition):
+                raise RegistryError("invalid action definition")
+            try:
+                definition.validate()
+            except ValueError as exc:
+                raise RegistryError("invalid action definition") from exc
             if definition.action_id in items:
                 raise RegistryError(f"duplicate action id: {definition.action_id}")
             items[definition.action_id] = definition

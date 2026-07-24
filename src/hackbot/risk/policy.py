@@ -81,6 +81,12 @@ class RiskEngine:
                 "DENY_UNKNOWN_ACTION", context=context, program_rule=request.program_rule
             )
         try:
+            definition.validate()
+        except ValueError:
+            return self._deny(
+                "DENY_INVALID_ACTION_DEFINITION", context=context, program_rule=request.program_rule
+            )
+        try:
             risk = request.effective_risk(definition)
         except (TypeError, ValueError):
             return self._deny("DENY_INVALID_REQUEST", context=context)
@@ -221,8 +227,31 @@ class RiskEngine:
                 scope_rule=scope_rule,
                 program_rule=request.program_rule,
             )
-        prohibited_tools, prohibited_types, excluded_impacts, required_headers = names
-        if self._tool_is_prohibited(definition, request, prohibited_tools):
+        (
+            prohibited_tools,
+            prohibited_types,
+            excluded_impacts,
+            required_headers,
+            source_ip_requirements,
+        ) = names
+        if source_ip_requirements:
+            return self._deny(
+                "DENY_PROGRAM_SOURCE_IP_UNVERIFIED",
+                risk,
+                context=context,
+                scope_rule=scope_rule,
+                program_rule=request.program_rule,
+            )
+        permission_denial = self._permission_denial(definition, policy)
+        if permission_denial is not None:
+            return self._deny(
+                permission_denial,
+                risk,
+                context=context,
+                scope_rule=scope_rule,
+                program_rule=request.program_rule,
+            )
+        if self._tool_is_prohibited(definition, prohibited_tools):
             return self._deny(
                 "DENY_PROGRAM_PROHIBITED_TOOL",
                 risk,
@@ -230,8 +259,17 @@ class RiskEngine:
                 scope_rule=scope_rule,
                 program_rule=request.program_rule,
             )
-        vulnerability_denial = self._named_restriction_denial(
-            request.vulnerability_type,
+        executable_denial = self._executable_request_denial(definition, request)
+        if executable_denial is not None:
+            return self._deny(
+                executable_denial,
+                risk,
+                context=context,
+                scope_rule=scope_rule,
+                program_rule=request.program_rule,
+            )
+        vulnerability_denial = self._classification_denial(
+            definition.vulnerability_types,
             prohibited_types,
             "DENY_PROGRAM_VULNERABILITY_TYPE_UNSPECIFIED",
             "DENY_PROGRAM_PROHIBITED_VULNERABILITY_TYPE",
@@ -244,8 +282,8 @@ class RiskEngine:
                 scope_rule=scope_rule,
                 program_rule=request.program_rule,
             )
-        impact_denial = self._named_restriction_denial(
-            request.impact,
+        impact_denial = self._classification_denial(
+            definition.impacts,
             excluded_impacts,
             "DENY_PROGRAM_IMPACT_UNSPECIFIED",
             "DENY_PROGRAM_EXCLUDED_IMPACT",
@@ -267,9 +305,9 @@ class RiskEngine:
                 scope_rule=scope_rule,
                 program_rule=request.program_rule,
             )
-        if not required_headers.issubset(request.required_headers):
+        if required_headers and not definition.honors_required_headers:
             return self._deny(
-                "DENY_PROGRAM_REQUIRED_HEADERS",
+                "DENY_PROGRAM_REQUIRED_HEADERS_UNSUPPORTED",
                 risk,
                 context=context,
                 scope_rule=scope_rule,
@@ -280,30 +318,74 @@ class RiskEngine:
     @staticmethod
     def _tool_is_prohibited(
         definition: ActionDefinition,
-        request: ActionRequest,
         prohibited_tools: frozenset[str],
     ) -> bool:
         if not prohibited_tools:
             return False
-        action_id = definition.action_id.strip().lower()
-        if action_id in prohibited_tools:
-            return True
-        if not request.argv:
-            return False
-        executable = request.argv[0].strip()
-        basename = PurePath(executable).name
-        windows_basename = PureWindowsPath(executable).name
-        return basename.lower() in prohibited_tools or windows_basename.lower() in prohibited_tools
+        identities = {definition.action_id}
+        if definition.tool_id is not None:
+            identities.add(definition.tool_id)
+        if definition.executable is not None:
+            identities.update(
+                {
+                    definition.executable,
+                    PurePath(definition.executable).name.lower(),
+                    PureWindowsPath(definition.executable).name.lower(),
+                }
+            )
+        return not identities.isdisjoint(prohibited_tools)
+
+    @staticmethod
+    def _executable_request_denial(
+        definition: ActionDefinition, request: ActionRequest
+    ) -> str | None:
+        if definition.executable is None:
+            return None
+        if not request.argv or request.argv[0] != definition.executable:
+            return "DENY_EXECUTABLE_MISMATCH"
+        return None
+
+    @staticmethod
+    def _permission_denial(definition: ActionDefinition, policy: TestingPolicy) -> str | None:
+        permissions = (
+            ("automated", "automated_scanning_allowed", "DENY_PROGRAM_AUTOMATED_NOT_ALLOWED"),
+            (
+                "authenticated",
+                "authenticated_testing_allowed",
+                "DENY_PROGRAM_AUTHENTICATED_NOT_ALLOWED",
+            ),
+            (
+                "creates_account",
+                "account_creation_allowed",
+                "DENY_PROGRAM_ACCOUNT_CREATION_NOT_ALLOWED",
+            ),
+            (
+                "uses_multiple_accounts",
+                "multiple_accounts_allowed",
+                "DENY_PROGRAM_MULTIPLE_ACCOUNTS_NOT_ALLOWED",
+            ),
+            ("out_of_band", "out_of_band_testing_allowed", "DENY_PROGRAM_OUT_OF_BAND_NOT_ALLOWED"),
+        )
+        for characteristic, setting, reason_code in permissions:
+            allowed = getattr(policy, setting)
+            if type(allowed) is not bool:
+                return "DENY_PROGRAM_INVALID_POLICY"
+            if getattr(definition, characteristic) and not allowed:
+                return reason_code
+        return None
 
     @staticmethod
     def _policy_names(
         policy: TestingPolicy,
-    ) -> tuple[frozenset[str], frozenset[str], frozenset[str], frozenset[str]] | None:
+    ) -> (
+        tuple[frozenset[str], frozenset[str], frozenset[str], frozenset[str], frozenset[str]] | None
+    ):
         collections = (
             policy.prohibited_tools,
             policy.prohibited_vulnerability_types,
             policy.excluded_impacts,
             policy.required_headers,
+            policy.source_ip_requirements,
         )
         if any(not isinstance(values, tuple) for values in collections):
             return None
@@ -318,20 +400,21 @@ class RiskEngine:
             frozenset(policy.prohibited_vulnerability_types),
             frozenset(policy.excluded_impacts),
             frozenset(policy.required_headers),
+            frozenset(policy.source_ip_requirements),
         )
 
     @staticmethod
-    def _named_restriction_denial(
-        name: str | None,
+    def _classification_denial(
+        classifications: tuple[str, ...],
         prohibited: Collection[str],
         missing_code: str,
         prohibited_code: str,
     ) -> str | None:
         if not prohibited:
             return None
-        if not isinstance(name, str) or not name:
+        if not classifications:
             return missing_code
-        return prohibited_code if name in prohibited else None
+        return prohibited_code if not set(classifications).isdisjoint(prohibited) else None
 
     @staticmethod
     def _restricted_hours_denial(policy: TestingPolicy, now: datetime | None) -> str | None:

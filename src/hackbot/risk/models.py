@@ -21,6 +21,7 @@ _RATE_MAX = 1_000
 _CONCURRENCY_MIN = 1
 _CONCURRENCY_MAX = 100
 _HEADER_FIELD_NAME_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$", re.ASCII)
+_CODE_IDENTITY_RE = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", re.ASCII)
 
 
 class RiskLevel(IntEnum):
@@ -130,6 +131,35 @@ def _header_field_names(value: object, *, maximum_items: int | None = None) -> t
     return names
 
 
+def _code_identity(value: object, *, name: str) -> str:
+    text = _text(value, name=name, limit=_IDENTIFIER_LIMIT)
+    if text != text.strip().lower() or _CODE_IDENTITY_RE.fullmatch(text) is None:
+        raise ValueError(f"{name} must be a canonical code-owned identity")
+    return text
+
+
+def _executable_identity(value: object) -> str:
+    executable = _text(value, name="executable", limit=_TARGET_AND_RULE_LIMIT)
+    normalized = executable.replace("\\", "/").lower()
+    if executable != executable.strip() or not (
+        normalized.startswith("/") or re.fullmatch(r"[a-z]:/[^\r\n\x00]+", normalized)
+    ):
+        raise ValueError("executable must be a canonical absolute path")
+    if executable != normalized:
+        raise ValueError("executable must be a canonical lowercase path")
+    return executable
+
+
+def _code_classifications(value: object, *, name: str) -> tuple[str, ...]:
+    if not isinstance(value, tuple):
+        raise ValueError(f"{name} must be an immutable tuple of code-owned identities")
+    for item in value:
+        _code_identity(item, name=name)
+    if len(set(value)) != len(value):
+        raise ValueError(f"{name} values must be unique")
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class ActionDefinition:
     action_id: str
@@ -140,9 +170,55 @@ class ActionDefinition:
     high_volume: bool = False
     touches_third_party: bool = False
     required_profile: str | None = None
+    tool_id: str | None = None
+    executable: str | None = None
+    vulnerability_types: tuple[str, ...] = ()
+    impacts: tuple[str, ...] = ()
+    automated: bool = False
+    authenticated: bool = False
+    creates_account: bool = False
+    uses_multiple_accounts: bool = False
+    out_of_band: bool = False
+    honors_required_headers: bool = False
+    shell_execution: bool = False
+
+    def __post_init__(self) -> None:
+        self.validate()
+
+    def validate(self) -> None:
+        """Validate a code-owned definition before registry admission or use."""
+        _code_identity(self.action_id, name="action_id")
+        if type(self.minimum_risk) is not RiskLevel:
+            raise ValueError("minimum_risk must be an exact RiskLevel")
+        for name in (
+            "network_access",
+            "low_impact_allowlisted",
+            "state_changing",
+            "high_volume",
+            "touches_third_party",
+            "automated",
+            "authenticated",
+            "creates_account",
+            "uses_multiple_accounts",
+            "out_of_band",
+            "honors_required_headers",
+            "shell_execution",
+        ):
+            if type(getattr(self, name)) is not bool:
+                raise ValueError(f"{name} must be a boolean")
+        if self.required_profile is not None:
+            _code_identity(self.required_profile, name="required_profile")
+        if self.tool_id is not None:
+            _code_identity(self.tool_id, name="tool_id")
+        if self.executable is not None:
+            _executable_identity(self.executable)
+        _code_classifications(self.vulnerability_types, name="vulnerability_types")
+        _code_classifications(self.impacts, name="impacts")
 
     @property
     def effective_floor(self) -> RiskLevel:
+        if self.shell_execution:
+            return RiskLevel.L3
         elevated = self.state_changing or self.high_volume or self.touches_third_party
         return max(self.minimum_risk, RiskLevel.L2 if elevated else self.minimum_risk)
 
@@ -165,8 +241,6 @@ class ActionRequest:
     program_rule: str
     required_headers: tuple[str, ...] = ()
     requested_risk: RiskLevel | None = None
-    vulnerability_type: str | None = None
-    impact: str | None = None
 
     def __post_init__(self) -> None:
         _text(self.engagement_id, name="engagement_id", limit=_IDENTIFIER_LIMIT)
@@ -237,13 +311,6 @@ class ActionRequest:
         )
         if self.requested_risk is not None and not isinstance(self.requested_risk, RiskLevel):
             raise ValueError("requested_risk must be a RiskLevel or None")
-        for name in ("vulnerability_type", "impact"):
-            value = getattr(self, name)
-            if value is not None:
-                normalized = _text(value, name=name, limit=_IDENTIFIER_LIMIT).strip().lower()
-                if not normalized:
-                    raise ValueError(f"{name} must not be empty")
-                object.__setattr__(self, name, normalized)
 
     def effective_risk(self, definition: ActionDefinition) -> RiskLevel:
         return max(definition.effective_floor, self.requested_risk or RiskLevel.L0)
