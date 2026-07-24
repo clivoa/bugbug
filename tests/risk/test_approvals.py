@@ -43,7 +43,6 @@ def definition() -> ActionDefinition:
         argv_template=("/opt/reviewed/probe", "--target", "{target}", "--rate", "{rate}"),
         vulnerability_types=("exposure",),
         impacts=("low",),
-        automated=True,
     )
 
 
@@ -81,6 +80,16 @@ def challenge(definition, action_request, context, fixed_now):
 @pytest.fixture
 def store(context):
     return ApprovalStore(context.engagement_path)
+
+
+@pytest.fixture
+def issue(definition, action_request, context, fixed_now):
+    def _issue(store: ApprovalStore):
+        return store.create_pending(
+            definition, action_request, context, now=fixed_now, nonce="abc123"
+        )
+
+    return _issue
 
 
 def test_canonical_bytes_are_deterministic_and_reject_nonfinite_values():
@@ -137,13 +146,14 @@ def test_challenge_binds_policy_scope_identity_and_definition_metadata(
     definition, action_request, context, fixed_now
 ):
     base = build_challenge(definition, action_request, context, now=fixed_now, nonce="abc123")
-    changed_policy = build_challenge(
-        definition,
-        action_request,
-        replace(context, policy_digest="f" * 64),
-        now=fixed_now,
-        nonce="abc123",
-    )
+    with pytest.raises(ApprovalError, match="policy context"):
+        build_challenge(
+            definition,
+            action_request,
+            replace(context, policy_digest="f" * 64),
+            now=fixed_now,
+            nonce="abc123",
+        )
     changed_definition = build_challenge(
         replace(definition, impacts=("medium",)),
         action_request,
@@ -151,7 +161,6 @@ def test_challenge_binds_policy_scope_identity_and_definition_metadata(
         now=fixed_now,
         nonce="abc123",
     )
-    assert changed_policy.challenge_digest != base.challenge_digest
     assert changed_definition.challenge_digest != base.challenge_digest
 
 
@@ -185,18 +194,77 @@ def test_challenge_requires_definition_argv_template_match(
         )
 
 
-def test_create_pending_is_exclusive_durable_and_secret_free(store, challenge):
-    pending = store.create_pending(challenge)
+def test_challenge_requires_otherwise_authorized_l2_action(
+    definition, action_request, context, fixed_now
+):
+    with pytest.raises(ApprovalError, match="authorized"):
+        build_challenge(
+            definition,
+            replace(
+                action_request,
+                target="https://outside.example",
+                argv=(
+                    "/opt/reviewed/probe",
+                    "--target",
+                    "https://outside.example",
+                    "--rate",
+                    "1",
+                ),
+            ),
+            context,
+            now=fixed_now,
+            nonce="abc123",
+        )
+
+
+def test_challenge_rejects_secret_bearing_review_text(
+    definition, action_request, context, fixed_now
+):
+    with pytest.raises(ApprovalError, match="secret"):
+        build_challenge(
+            definition,
+            replace(action_request, rationale="Use Authorization: Bearer top-secret-value"),
+            context,
+            now=fixed_now,
+            nonce="abc123",
+        )
+
+
+def test_create_pending_requires_trusted_inputs(store, challenge):
+    with pytest.raises(ApprovalError, match="trusted"):
+        store.create_pending(challenge)
+
+
+def test_create_pending_is_exclusive_durable_and_secret_free(store, challenge, issue):
+    pending = issue(store)
     assert pending.is_file()
     assert stat.S_IMODE(pending.stat().st_mode) == 0o600
     with pytest.raises(ApprovalError, match="already exists"):
-        store.create_pending(challenge)
+        issue(store)
     payload = pending.read_text(encoding="utf-8")
     assert '"approved_by"' not in payload
 
 
-def test_grant_and_consume_are_single_use_with_exact_expiry_boundary(store, challenge, fixed_now):
-    store.create_pending(challenge)
+def test_concurrent_pending_issuance_keeps_the_winner_artifact(
+    store, definition, action_request, context, fixed_now, challenge
+):
+    def create() -> str:
+        try:
+            store.create_pending(definition, action_request, context, now=fixed_now, nonce="abc123")
+            return "created"
+        except ApprovalError as error:
+            return error.code
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(lambda _: create(), range(8)))
+    assert results.count("created") == 1
+    assert (Path(store.root) / "pending" / f"{challenge.challenge_digest}.json").is_file()
+
+
+def test_grant_and_consume_are_single_use_with_exact_expiry_boundary(
+    store, challenge, fixed_now, issue
+):
+    issue(store)
     grant = store.grant(challenge, approved_by="operator", now=fixed_now)
     assert (
         store.consume(grant, challenge, now=challenge.expires_at - timedelta(microseconds=1)).status
@@ -206,16 +274,16 @@ def test_grant_and_consume_are_single_use_with_exact_expiry_boundary(store, chal
         store.consume(grant, challenge, now=fixed_now)
 
 
-def test_expiry_at_exact_boundary_moves_grant_to_expired(store, challenge, fixed_now):
-    store.create_pending(challenge)
+def test_expiry_at_exact_boundary_moves_grant_to_expired(store, challenge, fixed_now, issue):
+    issue(store)
     grant = store.grant(challenge, approved_by="operator", now=fixed_now)
     with pytest.raises(ApprovalError, match="expired"):
         store.consume(grant, challenge, now=challenge.expires_at)
     assert store.status(challenge.challenge_digest) == "expired"
 
 
-def test_grant_rejects_timestamp_before_challenge_creation(store, challenge, fixed_now):
-    store.create_pending(challenge)
+def test_grant_rejects_timestamp_before_challenge_creation(store, challenge, fixed_now, issue):
+    issue(store)
     with pytest.raises(ApprovalError, match="before"):
         store.grant(
             challenge,
@@ -224,8 +292,8 @@ def test_grant_rejects_timestamp_before_challenge_creation(store, challenge, fix
         )
 
 
-def test_concurrent_consumers_have_exactly_one_success(store, challenge, fixed_now):
-    store.create_pending(challenge)
+def test_concurrent_consumers_have_exactly_one_success(store, challenge, fixed_now, issue):
+    issue(store)
     grant = store.grant(challenge, approved_by="operator", now=fixed_now)
 
     def consume_once() -> str:
@@ -240,8 +308,10 @@ def test_concurrent_consumers_have_exactly_one_success(store, challenge, fixed_n
     assert len(results) - results.count("consumed") == 7
 
 
-def test_tampered_or_unknown_or_duplicate_json_artifacts_fail_closed(store, challenge, fixed_now):
-    pending = store.create_pending(challenge)
+def test_tampered_or_unknown_or_duplicate_json_artifacts_fail_closed(
+    store, challenge, fixed_now, issue
+):
+    pending = issue(store)
     pending.write_text('{"kind":"pending","kind":"pending"}', encoding="utf-8")
     with pytest.raises(ApprovalError, match="malformed"):
         store.grant(challenge, approved_by="operator", now=fixed_now)
@@ -252,8 +322,8 @@ def test_tampered_or_unknown_or_duplicate_json_artifacts_fail_closed(store, chal
         store.grant(challenge, approved_by="operator", now=fixed_now)
 
 
-def test_grant_rejects_policy_or_challenge_mismatch(store, challenge, fixed_now):
-    store.create_pending(challenge)
+def test_grant_rejects_policy_or_challenge_mismatch(store, challenge, fixed_now, issue):
+    issue(store)
     with pytest.raises(ApprovalError, match="policy"):
         store.grant(
             replace(challenge, policy_digest="a" * 64), approved_by="operator", now=fixed_now
@@ -267,35 +337,44 @@ def test_grant_rejects_policy_or_challenge_mismatch(store, challenge, fixed_now)
 
 
 def test_store_rejects_symlinked_paths_and_non_local_engagement(
-    store, challenge, context, tmp_path
+    store, challenge, context, tmp_path, definition, action_request, fixed_now
 ):
     external = tmp_path / "external"
     external.mkdir()
     approvals = Path(context.engagement_path) / "approvals"
     approvals.symlink_to(external, target_is_directory=True)
     with pytest.raises(ApprovalError, match="symlink"):
-        store.create_pending(challenge)
+        store.create_pending(definition, action_request, context, now=fixed_now, nonce="abc123")
 
     with pytest.raises(ApprovalError, match="engagement"):
-        ApprovalStore(tmp_path).create_pending(challenge)
+        ApprovalStore(tmp_path).create_pending(
+            definition, action_request, context, now=fixed_now, nonce="abc123"
+        )
 
 
-def test_corrupt_or_oversized_artifact_is_rejected(store, challenge, fixed_now):
-    pending = store.create_pending(challenge)
+def test_corrupt_or_oversized_artifact_is_rejected(store, challenge, fixed_now, issue):
+    pending = issue(store)
     pending.write_bytes(b"{" + b"x" * 200_000)
     with pytest.raises(ApprovalError, match="malformed"):
         store.grant(challenge, approved_by="operator", now=fixed_now)
 
 
-def test_status_rejects_malformed_artifact(store, challenge):
-    pending = store.create_pending(challenge)
+def test_status_rejects_malformed_artifact(store, challenge, issue):
+    pending = issue(store)
     pending.write_text("{}", encoding="utf-8")
     with pytest.raises(ApprovalError, match="malformed"):
         store.status(challenge.challenge_digest)
 
 
-def test_append_event_has_only_strict_safe_fields_and_mode(store, challenge, fixed_now):
-    store.create_pending(challenge)
+def test_status_rejects_wrong_artifact_mode(store, challenge, issue):
+    pending = issue(store)
+    pending.chmod(0o644)
+    with pytest.raises(ApprovalError, match="malformed"):
+        store.status(challenge.challenge_digest)
+
+
+def test_append_event_has_only_strict_safe_fields_and_mode(store, challenge, fixed_now, issue):
+    issue(store)
     store.append_event(challenge, result="created", reason_code="CREATED", now=fixed_now)
     event_path = Path(store.root) / "events.jsonl"
     assert stat.S_IMODE(event_path.stat().st_mode) == 0o600
@@ -313,8 +392,8 @@ def test_append_event_has_only_strict_safe_fields_and_mode(store, challenge, fix
     assert "argv" not in event
 
 
-def test_append_event_rejects_symlink(store, challenge, fixed_now, tmp_path):
-    store.create_pending(challenge)
+def test_append_event_rejects_symlink(store, challenge, fixed_now, tmp_path, issue):
+    issue(store)
     event_path = Path(store.root) / "events.jsonl"
     event_path.unlink()
     event_path.symlink_to(tmp_path / "outside-events.jsonl")
@@ -322,7 +401,7 @@ def test_append_event_rejects_symlink(store, challenge, fixed_now, tmp_path):
         store.append_event(challenge, result="created", reason_code="CREATED", now=fixed_now)
 
 
-def test_write_failure_creates_no_partial_success_record(store, challenge, monkeypatch):
+def test_write_failure_creates_no_partial_success_record(store, issue, monkeypatch):
     import hackbot.risk.approvals as approvals
 
     def fail_write(_fd: int, _payload: bytes) -> int:
@@ -330,5 +409,5 @@ def test_write_failure_creates_no_partial_success_record(store, challenge, monke
 
     monkeypatch.setattr(approvals.os, "write", fail_write)
     with pytest.raises(ApprovalError, match="write"):
-        store.create_pending(challenge)
+        issue(store)
     assert not list((Path(store.root) / "pending").glob("*"))
