@@ -72,3 +72,44 @@ concurrent consumers, otherwise-authorized target/rate changes, code-owned
 definition/argv changes, malformed argv precedence, scope/program/L3
 precedence, policy and engagement changes, expiry transition, missing grants,
 missing approval store, and mismatch audit events.
+
+## Review remediation — canonical payload confidentiality
+
+Remediation commit: `012525bf2537eef5cb2a2019145bfec997e89297`
+(`fix: reject secrets in canonical approval payload`).
+
+Review reproduced a scope URL containing credential userinfo being accepted and
+copied into `challenge.binding`. Root-cause tracing showed that the early
+secret filter covered request fields only; `_challenge_fields` subsequently
+added the code-owned definition, program/engagement metadata, and full in/out
+scope snapshot before serializing them without another confidentiality check.
+
+The fix recursively screens the complete would-be canonical `fields` mapping
+immediately before `canonical_bytes`. The existing early request filter remains,
+so no authority, preflight ordering, or persisted schema changed. TestingPolicy
+continues to be bound only by its digest and is not copied into the artifact.
+
+RED evidence:
+
+- Scope userinfo in both `in_scope` and `out_of_scope`, secret-like `program_id`
+  and code-owned `tool_id`, engine reason mapping, and pending-store leakage
+  checks produced six expected failures.
+- The engine returned `REQUIRES_APPROVAL` instead of
+  `DENY_APPROVAL_SECRET`, and direct challenge construction did not raise.
+- Safe ordinary scope and digest-only policy controls already passed, proving
+  that the reproduction isolated canonical fields outside the request.
+
+GREEN evidence after the one-line production fix:
+
+- New confidentiality selection: `8 passed, 292 deselected`.
+- Entire approval suite: `300 passed in 1.54s`.
+- Task 5 focused suites: `363 passed in 1.83s`.
+- Full suite: `651 passed in 4.39s`.
+- Risk-package Ruff check/format, mypy, and `git diff --check` passed.
+
+The regressions verify stable `APPROVAL_SECRET` /
+`DENY_APPROVAL_SECRET`, value-free errors, no pending or audit file containing
+the rejected secret, safe ordinary scope rules, sensitive request-header
+coverage, definition/tool metadata coverage, program metadata coverage, and
+that non-persisted policy text remains represented only through
+`policy_digest`.
