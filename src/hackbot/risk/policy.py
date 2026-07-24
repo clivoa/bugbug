@@ -12,11 +12,13 @@ import re
 from collections.abc import Collection
 from datetime import datetime, timedelta
 from pathlib import PurePath, PureWindowsPath
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from hackbot.risk.models import (
     ActionDefinition,
     ActionRequest,
+    ApprovalGrant,
     AuthorizationState,
     DecisionKind,
     PolicyContext,
@@ -27,6 +29,9 @@ from hackbot.risk.models import (
 )
 from hackbot.risk.registry import ActionRegistry, RegistryError
 
+if TYPE_CHECKING:
+    from hackbot.risk.approvals import ApprovalStore
+
 _HOUR_WINDOW = re.compile(
     r"^(?P<start_hour>[01]\d|2[0-3]):(?P<start_minute>[0-5]\d)-"
     r"(?P<end_hour>[01]\d|2[0-3]):(?P<end_minute>[0-5]\d)$"
@@ -35,10 +40,16 @@ _IDENTIFIER_LIMIT = 128
 
 
 class RiskEngine:
-    """Evaluate only frozen in-memory values; this class performs no I/O."""
+    """Evaluate policy and delegate exact L2 consumption to a bound local store."""
 
-    def __init__(self, registry: ActionRegistry) -> None:
+    def __init__(
+        self,
+        registry: ActionRegistry,
+        *,
+        approval_store: ApprovalStore | None = None,
+    ) -> None:
         self.registry = registry
+        self.approval_store = approval_store
 
     def evaluate(
         self,
@@ -47,8 +58,33 @@ class RiskEngine:
         grant: object | None = None,
         now: datetime | None = None,
     ) -> PolicyDecision:
-        """Return a policy decision without executing, persisting, or approving anything."""
-        del grant  # L2 grants are intentionally ignored until the approval-store task.
+        """Evaluate policy, consuming one exact L2 grant only after preflight passes."""
+        preflight = self._evaluate_without_approval(request, context, now=now)
+        if preflight.kind is not DecisionKind.REQUIRES_APPROVAL:
+            return preflight
+        try:
+            definition = self.registry.require(request.action_id)
+        except RegistryError:
+            return self._deny(
+                "DENY_UNKNOWN_ACTION", context=context, program_rule=request.program_rule
+            )
+        return self._approval_decision(
+            definition,
+            request,
+            context,
+            preflight,
+            grant=grant,
+            now=now,
+        )
+
+    def _evaluate_without_approval(
+        self,
+        request: ActionRequest,
+        context: PolicyContext,
+        *,
+        now: datetime | None = None,
+    ) -> PolicyDecision:
+        """Run the complete pure policy phase without challenge creation or store I/O."""
         if not isinstance(request, ActionRequest):
             return PolicyDecision.deny("DENY_INVALID_REQUEST")
         if not isinstance(context, PolicyContext):
@@ -135,6 +171,117 @@ class RiskEngine:
             scope_rule,
             request.program_rule,
             context.policy_digest,
+        )
+
+    def _approval_decision(
+        self,
+        definition: ActionDefinition,
+        request: ActionRequest,
+        context: PolicyContext,
+        preflight: PolicyDecision,
+        *,
+        grant: object | None,
+        now: datetime | None,
+    ) -> PolicyDecision:
+        from hackbot.risk.approvals import ApprovalError, build_challenge
+
+        if now is None:
+            return self._deny(
+                "DENY_APPROVAL_INVALID_CLOCK",
+                preflight.effective_risk,
+                context=context,
+                scope_rule=preflight.scope_rule,
+                program_rule=request.program_rule,
+            )
+        decision_at = now
+        if grant is None:
+            try:
+                challenge = build_challenge(
+                    definition,
+                    request,
+                    context,
+                    now=decision_at,
+                )
+            except ApprovalError as error:
+                return self._approval_error(
+                    error,
+                    preflight.effective_risk,
+                    context=context,
+                    scope_rule=preflight.scope_rule,
+                    program_rule=request.program_rule,
+                )
+            return PolicyDecision(
+                DecisionKind.REQUIRES_APPROVAL,
+                preflight.effective_risk,
+                "REQUIRES_APPROVAL",
+                "Human approval is required immediately before this action.",
+                preflight.scope_rule,
+                request.program_rule,
+                context.policy_digest,
+                challenge,
+            )
+        if not isinstance(grant, ApprovalGrant):
+            return self._deny(
+                "DENY_APPROVAL_MISMATCH",
+                preflight.effective_risk,
+                context=context,
+                scope_rule=preflight.scope_rule,
+                program_rule=request.program_rule,
+            )
+        store = self.approval_store
+        if store is None:
+            return self._deny(
+                "DENY_APPROVAL_STORE_UNAVAILABLE",
+                preflight.effective_risk,
+                context=context,
+                scope_rule=preflight.scope_rule,
+                program_rule=request.program_rule,
+            )
+        try:
+            challenge = store.challenge_for_grant(
+                grant,
+                definition,
+                request,
+                context,
+                now=decision_at,
+            )
+            store.consume(grant, challenge, now=decision_at)
+        except ApprovalError as error:
+            return self._approval_error(
+                error,
+                preflight.effective_risk,
+                context=context,
+                scope_rule=preflight.scope_rule,
+                program_rule=request.program_rule,
+            )
+        return PolicyDecision.allow(
+            preflight.effective_risk,
+            context.policy_digest,
+            scope_rule=preflight.scope_rule,
+            program_rule=request.program_rule,
+        )
+
+    @staticmethod
+    def _approval_error(
+        error: Exception,
+        risk: RiskLevel,
+        *,
+        context: PolicyContext,
+        scope_rule: str | None,
+        program_rule: str | None,
+    ) -> PolicyDecision:
+        code = getattr(error, "code", "")
+        reason_code = (
+            f"DENY_{code}"
+            if isinstance(code, str) and re.fullmatch(r"APPROVAL_[A-Z0-9_]+", code)
+            else "DENY_APPROVAL_ERROR"
+        )
+        return RiskEngine._deny(
+            reason_code,
+            risk,
+            context=context,
+            scope_rule=scope_rule,
+            program_rule=program_rule,
         )
 
     @staticmethod
