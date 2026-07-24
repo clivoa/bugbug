@@ -1,0 +1,11 @@
+# Publication guard: keep unlicensed recon material and its derivatives out of
+# distribution archives (`git archive`). See docs/publication-guard.md.
+references/recon/Recon-bundle.html         export-ignore
+generated/recon-bundle                     export-ignore
+docs/recon-bundle-review.md                export-ignore
+docs/recon-bundle-risk-classification.md   export-ignore
+docs/recon-bundle-macos-compatibility.md   export-ignore
+
+# Normalize line endings for shell/python
+*.sh   text eol=lf
+*.py   text eol=lf

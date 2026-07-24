@@ -54,20 +54,20 @@ class UnknownSecretName(SecretError):
 
 
 def canonical_name(name: str) -> str:
-    """Resolve an alias or validate a canonical secret name."""
+    """Resolve an alias (case-insensitively) or validate a canonical secret name."""
     key = name.strip()
-    if key in _ALIASES:
-        return _ALIASES[key]
+    # aliases are matched case-insensitively: "kimi3", "Kimi3", "KIMI3" all resolve.
+    lowered = key.lower()
+    if lowered in _ALIASES:
+        return _ALIASES[lowered]
     upper = key.upper().replace("-", "_")
     if upper in _CANONICAL:
         return upper
-    if upper in _ALIASES:  # e.g. "SHODAN"
-        return _ALIASES[upper.lower()]
     if _NAME_RE.match(upper):
         return upper  # allow custom, well-formed names
     raise UnknownSecretName(
-        f"unknown secret {name!r}; known: "
-        f"{', '.join(sorted(_ALIASES))} or a CANONICAL_NAME"
+        f"unknown secret {name!r}; known aliases: "
+        f"{', '.join(sorted(_ALIASES))}; or a CANONICAL_NAME"
     )
 
 

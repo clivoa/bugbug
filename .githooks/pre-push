@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+#
+# hackbot publication-guard (pre-push).
+#
+# The recon bundle (references/recon/Recon-bundle.html, author @reeshasx) has NO
+# license. It and every artifact derived from it are authorized for LOCAL, PRIVATE
+# use only. They must not be pushed or distributed without the author's permission.
+#
+# This hook blocks any push while those tracked artifacts exist, unless the
+# operator explicitly acknowledges permission via HACKBOT_ALLOW_PUBLISH_RECON=1.
+#
+set -euo pipefail
+
+if [ "${HACKBOT_ALLOW_PUBLISH_RECON:-0}" = "1" ]; then
+  echo "[publication-guard] override acknowledged; allowing push of recon-derived material." >&2
+  exit 0
+fi
+
+protected="$(git ls-files \
+  'references/recon/Recon-bundle.html' \
+  'generated/recon-bundle/*' \
+  'docs/recon-bundle-review.md' \
+  'docs/recon-bundle-risk-classification.md' \
+  'docs/recon-bundle-macos-compatibility.md' 2>/dev/null || true)"
+
+if [ -n "$protected" ]; then
+  {
+    echo ""
+    echo "  ✋ BLOCKED by hackbot publication-guard"
+    echo ""
+    echo "  These tracked artifacts derive from the UNLICENSED recon bundle"
+    echo "  (@reeshasx) and must NOT be pushed/distributed without permission:"
+    echo "$protected" | sed 's/^/      - /'
+    echo ""
+    echo "  If you have the author's permission and intend to publish, re-run:"
+    echo "      HACKBOT_ALLOW_PUBLISH_RECON=1 git push <remote> <branch>"
+    echo ""
+  } >&2
+  exit 1
+fi
+
+exit 0
