@@ -1,5 +1,6 @@
 """Loader wiring to the scope engine + atomic/no-overwrite engagement tests."""
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -143,6 +144,42 @@ def test_loader_invalid_utf8_raises_program_error(tmp_path, filename):
             loader.load_program_file(path)
         else:
             loader.load_scope_file(path)
+
+
+def _over_limit_json_integer() -> str:
+    limit = sys.get_int_max_str_digits()
+    return "9" * (limit + 1 if limit else 10_000)
+
+
+def test_loader_json_parser_value_error_raises_program_error(tmp_path):
+    program = tmp_path / "program.json"
+    program.write_text('{"schema_version": ' + _over_limit_json_integer() + "}", encoding="utf-8")
+    with pytest.raises(loader.ProgramError, match=str(program)):
+        loader.load_program_file(program)
+
+
+def test_loader_json_recursion_error_raises_program_error(tmp_path, monkeypatch):
+    scope = tmp_path / "scope.json"
+    scope.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        loader,
+        "strict_json_loads",
+        lambda _text: (_ for _ in ()).throw(RecursionError()),
+    )
+    with pytest.raises(loader.ProgramError, match=str(scope)):
+        loader.load_scope_file(scope)
+
+
+def test_loader_yaml_recursion_error_raises_program_error(tmp_path, monkeypatch):
+    scope = tmp_path / "scope.yaml"
+    scope.write_text("schema_version: 1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        loader,
+        "_strict_yaml_load",
+        lambda _text, _yaml: (_ for _ in ()).throw(RecursionError()),
+    )
+    with pytest.raises(loader.ProgramError, match=str(scope)):
+        loader.load_scope_file(scope)
 
 
 # --- engagement creation ---------------------------------------------------

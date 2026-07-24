@@ -43,6 +43,8 @@ def _text(value: object, *, name: str, limit: int, allow_empty: bool = False) ->
         raise ValueError(f"{name} must not be empty")
     if len(value) > limit:
         raise ValueError(f"{name} exceeds {limit} characters")
+    if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
+        raise ValueError(f"{name} contains invalid Unicode")
     return value
 
 
@@ -359,6 +361,10 @@ class ApprovalChallenge:
     challenge_digest: str
 
     def __post_init__(self) -> None:
+        _text(self.engagement_id, name="engagement_id", limit=_IDENTIFIER_LIMIT)
+        _text(self.program_id, name="program_id", limit=_IDENTIFIER_LIMIT)
+        _text(self.target, name="target", limit=_TARGET_AND_RULE_LIMIT)
+        _text(self.action_id, name="action_id", limit=_IDENTIFIER_LIMIT)
         object.__setattr__(
             self,
             "argv",
@@ -369,6 +375,34 @@ class ApprovalChallenge:
                 maximum_items=_ARGV_LIMIT,
             ),
         )
+        _text(self.rationale, name="rationale", limit=_DESCRIPTIVE_LIMIT, allow_empty=True)
+        _text(self.hypothesis_id, name="hypothesis_id", limit=_IDENTIFIER_LIMIT, allow_empty=True)
+        _text(
+            self.expected_impact,
+            name="expected_impact",
+            limit=_DESCRIPTIVE_LIMIT,
+            allow_empty=True,
+        )
+        _bounded_int(self.rate, name="rate", minimum=_RATE_MIN, maximum=_RATE_MAX)
+        _bounded_int(
+            self.concurrency,
+            name="concurrency",
+            minimum=_CONCURRENCY_MIN,
+            maximum=_CONCURRENCY_MAX,
+        )
+        _text(self.data_touched, name="data_touched", limit=_DESCRIPTIVE_LIMIT, allow_empty=True)
+        _text(
+            self.stop_condition,
+            name="stop_condition",
+            limit=_DESCRIPTIVE_LIMIT,
+            allow_empty=True,
+        )
+        _text(self.program_rule, name="program_rule", limit=_TARGET_AND_RULE_LIMIT)
+        _text(self.cleanup_plan, name="cleanup_plan", limit=_DESCRIPTIVE_LIMIT, allow_empty=True)
+        _text(self.scope_digest, name="scope_digest", limit=_IDENTIFIER_LIMIT)
+        _text(self.policy_digest, name="policy_digest", limit=_IDENTIFIER_LIMIT)
+        _text(self.nonce, name="nonce", limit=_IDENTIFIER_LIMIT)
+        _text(self.challenge_digest, name="challenge_digest", limit=_IDENTIFIER_LIMIT)
 
 
 @dataclass(frozen=True, slots=True)

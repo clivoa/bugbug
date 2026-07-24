@@ -14,6 +14,8 @@ class EngagementIdentityError(ValueError):
 
 def canonical_engagement_identity(path: str | Path) -> tuple[str, str]:
     """Return an absolute canonical path and its stable collision-resistant identity."""
+    if any(0xD800 <= ord(character) <= 0xDFFF for character in str(path)):
+        raise EngagementIdentityError("engagement_path: contains invalid Unicode")
     try:
         directory = Path(path).resolve(strict=True)
     except (OSError, RuntimeError) as exc:

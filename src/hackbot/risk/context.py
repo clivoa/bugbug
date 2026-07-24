@@ -27,6 +27,8 @@ class ContextError(Exception):
 def _bounded_text(value: object, *, name: str, limit: int) -> str:
     if not isinstance(value, str) or not value.strip() or len(value) > limit:
         raise ContextError(f"{name}: expected a non-empty string up to {limit} characters")
+    if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
+        raise ContextError(f"{name}: contains invalid Unicode")
     return value.strip()
 
 
@@ -49,7 +51,7 @@ def load_authorization(path: str | Path) -> AuthorizationState:
         value = strict_json_loads(authorization_path.read_text(encoding="utf-8"))
     except DuplicateJSONKeyError as exc:
         raise ContextError(f"authorization: {exc}") from exc
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError, RecursionError) as exc:
         raise ContextError(f"authorization: unable to read {authorization_path}") from exc
     if not isinstance(value, dict):
         raise ContextError("authorization: expected a JSON object")
