@@ -14,6 +14,7 @@ import re
 import secrets
 import stat
 from collections.abc import Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -34,6 +35,10 @@ _NONCE_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$", re.ASCII)
 _APPROVED_BY_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$", re.ASCII)
 _EVENT_RESULT_RE = re.compile(r"^[a-z][a-z-]{0,63}$", re.ASCII)
 _EVENT_REASON_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,127}$", re.ASCII)
+_SECRET_RE = re.compile(
+    r"(?i)(authorization\s*:\s*(?:bearer|basic)|\b(?:api[ _-]?key|token|secret|"
+    r"password|private[ _-]?key)\s*[:=]|\b(?:sk|ghp|xox[baprs])_[A-Za-z0-9_-]{12,})"
+)
 _ARTIFACT_LIMIT = 65_536
 _VERSION = 1
 _ARTIFACT_KEYS = frozenset(
@@ -192,6 +197,44 @@ def _challenge_fields(
     }
 
 
+def _reject_secrets(value: object) -> None:
+    """Reject likely credentials without retaining or echoing their values."""
+    if isinstance(value, str):
+        if _SECRET_RE.search(value):
+            raise ApprovalError("APPROVAL_SECRET", "secret-bearing challenge data is not allowed")
+        return
+    if isinstance(value, Mapping):
+        for item in value.values():
+            _reject_secrets(item)
+    elif isinstance(value, (tuple, list)):
+        for item in value:
+            _reject_secrets(item)
+
+
+def _validate_context_digest(context: PolicyContext) -> None:
+    """Recompute the context's code-owned digest before issuing a challenge."""
+    try:
+        from hackbot.risk.context import _canonical_policy_data, _policy_digest, _scope_snapshot
+
+        scope_in, scope_out = _scope_snapshot(context.scope.in_scope, context.scope.out_of_scope)
+        canonical = _canonical_policy_data(
+            engagement_id=context.engagement_id,
+            engagement_path=context.engagement_path,
+            program_id=context.program_id,
+            authorization=context.authorization,
+            scope_in=scope_in,
+            scope_out=scope_out,
+            testing_policy=context.testing_policy,
+            active_profile=context.active_profile,
+        )
+        if _policy_digest(canonical) != context.policy_digest:
+            raise ValueError("policy digest mismatch")
+    except (AttributeError, TypeError, ValueError, UnicodeError) as exc:
+        raise ApprovalError(
+            "APPROVAL_INVALID_CONTEXT", "current policy context is invalid"
+        ) from exc
+
+
 def _validate_inputs(
     definition: object, request: object, context: object, now: object, nonce: object
 ) -> tuple[ActionDefinition, ActionRequest, PolicyContext, datetime, str]:
@@ -199,6 +242,7 @@ def _validate_inputs(
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "invalid challenge input")
     if not isinstance(context, PolicyContext):
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "invalid policy context")
+    _validate_context_digest(context)
     try:
         definition.validate()
     except ValueError as exc:
@@ -221,6 +265,18 @@ def _validate_inputs(
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "request argv does not match template")
     if not isinstance(nonce, str) or _NONCE_RE.fullmatch(nonce) is None:
         raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "nonce must be bounded canonical text")
+    _reject_secrets((request.argv, request.rationale, request.target, request.data_touched))
+    try:
+        from hackbot.risk.policy import RiskEngine
+        from hackbot.risk.registry import ActionRegistry
+
+        decision = RiskEngine(ActionRegistry([definition])).evaluate(
+            request, context, now=_utc(now, name="now")
+        )
+    except (TypeError, ValueError) as exc:
+        raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "challenge preflight is invalid") from exc
+    if decision.kind.value != "requires-approval":
+        raise ApprovalError("APPROVAL_NOT_AUTHORIZED", "action is not otherwise authorized")
     return definition, request, context, _utc(now, name="now"), nonce
 
 
@@ -238,40 +294,44 @@ def build_challenge(
         definition, request, context, now, supplied_nonce
     )
     expires_at = created_at + timedelta(minutes=5)
-    fields = _challenge_fields(
-        definition,
-        request,
-        context,
-        created_at=created_at,
-        expires_at=expires_at,
-        nonce=checked_nonce,
-    )
-    digest = hashlib.sha256(canonical_bytes(fields)).hexdigest()
-    return ApprovalChallenge(
-        engagement_id=context.engagement_id,
-        engagement_path=context.engagement_path,
-        program_id=context.program_id,
-        target=request.target,
-        action_id=request.action_id,
-        argv=request.argv,
-        effective_risk=request.effective_risk(definition),
-        rationale=request.rationale,
-        hypothesis_id=request.hypothesis_id,
-        expected_impact=request.expected_impact,
-        rate=request.rate if request.rate is not None else 0,
-        concurrency=request.concurrency if request.concurrency is not None else 0,
-        data_touched=request.data_touched,
-        stop_condition=request.stop_condition,
-        program_rule=request.program_rule,
-        cleanup_plan=request.cleanup_plan,
-        scope_digest=fields["scope_digest"],  # type: ignore[arg-type]
-        policy_digest=context.policy_digest,
-        created_at=created_at,
-        expires_at=expires_at,
-        nonce=checked_nonce,
-        challenge_digest=digest,
-        binding=canonical_bytes(fields),
-    )
+    try:
+        fields = _challenge_fields(
+            definition,
+            request,
+            context,
+            created_at=created_at,
+            expires_at=expires_at,
+            nonce=checked_nonce,
+        )
+        binding = canonical_bytes(fields)
+        digest = hashlib.sha256(binding).hexdigest()
+        return ApprovalChallenge(
+            engagement_id=context.engagement_id,
+            engagement_path=context.engagement_path,
+            program_id=context.program_id,
+            target=request.target,
+            action_id=request.action_id,
+            argv=request.argv,
+            effective_risk=request.effective_risk(definition),
+            rationale=request.rationale,
+            hypothesis_id=request.hypothesis_id,
+            expected_impact=request.expected_impact,
+            rate=request.rate if request.rate is not None else 0,
+            concurrency=request.concurrency if request.concurrency is not None else 0,
+            data_touched=request.data_touched,
+            stop_condition=request.stop_condition,
+            program_rule=request.program_rule,
+            cleanup_plan=request.cleanup_plan,
+            scope_digest=fields["scope_digest"],  # type: ignore[arg-type]
+            policy_digest=context.policy_digest,
+            created_at=created_at,
+            expires_at=expires_at,
+            nonce=checked_nonce,
+            challenge_digest=digest,
+            binding=binding,
+        )
+    except (TypeError, ValueError, UnicodeError) as exc:
+        raise ApprovalError("APPROVAL_INVALID_CHALLENGE", "canonical challenge is invalid") from exc
 
 
 def _validate_challenge(challenge: object) -> ApprovalChallenge:
@@ -371,6 +431,14 @@ class ApprovalStore:
                 if not directory.is_dir() or directory.is_symlink():
                     raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval path is unsafe")
                 os.chmod(directory, 0o700)
+            for name in ("locks", "transactions"):
+                directory = root / name
+                if directory.exists() and directory.is_symlink():
+                    raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval path is a symlink")
+                directory.mkdir(mode=0o700, exist_ok=True)
+                if not directory.is_dir() or directory.is_symlink():
+                    raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval path is unsafe")
+                os.chmod(directory, 0o700)
         except ApprovalError:
             raise
         except OSError as exc:
@@ -394,6 +462,40 @@ class ApprovalStore:
 
     def _path(self, state: str, digest: str) -> Path:
         return Path(self.root) / state / self._name(digest)
+
+    @contextmanager
+    def _digest_lock(self, digest: str):
+        """Serialize state transitions on supported macOS/Linux filesystems."""
+        import fcntl
+
+        path = Path(self.root) / "locks" / (self._name(digest) + ".lock")
+        fd: int | None = None
+        try:
+            fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600:
+                raise ApprovalError("APPROVAL_UNSAFE_PATH", "approval lock path is unsafe")
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        except ApprovalError:
+            raise
+        except OSError as exc:
+            raise ApprovalError("APPROVAL_IO", "approval lock failed") from exc
+        finally:
+            if fd is not None:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                except OSError:
+                    pass
+                os.close(fd)
+
+    @staticmethod
+    def _fsync_directory(path: Path) -> None:
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
 
     @staticmethod
     def _artifact(
@@ -464,7 +566,12 @@ class ApprovalStore:
                 raise ApprovalError("APPROVAL_UNSAFE_PATH", "safe artifact reads are unavailable")
             fd = os.open(path, os.O_RDONLY | no_follow)
             info = os.fstat(fd)
-            if not stat.S_ISREG(info.st_mode) or info.st_size > _ARTIFACT_LIMIT:
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or stat.S_IMODE(info.st_mode) != 0o600
+                or info.st_uid != os.geteuid()
+                or info.st_size > _ARTIFACT_LIMIT
+            ):
                 raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
             chunks: list[bytes] = []
             remaining = info.st_size
@@ -543,22 +650,45 @@ class ApprovalStore:
                 return state
         return None
 
-    def create_pending(self, challenge: ApprovalChallenge) -> Path:
+    def create_pending(
+        self,
+        definition: ActionDefinition | ApprovalChallenge,
+        request: ActionRequest | None = None,
+        context: PolicyContext | None = None,
+        *,
+        now: datetime | None = None,
+        nonce: str | None = None,
+    ) -> Path:
+        """Issue a pending record only from current trusted policy inputs."""
+        if (
+            not isinstance(definition, ActionDefinition)
+            or not isinstance(request, ActionRequest)
+            or not isinstance(context, PolicyContext)
+            or now is None
+        ):
+            raise ApprovalError(
+                "APPROVAL_TRUSTED_INPUTS_REQUIRED",
+                "trusted definition, request, context, and clock are required",
+            )
+        challenge = build_challenge(definition, request, context, now=now, nonce=nonce)
         self._assert_local(challenge)
         self._ensure_layout()
         if self._state(challenge.challenge_digest) is not None:
             raise ApprovalError("APPROVAL_EXISTS", "approval record already exists")
         path = self._path("pending", challenge.challenge_digest)
+        owned = False
         try:
             self._write_exclusive(path, self._artifact(challenge, kind="pending"))
+            owned = True
             self.append_event(
                 challenge, result="created", reason_code="CREATED", now=challenge.created_at
             )
         except ApprovalError:
-            try:
-                path.unlink()
-            except OSError:
-                pass
+            if owned:
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
             raise
         return path
 
@@ -612,19 +742,33 @@ class ApprovalStore:
         return grant
 
     def _claim(self, source: Path, destination: Path) -> None:
-        """Claim ``destination`` without rename-overwrite semantics, then remove source."""
-        try:
-            os.link(source, destination)
-        except FileExistsError as exc:
-            raise ApprovalError("APPROVAL_CONSUMED", "approval already consumed") from exc
-        except FileNotFoundError as exc:
-            raise ApprovalError("APPROVAL_CONSUMED", "approval already consumed") from exc
-        except OSError as exc:
-            raise ApprovalError("APPROVAL_IO", "approval state transition failed") from exc
-        try:
-            os.unlink(source)
-        except OSError as exc:
-            raise ApprovalError("APPROVAL_IO", "approval state transition failed") from exc
+        """Rename under a per-digest lock with a durable recovery journal."""
+        digest = source.stem
+        journal = Path(self.root) / "transactions" / (self._name(digest) + ".json")
+        with self._digest_lock(digest):
+            try:
+                if destination.exists() or destination.is_symlink():
+                    raise ApprovalError("APPROVAL_CONSUMED", "approval already consumed")
+                self._write_exclusive(
+                    journal,
+                    {
+                        "version": _VERSION,
+                        "source": source.parent.name,
+                        "destination": destination.parent.name,
+                        "challenge_digest": digest,
+                    },
+                )
+                os.rename(source, destination)
+                self._fsync_directory(source.parent)
+                self._fsync_directory(destination.parent)
+                journal.unlink()
+                self._fsync_directory(journal.parent)
+            except ApprovalError:
+                raise
+            except FileNotFoundError as exc:
+                raise ApprovalError("APPROVAL_CONSUMED", "approval already consumed") from exc
+            except OSError as exc:
+                raise ApprovalError("APPROVAL_IO", "approval state transition failed") from exc
 
     def _expire(self, challenge: ApprovalChallenge, source: Path) -> None:
         try:
