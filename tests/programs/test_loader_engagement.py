@@ -74,6 +74,41 @@ in_scope:
         loader.load_scope_file(scope)
 
 
+def test_loader_rejects_duplicate_json_keys_in_program_at_every_depth(tmp_path):
+    program = tmp_path / "program.json"
+    program.write_text(
+        '{"schema_version": 1, "program": {"name": "first", "name": "last"}, '
+        '"scope": {"in_scope": {"domains": ["example.com"], '
+        '"domains": ["expanded.example"]}}, "testing_rules": '
+        '{"max_requests_per_second": 1, "max_requests_per_second": 1000}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(loader.ProgramError, match="duplicate JSON key"):
+        loader.load_program_file(program)
+
+
+def test_loader_rejects_duplicate_json_keys_in_standalone_scope(tmp_path):
+    scope = tmp_path / "scope.json"
+    scope.write_text(
+        '{"schema_version": 1, "in_scope": {"domains": ["example.com"], '
+        '"domains": ["expanded.example"]}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(loader.ProgramError, match="duplicate JSON key"):
+        loader.load_scope_file(scope)
+
+
+@pytest.mark.parametrize(
+    "mapping_key",
+    ["1: one", "? [sequence, key]\n: value"],
+)
+def test_loader_rejects_non_string_or_unhashable_yaml_mapping_keys(tmp_path, mapping_key):
+    scope = tmp_path / "scope.yaml"
+    scope.write_text(f"schema_version: 1\n{mapping_key}\n", encoding="utf-8")
+    with pytest.raises(loader.ProgramError, match="mapping key must be a string"):
+        loader.load_scope_file(scope)
+
+
 # --- engagement creation ---------------------------------------------------
 def _doc():
     import yaml

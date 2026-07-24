@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from hackbot.programs.decoding import DuplicateJSONKeyError, strict_json_loads
 from hackbot.programs.schema import ScopeDoc, ValidationError, validate_program, validate_scope
 from hackbot.scope import Scope
 
@@ -34,6 +35,13 @@ def _strict_yaml_load(text: str, yaml: Any) -> object:
         result = {}
         for key_node, value_node in node.value:
             key = loader.construct_object(key_node, deep=deep)
+            if not isinstance(key, str):
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    "mapping key must be a string",
+                    key_node.start_mark,
+                )
             if key in result:
                 raise yaml.constructor.ConstructorError(
                     "while constructing a mapping",
@@ -55,9 +63,12 @@ def _load_mapping(path: str | Path) -> dict:
     text = p.read_text(encoding="utf-8")
     if p.suffix.lower() == ".json":
         try:
-            return json.loads(text)
-        except json.JSONDecodeError as e:
+            data = strict_json_loads(text)
+        except (json.JSONDecodeError, DuplicateJSONKeyError) as e:
             raise ProgramError(f"invalid JSON in {p}: {e}") from e
+        if not isinstance(data, dict):
+            raise ProgramError(f"{p}: top-level document must be a mapping")
+        return data
     try:
         import yaml  # config extra
     except ModuleNotFoundError as e:

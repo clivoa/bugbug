@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from hackbot.programs.decoding import DuplicateJSONKeyError, strict_json_loads
 from hackbot.programs.loader import ProgramError, load_program_file, load_scope_file
 from hackbot.programs.schema import ValidationError, validate_testing_policy
 from hackbot.risk.identity import EngagementIdentityError, canonical_engagement_identity
@@ -21,10 +22,6 @@ _NOTE_LIMIT = 8_192
 
 class ContextError(Exception):
     """Raised when any engagement input cannot produce a safe policy context."""
-
-
-class _DuplicateJSONKey(ValueError):
-    pass
 
 
 def _bounded_text(value: object, *, name: str, limit: int) -> str:
@@ -45,36 +42,23 @@ def _parse_utc_timestamp(value: object) -> datetime:
     return parsed.astimezone(UTC)
 
 
-def _strict_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    value: dict[str, object] = {}
-    for key, item in pairs:
-        if key in value:
-            raise _DuplicateJSONKey(f"duplicate JSON key {key!r}")
-        value[key] = item
-    return value
-
-
 def load_authorization(path: str | Path) -> AuthorizationState:
     """Load strict, non-secret authorization state; unknown keys fail closed."""
     authorization_path = Path(path)
     try:
-        value = json.loads(
-            authorization_path.read_text(encoding="utf-8"),
-            object_pairs_hook=_strict_json_object,
-        )
-    except _DuplicateJSONKey as exc:
+        value = strict_json_loads(authorization_path.read_text(encoding="utf-8"))
+    except DuplicateJSONKeyError as exc:
         raise ContextError(f"authorization: {exc}") from exc
     except (OSError, json.JSONDecodeError) as exc:
         raise ContextError(f"authorization: unable to read {authorization_path}") from exc
     if not isinstance(value, dict):
         raise ContextError("authorization: expected a JSON object")
-    keys = set(value)
-    unknown = keys - _AUTHORIZATION_KEYS
-    missing = _REQUIRED_AUTHORIZATION_KEYS - keys
+    unknown = [key for key in value if key not in _AUTHORIZATION_KEYS]
+    missing = [key for key in _REQUIRED_AUTHORIZATION_KEYS if key not in value]
     if unknown:
-        raise ContextError(f"authorization: unknown field {sorted(unknown)[0]!r}")
+        raise ContextError(f"authorization: unknown field {unknown[0]!r}")
     if missing:
-        raise ContextError(f"authorization: missing field {sorted(missing)[0]!r}")
+        raise ContextError(f"authorization: missing field {missing[0]!r}")
     note = value.get("note")
     if "note" in value and (not isinstance(note, str) or len(note) > _NOTE_LIMIT):
         raise ContextError(f"authorization.note: expected a string up to {_NOTE_LIMIT} characters")
