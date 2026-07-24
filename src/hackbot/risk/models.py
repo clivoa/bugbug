@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, IntEnum
+from pathlib import PurePath, PureWindowsPath
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from hackbot.risk.identity import EngagementIdentityError, canonical_engagement_identity
@@ -22,6 +23,28 @@ _CONCURRENCY_MIN = 1
 _CONCURRENCY_MAX = 100
 _HEADER_FIELD_NAME_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$", re.ASCII)
 _CODE_IDENTITY_RE = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", re.ASCII)
+_SHELL_EXECUTABLE_BASENAMES = frozenset(
+    {
+        "sh",
+        "sh.exe",
+        "bash",
+        "bash.exe",
+        "zsh",
+        "zsh.exe",
+        "fish",
+        "fish.exe",
+        "dash",
+        "dash.exe",
+        "ksh",
+        "ksh.exe",
+        "cmd",
+        "cmd.exe",
+        "powershell",
+        "powershell.exe",
+        "pwsh",
+        "pwsh.exe",
+    }
+)
 
 
 class RiskLevel(IntEnum):
@@ -187,7 +210,7 @@ class ActionDefinition:
     required_profile: str | None = None
     tool_id: str | None = None
     executable: str | None = None
-    uses_external_tool: bool | None = None
+    uses_external_tool: bool = False
     vulnerability_types: tuple[str, ...] = ()
     impacts: tuple[str, ...] = ()
     automated: bool = False
@@ -223,6 +246,7 @@ class ActionDefinition:
             "out_of_band",
             "honors_required_headers",
             "shell_execution",
+            "uses_external_tool",
         ):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f"{name} must be a boolean")
@@ -233,14 +257,21 @@ class ActionDefinition:
         if self.executable is not None:
             if self.executable != canonical_tool_identity(self.executable, name="executable"):
                 raise ValueError("executable must be a canonical absolute path")
-        if self.uses_external_tool is not None and type(self.uses_external_tool) is not bool:
-            raise ValueError("uses_external_tool must be a boolean or None")
-        if self.uses_external_tool is True and self.tool_id is None and self.executable is None:
-            raise ValueError("external tools require a trusted tool_id or executable")
-        if self.uses_external_tool is not True and (
+        if self.uses_external_tool and self.executable is None:
+            raise ValueError("external tools require a trusted executable")
+        if not self.uses_external_tool and (
             self.tool_id is not None or self.executable is not None
         ):
             raise ValueError("tool_id and executable require uses_external_tool=true")
+        if self.shell_execution and (not self.uses_external_tool or self.executable is None):
+            raise ValueError("shell_execution requires an external executable")
+        if self.executable is not None:
+            basenames = {
+                PurePath(self.executable).name.lower(),
+                PureWindowsPath(self.executable).name.lower(),
+            }
+            if not basenames.isdisjoint(_SHELL_EXECUTABLE_BASENAMES) and not self.shell_execution:
+                raise ValueError("known shell executables require shell_execution=true")
         _code_classifications(self.vulnerability_types, name="vulnerability_types")
         _code_classifications(self.impacts, name="impacts")
 

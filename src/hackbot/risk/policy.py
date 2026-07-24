@@ -251,14 +251,6 @@ class RiskEngine:
                 scope_rule=scope_rule,
                 program_rule=request.program_rule,
             )
-        if prohibited_tools and definition.uses_external_tool is None:
-            return self._deny(
-                "DENY_PROGRAM_TOOL_ID_UNSPECIFIED",
-                risk,
-                context=context,
-                scope_rule=scope_rule,
-                program_rule=request.program_rule,
-            )
         if definition.uses_external_tool and self._tool_is_prohibited(definition, prohibited_tools):
             return self._deny(
                 "DENY_PROGRAM_PROHIBITED_TOOL",
@@ -347,8 +339,8 @@ class RiskEngine:
     def _executable_request_denial(
         definition: ActionDefinition, request: ActionRequest
     ) -> str | None:
-        if definition.executable is None:
-            return None
+        if not definition.uses_external_tool:
+            return "DENY_NO_TOOL_ARGV" if request.argv else None
         if not request.argv or request.argv[0] != definition.executable:
             return "DENY_EXECUTABLE_MISMATCH"
         return None
