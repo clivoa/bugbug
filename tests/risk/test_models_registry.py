@@ -121,6 +121,38 @@ def test_testing_policy_rejects_absolute_l3_flags(field):
         _testing_policy(**{field: True})
 
 
+_PERMISSION_FLAGS = (
+    "automated_scanning_allowed",
+    "authenticated_testing_allowed",
+    "account_creation_allowed",
+    "multiple_accounts_allowed",
+    "social_engineering_allowed",
+    "denial_of_service_allowed",
+    "out_of_band_testing_allowed",
+)
+
+
+@pytest.mark.parametrize("field", _PERMISSION_FLAGS)
+@pytest.mark.parametrize("value", ["false", 0, 1, None])
+def test_testing_policy_rejects_non_boolean_permission_flags(field, value):
+    with pytest.raises(ValueError, match=field):
+        _testing_policy(**{field: value})
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "automated_scanning_allowed",
+        "authenticated_testing_allowed",
+        "account_creation_allowed",
+        "multiple_accounts_allowed",
+        "out_of_band_testing_allowed",
+    ],
+)
+def test_testing_policy_preserves_non_l3_boolean_permission_flags(field):
+    assert getattr(_testing_policy(**{field: True}), field) is True
+
+
 def test_testing_policy_normalizes_immutable_collections_and_timezone():
     policy = _testing_policy(
         source_ip_requirements=[" OFFICE-IP "],
