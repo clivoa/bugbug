@@ -138,16 +138,31 @@ def _code_identity(value: object, *, name: str) -> str:
     return text
 
 
-def _executable_identity(value: object) -> str:
-    executable = _text(value, name="executable", limit=_TARGET_AND_RULE_LIMIT)
-    normalized = executable.replace("\\", "/").lower()
-    if executable != executable.strip() or not (
-        normalized.startswith("/") or re.fullmatch(r"[a-z]:/[^\r\n\x00]+", normalized)
+def _canonical_absolute_path(value: object, *, name: str) -> str:
+    path = _text(value, name=name, limit=_TARGET_AND_RULE_LIMIT)
+    if path != path.strip() or any(
+        ord(character) < 0x20 or ord(character) == 0x7F for character in path
     ):
-        raise ValueError("executable must be a canonical absolute path")
-    if executable != normalized:
-        raise ValueError("executable must be a canonical lowercase path")
-    return executable
+        raise ValueError(f"{name} must be a canonical absolute path")
+    normalized = path.replace("\\", "/").lower()
+    if normalized.startswith("/"):
+        remainder = normalized[1:]
+    elif re.fullmatch(r"[a-z]:/.*", normalized) is not None:
+        remainder = normalized[3:]
+    else:
+        raise ValueError(f"{name} must be a canonical absolute path")
+    segments = remainder.split("/")
+    if not segments or any(segment in {"", ".", ".."} for segment in segments):
+        raise ValueError(f"{name} must be a canonical absolute path")
+    return normalized
+
+
+def canonical_tool_identity(value: object, *, name: str = "tool identity") -> str:
+    """Return a pure lexical canonical tool ID or absolute executable path."""
+    text = _text(value, name=name, limit=_TARGET_AND_RULE_LIMIT)
+    if "/" in text or "\\" in text:
+        return _canonical_absolute_path(text, name=name)
+    return _code_identity(text, name=name)
 
 
 def _code_classifications(value: object, *, name: str) -> tuple[str, ...]:
@@ -172,6 +187,7 @@ class ActionDefinition:
     required_profile: str | None = None
     tool_id: str | None = None
     executable: str | None = None
+    uses_external_tool: bool | None = None
     vulnerability_types: tuple[str, ...] = ()
     impacts: tuple[str, ...] = ()
     automated: bool = False
@@ -183,6 +199,10 @@ class ActionDefinition:
     shell_execution: bool = False
 
     def __post_init__(self) -> None:
+        if self.executable is not None:
+            object.__setattr__(
+                self, "executable", canonical_tool_identity(self.executable, name="executable")
+            )
         self.validate()
 
     def validate(self) -> None:
@@ -211,7 +231,16 @@ class ActionDefinition:
         if self.tool_id is not None:
             _code_identity(self.tool_id, name="tool_id")
         if self.executable is not None:
-            _executable_identity(self.executable)
+            if self.executable != canonical_tool_identity(self.executable, name="executable"):
+                raise ValueError("executable must be a canonical absolute path")
+        if self.uses_external_tool is not None and type(self.uses_external_tool) is not bool:
+            raise ValueError("uses_external_tool must be a boolean or None")
+        if self.uses_external_tool is True and self.tool_id is None and self.executable is None:
+            raise ValueError("external tools require a trusted tool_id or executable")
+        if self.uses_external_tool is not True and (
+            self.tool_id is not None or self.executable is not None
+        ):
+            raise ValueError("tool_id and executable require uses_external_tool=true")
         _code_classifications(self.vulnerability_types, name="vulnerability_types")
         _code_classifications(self.impacts, name="impacts")
 
@@ -219,8 +248,19 @@ class ActionDefinition:
     def effective_floor(self) -> RiskLevel:
         if self.shell_execution:
             return RiskLevel.L3
-        elevated = self.state_changing or self.high_volume or self.touches_third_party
-        return max(self.minimum_risk, RiskLevel.L2 if elevated else self.minimum_risk)
+        l2 = (
+            self.state_changing
+            or self.high_volume
+            or self.touches_third_party
+            or self.creates_account
+            or self.uses_multiple_accounts
+            or self.out_of_band
+        )
+        l1 = self.automated or self.authenticated
+        return max(
+            self.minimum_risk,
+            RiskLevel.L2 if l2 else RiskLevel.L1 if l1 else self.minimum_risk,
+        )
 
 
 @dataclass(frozen=True, slots=True)

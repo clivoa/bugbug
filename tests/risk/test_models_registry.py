@@ -93,6 +93,47 @@ def test_shell_execution_is_an_absolute_l3_definition_characteristic():
     assert action.effective_floor is RiskLevel.L3
 
 
+@pytest.mark.parametrize(
+    ("field", "expected"),
+    [
+        ("automated", RiskLevel.L1),
+        ("authenticated", RiskLevel.L1),
+        ("creates_account", RiskLevel.L2),
+        ("uses_multiple_accounts", RiskLevel.L2),
+        ("out_of_band", RiskLevel.L2),
+    ],
+)
+def test_trusted_action_characteristics_raise_the_effective_floor(field, expected):
+    action = ActionDefinition("fixture.floor", RiskLevel.L0, **{field: True})
+    assert action.effective_floor is expected
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"uses_external_tool": 1},
+        {"uses_external_tool": False, "tool_id": "nmap"},
+        {"uses_external_tool": False, "executable": "/opt/nmap"},
+        {"uses_external_tool": True},
+        {"uses_external_tool": True, "tool_id": "nmap", "executable": "/opt//nmap"},
+        {"uses_external_tool": True, "executable": "/opt/../nmap"},
+    ],
+)
+def test_external_tool_metadata_is_explicit_and_paths_are_canonical(changes):
+    with pytest.raises(ValueError):
+        ActionDefinition("fixture.tool", RiskLevel.L0, **changes)
+
+
+def test_external_tool_metadata_normalizes_windows_paths_lexically():
+    action = ActionDefinition(
+        "fixture.tool",
+        RiskLevel.L0,
+        uses_external_tool=True,
+        executable="C:\\Tools\\Nmap.EXE",
+    )
+    assert action.executable == "c:/tools/nmap.exe"
+
+
 def test_registry_revalidates_mutated_action_definition():
     action = ActionDefinition("fixture.scan", RiskLevel.L1)
     object.__setattr__(action, "network_access", 1)

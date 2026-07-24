@@ -54,8 +54,15 @@ def engine():
                     RiskLevel.L1,
                     network_access=True,
                     low_impact_allowlisted=True,
+                    automated=True,
                 ),
                 ActionDefinition("fixture.l1-unlisted", RiskLevel.L1, network_access=True),
+                ActionDefinition(
+                    "fixture.l1-manual",
+                    RiskLevel.L1,
+                    network_access=True,
+                    low_impact_allowlisted=True,
+                ),
                 ActionDefinition("fixture.l2", RiskLevel.L2, network_access=True),
                 ActionDefinition("fixture.prohibited", RiskLevel.L3, network_access=True),
                 ActionDefinition("fixture.local", RiskLevel.L0),
@@ -93,7 +100,7 @@ def test_l1_requires_allowlist_and_automated_scanning_permission(engine, context
     assert unlisted.reason_code == "DENY_L1_NOT_ALLOWLISTED"
 
     scanning = engine.evaluate(replace(action_request, action_id="fixture.l1-allowlisted"), context)
-    assert scanning.reason_code == "DENY_L1_AUTOMATED_SCANNING_NOT_ALLOWED"
+    assert scanning.reason_code == "DENY_PROGRAM_AUTOMATED_NOT_ALLOWED"
 
     allowed_context = _context(context, automated_scanning_allowed=True)
     allowed = engine.evaluate(
@@ -101,6 +108,13 @@ def test_l1_requires_allowlist_and_automated_scanning_permission(engine, context
     )
     assert allowed.kind is DecisionKind.ALLOW
     assert allowed.effective_risk is RiskLevel.L1
+
+
+def test_manual_allowlisted_l1_does_not_require_automated_scanning_permission(
+    engine, context, action_request
+):
+    decision = engine.evaluate(replace(action_request, action_id="fixture.l1-manual"), context)
+    assert decision.kind is DecisionKind.ALLOW
 
 
 def test_l0_is_not_blocked_by_automated_scanning_permission(engine, context, action_request):
@@ -198,6 +212,7 @@ def test_prohibited_tool_uses_only_code_owned_tool_identity(engine, context, act
                     "fixture.l0-network",
                     RiskLevel.L0,
                     network_access=True,
+                    uses_external_tool=True,
                     tool_id="nmap",
                     executable="/opt/reviewed/nmap",
                 )
@@ -225,6 +240,44 @@ def test_prohibited_tool_uses_only_code_owned_tool_identity(engine, context, act
         replace(action_request, argv=("safe-nmap-wrapper",)), context
     )
     assert executable_mismatch.reason_code == "DENY_EXECUTABLE_MISMATCH"
+
+
+def test_prohibited_tool_requires_explicit_trusted_tool_status(engine, context, action_request):
+    unspecified = engine.evaluate(action_request, _context(context, prohibited_tools=("nmap",)))
+    assert unspecified.reason_code == "DENY_PROGRAM_TOOL_ID_UNSPECIFIED"
+
+    directly_prohibited = engine.evaluate(
+        action_request,
+        _context(context, prohibited_tools=("fixture.l0-network",)),
+    )
+    assert directly_prohibited.reason_code == "DENY_PROGRAM_PROHIBITED_TOOL"
+
+
+def test_prohibited_tool_paths_use_lexical_canonicalization(context, action_request):
+    path_engine = RiskEngine(
+        ActionRegistry(
+            [
+                ActionDefinition(
+                    "fixture.l0-network",
+                    RiskLevel.L0,
+                    network_access=True,
+                    uses_external_tool=True,
+                    executable="c:/tools/nmap.exe",
+                )
+            ]
+        )
+    )
+    decision = path_engine.evaluate(
+        replace(action_request, argv=("c:/tools/nmap.exe",)),
+        _context(context, prohibited_tools=("C:\\TOOLS\\NMAP.EXE",)),
+    )
+    assert decision.reason_code == "DENY_PROGRAM_PROHIBITED_TOOL"
+
+    malformed = path_engine.evaluate(
+        replace(action_request, argv=("c:/tools/nmap.exe",)),
+        _context(context, prohibited_tools=("c:/tools//nmap.exe",)),
+    )
+    assert malformed.reason_code == "DENY_PROGRAM_INVALID_POLICY"
 
 
 def test_vulnerability_and_impact_restrictions_use_code_owned_classifications(
@@ -396,6 +449,58 @@ def test_shell_execution_definition_is_absolute_l3(context, action_request):
     decision = shell_engine.evaluate(action_request, context, grant=object())
     assert decision.kind is DecisionKind.DENY
     assert decision.reason_code == "DENY_PROHIBITED"
+
+
+def test_automated_l0_action_is_elevated_and_cannot_bypass_permission(context, action_request):
+    automated_engine = RiskEngine(
+        ActionRegistry(
+            [
+                ActionDefinition(
+                    "fixture.l0-network",
+                    RiskLevel.L0,
+                    network_access=True,
+                    low_impact_allowlisted=True,
+                    automated=True,
+                )
+            ]
+        )
+    )
+    denied = automated_engine.evaluate(action_request, context)
+    assert denied.reason_code == "DENY_PROGRAM_AUTOMATED_NOT_ALLOWED"
+
+    allowed = automated_engine.evaluate(
+        action_request,
+        _context(context, automated_scanning_allowed=True),
+    )
+    assert allowed.kind is DecisionKind.ALLOW
+    assert allowed.effective_risk is RiskLevel.L1
+
+
+def test_out_of_band_l0_action_is_elevated_to_l2_and_still_requires_approval(
+    context, action_request
+):
+    out_of_band_engine = RiskEngine(
+        ActionRegistry(
+            [
+                ActionDefinition(
+                    "fixture.l0-network",
+                    RiskLevel.L0,
+                    network_access=True,
+                    out_of_band=True,
+                )
+            ]
+        )
+    )
+    permission_denied = out_of_band_engine.evaluate(action_request, context, grant=object())
+    assert permission_denied.reason_code == "DENY_PROGRAM_OUT_OF_BAND_NOT_ALLOWED"
+
+    approval = out_of_band_engine.evaluate(
+        action_request,
+        _context(context, out_of_band_testing_allowed=True),
+        grant=object(),
+    )
+    assert approval.kind is DecisionKind.REQUIRES_APPROVAL
+    assert approval.effective_risk is RiskLevel.L2
 
 
 @pytest.mark.parametrize(
