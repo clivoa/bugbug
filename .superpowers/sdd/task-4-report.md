@@ -7,7 +7,7 @@ engagement-local pending/granted/consumed/expired approval persistence. No CLI,
 interactive confirmation, policy-engine grant integration, subprocesses,
 providers, tokens, or network activity was added.
 
-Implementation commit: `ac7f04cda6e643e4311995b35b65cc47a21ae963`
+Initial implementation commit: `ac7f04cda6e643e4311995b35b65cc47a21ae963`
 (`feat: add single-use L2 approval store`).
 
 ## Security properties
@@ -24,10 +24,9 @@ Implementation commit: `ac7f04cda6e643e4311995b35b65cc47a21ae963`
   audit opens reject symlinks, names derive only from SHA-256 digests, and all
   record reads reject oversized, malformed, duplicate-key, or unknown-key JSON.
 - Pending and grant files use exclusive creation plus fsync. Consumption uses a
-  same-filesystem hard-link no-overwrite claim followed by source unlink, so a
-  competing consumer cannot overwrite the consumed destination; races become
-  controlled `ApprovalError`s. There is no API to unconsume, regrant, or extend
-  a grant.
+  per-digest advisory lock, durable transaction journal, same-filesystem rename,
+  and parent-directory fsync; a competing consumer becomes a controlled
+  `ApprovalError`. There is no API to unconsume, regrant, or extend a grant.
 - The persisted canonical challenge payload is rehashed and cross-checked
   against presentation fields on every use, so tampering cannot reuse a stale
   digest. Audit events use a strict seven-field secret-free projection.
@@ -61,3 +60,30 @@ Audit locking deliberately uses `fcntl.flock`; it is documented in
 Repository-wide `ruff format --check .` still reports the pre-existing root
 `conftest.py` formatting issue; Task 4's changed files are formatted and that
 file was not modified.
+
+## Review remediation — authorization and persistence hardening
+
+Commit: `56e3c8452ed897b1231a59c4ba6be9e1145d6ad9`
+(`fix: preflight and harden approval issuance`).
+
+- `build_challenge` now recomputes the canonical policy-context digest and runs
+  the pure `RiskEngine` with the exact code-owned definition, request, context,
+  and injected clock. It requires `REQUIRES_APPROVAL`; scope, authorization,
+  program restrictions, rate/concurrency, and malformed local L2 input deny
+  with controlled `ApprovalError`s.
+- `create_pending` no longer accepts a caller-supplied challenge. It requires
+  the trusted definition/request/context/clock and rebuilds the challenge.
+- Challenge input recursively rejects likely credential-bearing values without
+  echoing them. It recognizes authorization/Bearer/Basic, common secret key
+  names with values, and high-confidence provider token prefixes.
+- O_EXCL ownership is tracked so a losing concurrent pending issuer never
+  unlinks the winning artifact. Persisted artifacts must be regular files owned
+  by the current UID and mode `0600`.
+- State claims now use a per-digest `fcntl` lock and a durable transaction
+  journal around no-overwrite rename plus source/destination directory fsync.
+
+Additional RED/GREEN evidence: tests for denied preflight, secret-bearing
+review text, free-standing challenge issuance, concurrent pending issuance,
+and wrong artifact modes were added before the corresponding changes. Focused
+approval suite completed with `30 passed`; full suite completed with `364
+passed`; Ruff and mypy passed.
