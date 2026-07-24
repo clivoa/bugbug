@@ -113,9 +113,7 @@ def test_testing_policy_rejects_invalid_rate_and_concurrency(field, value):
         _testing_policy(**{field: value})
 
 
-@pytest.mark.parametrize(
-    "field", ["social_engineering_allowed", "denial_of_service_allowed"]
-)
+@pytest.mark.parametrize("field", ["social_engineering_allowed", "denial_of_service_allowed"])
 def test_testing_policy_rejects_absolute_l3_flags(field):
     with pytest.raises(ValueError, match=field):
         _testing_policy(**{field: True})
@@ -182,6 +180,15 @@ def test_testing_policy_rejects_duplicate_normalized_collection_values(field):
 def test_testing_policy_rejects_unknown_restricted_hours_timezone():
     with pytest.raises(ValueError, match="restricted_hours_timezone"):
         _testing_policy(restricted_hours_timezone="Mars/Olympus")
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [["Authorization: Bearer value"], ["X Header"], ["X-Header\rInjected"]],
+)
+def test_testing_policy_required_headers_are_field_names_only(headers):
+    with pytest.raises(ValueError, match="required_headers"):
+        _testing_policy(required_headers=headers)
 
 
 def test_approval_challenge_canonicalizes_and_validates_argv():

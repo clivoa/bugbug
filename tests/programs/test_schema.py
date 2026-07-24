@@ -134,3 +134,29 @@ def test_validate_program_applies_typed_testing_policy_validation():
     program["testing_rules"]["concurrency"] = True
     with pytest.raises(ValidationError, match="concurrency"):
         validate_program(program)
+
+
+def test_validate_program_rejects_explicit_null_testing_rules():
+    program = load("valid_program.yaml")
+    program["testing_rules"] = None
+    with pytest.raises(ValidationError, match="testing_rules"):
+        validate_program(program)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        ["Authorization: Bearer value"],
+        ["X Header"],
+        ["X-Header\nInjected"],
+        ["X-Header", "x-header"],
+    ],
+)
+def test_testing_policy_rejects_non_field_name_required_headers(headers):
+    with pytest.raises(ValidationError, match="required_headers"):
+        validate_testing_policy({"required_headers": headers})
+
+
+def test_testing_policy_normalizes_header_field_names():
+    policy = validate_testing_policy({"required_headers": ["X-Research-ID", "!Custom"]})
+    assert policy.required_headers == ("x-research-id", "!custom")

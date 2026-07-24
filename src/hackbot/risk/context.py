@@ -16,10 +16,15 @@ _AUTHORIZATION_KEYS = frozenset({"confirmed", "confirmation_timestamp", "confirm
 _REQUIRED_AUTHORIZATION_KEYS = frozenset({"confirmed", "confirmation_timestamp", "confirmed_by"})
 _IDENTIFIER_LIMIT = 128
 _NOTE_LIMIT = 8_192
+_PATH_LIMIT = 2_048
 
 
 class ContextError(Exception):
     """Raised when any engagement input cannot produce a safe policy context."""
+
+
+class _DuplicateJSONKey(ValueError):
+    pass
 
 
 def _bounded_text(value: object, *, name: str, limit: int) -> str:
@@ -40,11 +45,25 @@ def _parse_utc_timestamp(value: object) -> datetime:
     return parsed.astimezone(UTC)
 
 
+def _strict_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise _DuplicateJSONKey(f"duplicate JSON key {key!r}")
+        value[key] = item
+    return value
+
+
 def load_authorization(path: str | Path) -> AuthorizationState:
     """Load strict, non-secret authorization state; unknown keys fail closed."""
     authorization_path = Path(path)
     try:
-        value = json.loads(authorization_path.read_text(encoding="utf-8"))
+        value = json.loads(
+            authorization_path.read_text(encoding="utf-8"),
+            object_pairs_hook=_strict_json_object,
+        )
+    except _DuplicateJSONKey as exc:
+        raise ContextError(f"authorization: {exc}") from exc
     except (OSError, json.JSONDecodeError) as exc:
         raise ContextError(f"authorization: unable to read {authorization_path}") from exc
     if not isinstance(value, dict):
@@ -86,6 +105,7 @@ def _program_id(program_document: dict[str, Any]) -> str:
 def _canonical_policy_data(
     *,
     engagement_id: str,
+    engagement_path: str,
     program_id: str,
     authorization: AuthorizationState,
     scope_in: tuple[str, ...],
@@ -95,6 +115,7 @@ def _canonical_policy_data(
 ) -> dict[str, object]:
     return {
         "engagement_id": engagement_id,
+        "engagement_path": engagement_path,
         "program_id": program_id,
         "authorization": {
             "confirmed": authorization.confirmed,
@@ -137,6 +158,12 @@ def _policy_digest(value: dict[str, object]) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def _scope_snapshot(
+    scope_in: tuple[str, ...], scope_out: tuple[str, ...]
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    return tuple(sorted(scope_in)), tuple(sorted(scope_out))
+
+
 def load_policy_context(
     engagement_dir: str | Path,
     profile: str | None = None,
@@ -144,9 +171,16 @@ def load_policy_context(
 ) -> PolicyContext:
     """Load an independently validated engagement snapshot, or fail closed."""
     del now  # Evaluation, not loading, applies restricted-hour checks against an injected clock.
-    directory = Path(engagement_dir)
     try:
-        program_document, _ = load_program_file(directory / "program.yaml", name=directory.name)
+        directory = Path(engagement_dir).resolve(strict=True)
+    except OSError as exc:
+        raise ContextError(f"engagement path could not be resolved: {engagement_dir}") from exc
+    if not directory.is_dir():
+        raise ContextError(f"engagement path is not a directory: {directory}")
+    try:
+        program_document, program_scope = load_program_file(
+            directory / "program.yaml", name=directory.name
+        )
         scope = load_scope_file(directory / "scope.yaml", name=directory.name)
         testing_policy = validate_testing_policy(program_document.get("testing_rules", {}))
         authorization = load_authorization(directory / "authorization.json")
@@ -156,7 +190,12 @@ def load_policy_context(
         raise ContextError(f"engagement policy could not be loaded: {exc}") from exc
     if not authorization.confirmed:
         raise ContextError("authorization: confirmation is required")
-    engagement_id = _bounded_text(directory.name, name="engagement_id", limit=_IDENTIFIER_LIMIT)
+    program_snapshot = _scope_snapshot(program_scope.in_scope, program_scope.out_of_scope)
+    standalone_snapshot = _scope_snapshot(scope.in_scope, scope.out_of_scope)
+    if standalone_snapshot != program_snapshot:
+        raise ContextError("scope: standalone scope must exactly match the embedded program scope")
+    engagement_path = _bounded_text(str(directory), name="engagement_path", limit=_PATH_LIMIT)
+    engagement_id = hashlib.sha256(engagement_path.encode("utf-8")).hexdigest()
     program_id = _program_id(program_document)
     active_profile = (
         _bounded_text(profile, name="profile", limit=_IDENTIFIER_LIMIT)
@@ -165,15 +204,17 @@ def load_policy_context(
     )
     digest_data = _canonical_policy_data(
         engagement_id=engagement_id,
+        engagement_path=engagement_path,
         program_id=program_id,
         authorization=authorization,
-        scope_in=scope.in_scope,
-        scope_out=scope.out_of_scope,
+        scope_in=standalone_snapshot[0],
+        scope_out=standalone_snapshot[1],
         testing_policy=testing_policy,
         active_profile=active_profile,
     )
     return PolicyContext(
         engagement_id=engagement_id,
+        engagement_path=engagement_path,
         program_id=program_id,
         authorization=authorization,
         scope=scope,
