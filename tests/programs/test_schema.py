@@ -186,3 +186,24 @@ def test_restricted_hours_invalid_zoneinfo_names_raise_validation_error(timezone
         validate_testing_policy(
             {"restricted_hours": {"timezone": timezone, "windows": ["09:00-10:00"]}}
         )
+
+
+def test_restricted_hours_surrogate_timezone_raises_validation_error():
+    with pytest.raises(ValidationError, match="restricted_hours.timezone"):
+        validate_testing_policy(
+            {"restricted_hours": {"timezone": "\ud800", "windows": ["09:00-10:00"]}}
+        )
+
+
+def test_scope_surrogate_entry_raises_validation_error_without_echoing_value():
+    with pytest.raises(
+        ValidationError, match=r"in_scope.urls\[0\]: contains invalid Unicode"
+    ) as exc_info:
+        validate_scope(
+            {
+                "schema_version": 1,
+                "in_scope": {"urls": ["https://\ud800"]},
+                "out_of_scope": {},
+            }
+        )
+    assert "\\ud800" not in str(exc_info.value)

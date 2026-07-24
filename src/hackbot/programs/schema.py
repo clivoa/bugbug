@@ -96,6 +96,9 @@ def _validate_entry(kind: str, value: object, errors: list[str], where: str) -> 
     if not isinstance(value, str) or not value.strip():
         _err(errors, f"{where}: entry must be a non-empty string, got {value!r}")
         return None
+    if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
+        _err(errors, f"{where}: contains invalid Unicode")
+        return None
     v = value.strip()
     low = v.lower()
     if kind == "domains":
@@ -250,6 +253,8 @@ def _restricted_hours(value: object) -> tuple[tuple[str, ...], str | None]:
     timezone = value["timezone"]
     if not isinstance(timezone, str) or not timezone.strip():
         raise ValidationError(["restricted_hours.timezone: must be a non-empty IANA name"])
+    if any(0xD800 <= ord(character) <= 0xDFFF for character in timezone):
+        raise ValidationError(["restricted_hours.timezone: invalid IANA name"])
     timezone = timezone.strip()
     try:
         ZoneInfo(timezone)

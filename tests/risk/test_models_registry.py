@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from hackbot.risk.identity import canonical_engagement_identity
+from hackbot.risk.identity import EngagementIdentityError, canonical_engagement_identity
 from hackbot.risk.models import (
     ActionDefinition,
     ActionRequest,
@@ -107,6 +107,21 @@ def test_request_required_headers_are_bounded_field_names_only(tmp_path, headers
 def test_request_normalizes_required_header_names(tmp_path):
     request = ActionRequest(**_request_values(tmp_path), required_headers=("X-Research-ID",))
     assert request.required_headers == ("x-research-id",)
+
+
+def test_action_request_rejects_surrogate_text(tmp_path):
+    values = _request_values(tmp_path)
+    values["rationale"] = "\ud800"
+    with pytest.raises(ValueError, match="rationale"):
+        ActionRequest(**values)
+
+
+def test_engagement_identity_rejects_surrogate_path_without_echoing_value():
+    with pytest.raises(
+        EngagementIdentityError, match="engagement_path: contains invalid Unicode"
+    ) as exc_info:
+        canonical_engagement_identity("/tmp/\ud800")
+    assert "\\ud800" not in str(exc_info.value)
 
 
 def test_registry_rejects_duplicate_and_unknown_actions():
@@ -227,6 +242,13 @@ def test_testing_policy_rejects_invalid_zoneinfo_path_values(timezone):
         _testing_policy(restricted_hours=["09:00-10:00"], restricted_hours_timezone=timezone)
 
 
+def test_testing_policy_rejects_surrogate_list_and_timezone_text():
+    with pytest.raises(ValueError, match="prohibited_tools"):
+        _testing_policy(prohibited_tools=["\ud800"])
+    with pytest.raises(ValueError, match="restricted_hours_timezone"):
+        _testing_policy(restricted_hours=["09:00-10:00"], restricted_hours_timezone="\ud800")
+
+
 @pytest.mark.parametrize(
     "headers",
     [["Authorization: Bearer value"], ["X Header"], ["X-Header\rInjected"]],
@@ -272,6 +294,34 @@ def test_approval_challenge_canonicalizes_and_validates_argv():
             argv=["fixture"] * 129,
             effective_risk=RiskLevel.L2,
             rationale="Validate one authorized hypothesis.",
+            hypothesis_id="hyp-1",
+            expected_impact="One low-rate request.",
+            rate=1,
+            concurrency=1,
+            data_touched="Public response headers.",
+            stop_condition="Stop on any rate limit.",
+            program_rule="Automated testing rule.",
+            cleanup_plan="No state is created.",
+            scope_digest="scope-digest",
+            policy_digest="policy-digest",
+            created_at=now,
+            expires_at=now,
+            nonce="nonce",
+            challenge_digest="challenge-digest",
+        )
+
+
+def test_approval_challenge_rejects_surrogate_text():
+    now = datetime(2026, 7, 24, tzinfo=UTC)
+    with pytest.raises(ValueError, match="rationale"):
+        ApprovalChallenge(
+            engagement_id="sample",
+            program_id="program",
+            target="https://example.com",
+            action_id="fixture.scan",
+            argv=("fixture", "scan"),
+            effective_risk=RiskLevel.L2,
+            rationale="\ud800",
             hypothesis_id="hyp-1",
             expected_impact="One low-rate request.",
             rate=1,

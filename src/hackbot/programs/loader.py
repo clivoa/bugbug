@@ -67,8 +67,10 @@ def _load_mapping(path: str | Path) -> dict:
     if p.suffix.lower() == ".json":
         try:
             data = strict_json_loads(text)
-        except (json.JSONDecodeError, DuplicateJSONKeyError) as e:
+        except DuplicateJSONKeyError as e:
             raise ProgramError(f"invalid JSON in {p}: {e}") from e
+        except (json.JSONDecodeError, ValueError, RecursionError) as e:
+            raise ProgramError(f"invalid JSON in {p}") from e
         if not isinstance(data, dict):
             raise ProgramError(f"{p}: top-level document must be a mapping")
         return data
@@ -81,7 +83,7 @@ def _load_mapping(path: str | Path) -> dict:
         ) from e
     try:
         data = _strict_yaml_load(text, yaml)  # SafeLoader subclass: no arbitrary objects
-    except yaml.YAMLError as e:
+    except (yaml.YAMLError, RecursionError) as e:
         raise ProgramError(f"invalid YAML in {p}: {e}") from e
     if not isinstance(data, dict):
         raise ProgramError(f"{p}: top-level document must be a mapping")

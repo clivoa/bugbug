@@ -1,6 +1,7 @@
 """Strict authorization and policy-context loading tests."""
 
 import json
+import sys
 from pathlib import Path
 from shutil import copytree
 
@@ -107,6 +108,54 @@ def test_authorization_invalid_utf8_raises_context_error(tmp_path):
     authorization.write_bytes(b"\xff\xfe")
     with pytest.raises(ContextError, match=str(authorization)):
         load_authorization(authorization)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        lambda: (
+            '{"confirmed": true, "confirmation_timestamp": "2000-01-01T00:00:00Z", '
+            '"confirmed_by": ' + "9" * (sys.get_int_max_str_digits() + 1) + "}"
+        ),
+    ],
+)
+def test_authorization_parser_failures_raise_context_error(tmp_path, payload):
+    authorization = tmp_path / "authorization.json"
+    authorization.write_text(payload(), encoding="utf-8")
+    with pytest.raises(ContextError, match=str(authorization)):
+        load_authorization(authorization)
+
+
+def test_authorization_json_recursion_error_raises_context_error(tmp_path, monkeypatch):
+    authorization = tmp_path / "authorization.json"
+    authorization.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        "hackbot.risk.context.strict_json_loads",
+        lambda _text: (_ for _ in ()).throw(RecursionError()),
+    )
+    with pytest.raises(ContextError, match=str(authorization)):
+        load_authorization(authorization)
+
+
+def test_context_rejects_surrogate_confirmed_by_and_profile(sample_engagement):
+    (sample_engagement / "authorization.json").write_text(
+        json.dumps(
+            {
+                "confirmed": True,
+                "confirmation_timestamp": "2000-01-01T00:00:00Z",
+                "confirmed_by": "\ud800",
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ContextError, match="confirmed_by"):
+        load_policy_context(sample_engagement, profile="bug-bounty")
+    (sample_engagement / "authorization.json").write_text(
+        (FIXTURES / "authorization-confirmed.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    with pytest.raises(ContextError, match="profile"):
+        load_policy_context(sample_engagement, profile="\ud800")
 
 
 @pytest.mark.parametrize(
