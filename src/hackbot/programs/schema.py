@@ -363,8 +363,8 @@ def validate_program(doc: object) -> ScopeDoc:
                 if k not in _AUTH_KEYS:
                     _err(errors, f"authorization: unknown field {k!r}")
     # testing_rules: strict keys
-    tr = doc.get("testing_rules")
-    if tr is not None:
+    if "testing_rules" in doc:
+        tr = doc["testing_rules"]
         if not isinstance(tr, dict):
             _err(errors, "testing_rules: must be a mapping")
         else:

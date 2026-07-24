@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, IntEnum
@@ -18,6 +19,7 @@ _RATE_MIN = 1
 _RATE_MAX = 1_000
 _CONCURRENCY_MIN = 1
 _CONCURRENCY_MAX = 100
+_HEADER_FIELD_NAME_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$", re.ASCII)
 
 
 class RiskLevel(IntEnum):
@@ -109,6 +111,13 @@ def _normalized_unique_strings(value: object, *, name: str) -> tuple[str, ...]:
     return normalized
 
 
+def _header_field_names(value: object) -> tuple[str, ...]:
+    names = _normalized_unique_strings(value, name="required_headers")
+    if any(_HEADER_FIELD_NAME_RE.fullmatch(name) is None for name in names):
+        raise ValueError("required_headers must contain RFC token-like field names only")
+    return names
+
+
 @dataclass(frozen=True, slots=True)
 class ActionDefinition:
     action_id: str
@@ -167,9 +176,7 @@ class ActionRequest:
             allow_empty=True,
         )
         _text(self.rationale, name="rationale", limit=_DESCRIPTIVE_LIMIT, allow_empty=True)
-        rate = _bounded_optional_int(
-            self.rate, name="rate", minimum=_RATE_MIN, maximum=_RATE_MAX
-        )
+        rate = _bounded_optional_int(self.rate, name="rate", minimum=_RATE_MIN, maximum=_RATE_MAX)
         concurrency = _bounded_optional_int(
             self.concurrency,
             name="concurrency",
@@ -266,7 +273,6 @@ class TestingPolicy:
             raise ValueError("denial_of_service_allowed must be false")
         for name in (
             "source_ip_requirements",
-            "required_headers",
             "restricted_hours",
             "prohibited_tools",
             "prohibited_vulnerability_types",
@@ -277,6 +283,7 @@ class TestingPolicy:
                 name,
                 _normalized_unique_strings(getattr(self, name), name=name),
             )
+        object.__setattr__(self, "required_headers", _header_field_names(self.required_headers))
         timezone = self.restricted_hours_timezone
         if timezone is not None:
             timezone = _text(
@@ -305,6 +312,7 @@ class AuthorizationState:
 @dataclass(frozen=True, slots=True)
 class PolicyContext:
     engagement_id: str
+    engagement_path: str
     program_id: str
     authorization: AuthorizationState
     scope: Scope
