@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import stat
 from concurrent.futures import ThreadPoolExecutor
@@ -19,7 +20,11 @@ from hackbot.risk.approvals import (
     canonical_bytes,
 )
 from hackbot.risk.context import load_policy_context
-from hackbot.risk.models import ActionDefinition, ActionRequest, RiskLevel
+from hackbot.risk.models import ActionDefinition, ActionRequest, ApprovalGrant, RiskLevel
+
+
+class SimulatedCrash(BaseException):
+    """Model process death without letting production exception handlers run."""
 
 
 @pytest.fixture
@@ -218,13 +223,27 @@ def test_challenge_requires_otherwise_authorized_l2_action(
         )
 
 
+@pytest.mark.parametrize(
+    "field",
+    (
+        "rationale",
+        "hypothesis_id",
+        "expected_impact",
+        "stop_condition",
+        "cleanup_plan",
+        "program_rule",
+    ),
+)
 def test_challenge_rejects_secret_bearing_review_text(
-    definition, action_request, context, fixed_now
+    definition, action_request, context, fixed_now, field
 ):
     with pytest.raises(ApprovalError, match="secret"):
         build_challenge(
             definition,
-            replace(action_request, rationale="Use Authorization: Bearer top-secret-value"),
+            replace(
+                action_request,
+                **{field: "Use Authorization: Bearer top-secret-value"},
+            ),
             context,
             now=fixed_now,
             nonce="abc123",
@@ -384,20 +403,386 @@ def test_status_recovers_interrupted_transition_without_dual_state(
     shutil.copyfile(granted, consumed)
     consumed.chmod(0o600)
     journal = Path(store.root) / "transactions" / f"{challenge.challenge_digest}.json.json"
-    journal.write_text(
-        json.dumps(
+    journal.write_bytes(
+        canonical_bytes(
             {
                 "version": 1,
                 "source": "granted",
                 "destination": "consumed",
                 "challenge_digest": challenge.challenge_digest,
             }
-        ),
-        encoding="utf-8",
+        )
     )
     journal.chmod(0o600)
     assert store.status(challenge.challenge_digest) == "consumed"
     assert not granted.exists()
+
+
+def _state_paths(store: ApprovalStore, digest: str) -> list[Path]:
+    name = f"{digest}.json"
+    return [
+        path
+        for state in ("pending", "granted", "consumed", "expired")
+        if (path := Path(store.root) / state / name).exists()
+    ]
+
+
+def _audit_events(store: ApprovalStore) -> list[dict[str, object]]:
+    path = Path(store.root) / "events.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def test_store_keeps_descriptor_owned_root_across_ancestor_symlink_swap(
+    store, challenge, fixed_now, issue, tmp_path
+):
+    issue(store)
+    engagement = Path(challenge.engagement_path)
+    detached = engagement.with_name(f"{engagement.name}-detached")
+    external = tmp_path / "external-engagement"
+    external.mkdir()
+    engagement.rename(detached)
+    engagement.symlink_to(external, target_is_directory=True)
+
+    grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+
+    name = f"{challenge.challenge_digest}.json"
+    assert grant.challenge_digest == challenge.challenge_digest
+    assert (detached / "approvals" / "granted" / name).is_file()
+    assert not (external / "approvals").exists()
+
+
+def test_transition_uses_open_state_descriptors_across_directory_swap(
+    store, challenge, fixed_now, issue, tmp_path, monkeypatch
+):
+    issue(store)
+    grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+    root = Path(store.root)
+    granted_dir = root / "granted"
+    detached = root / "granted-detached"
+    external = tmp_path / "external-granted"
+    external.mkdir()
+    swapped = False
+
+    def swap_at_rename(phase: str) -> None:
+        nonlocal swapped
+        if phase == "before_rename" and not swapped:
+            granted_dir.rename(detached)
+            granted_dir.symlink_to(external, target_is_directory=True)
+            swapped = True
+
+    monkeypatch.setattr(store, "_crash_point", swap_at_rename, raising=False)
+    try:
+        assert store.consume(grant, challenge, now=fixed_now).status == "consumed"
+    finally:
+        if swapped:
+            granted_dir.unlink()
+            detached.rename(granted_dir)
+
+    assert not list(external.iterdir())
+    assert store.status(challenge.challenge_digest) == "consumed"
+
+
+def test_read_to_rename_source_replacement_is_rejected(
+    store, challenge, fixed_now, issue, monkeypatch
+):
+    issue(store)
+    grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+    source = Path(store.root) / "granted" / f"{challenge.challenge_digest}.json"
+    displaced = source.with_suffix(".displaced")
+    replaced = False
+
+    def replace_at_rename(phase: str) -> None:
+        nonlocal replaced
+        if phase == "before_rename" and not replaced:
+            source.rename(displaced)
+            source.write_text('{"kind":"granted","tampered":true}', encoding="utf-8")
+            source.chmod(0o600)
+            replaced = True
+
+    monkeypatch.setattr(store, "_crash_point", replace_at_rename, raising=False)
+    with pytest.raises(ApprovalError, match="changed|tamper|unsafe"):
+        store.consume(grant, challenge, now=fixed_now)
+
+    assert replaced
+    assert not (Path(store.root) / "consumed" / source.name).exists()
+
+
+def test_atomic_rename_never_overwrites_a_late_destination(
+    store, challenge, fixed_now, issue, monkeypatch
+):
+    issue(store)
+    grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+    destination = Path(store.root) / "consumed" / f"{challenge.challenge_digest}.json"
+    sentinel = b"late-destination"
+
+    def create_late_destination(phase: str) -> None:
+        if phase == "after_destination_check" and not destination.exists():
+            destination.write_bytes(sentinel)
+            destination.chmod(0o600)
+
+    monkeypatch.setattr(store, "_crash_point", create_late_destination)
+    with pytest.raises(ApprovalError, match="already|transition"):
+        store.consume(grant, challenge, now=fixed_now)
+
+    assert destination.read_bytes() == sentinel
+
+
+def test_artifact_and_audit_hardlinks_are_rejected(store, challenge, fixed_now, issue, tmp_path):
+    pending = issue(store)
+    os.link(pending, tmp_path / "pending-hardlink")
+    with pytest.raises(ApprovalError, match="malformed|unsafe"):
+        store.grant(challenge, approved_by="operator", now=fixed_now)
+
+    pending.unlink()
+    (tmp_path / "pending-hardlink").unlink()
+    issue(store)
+    events = Path(store.root) / "events.jsonl"
+    os.link(events, tmp_path / "audit-hardlink")
+    with pytest.raises(ApprovalError, match="audit"):
+        store.append_event(challenge, result="created", reason_code="CREATED", now=fixed_now)
+
+
+def test_digest_lock_rejects_symlinks_and_hardlinks(store, challenge, fixed_now, issue, tmp_path):
+    issue(store)
+    lock = Path(store.root) / "locks" / f"{challenge.challenge_digest}.json.lock"
+    outside_lock = tmp_path / "outside-lock"
+    outside_lock.touch(mode=0o600)
+    lock.unlink()
+    lock.symlink_to(outside_lock)
+    with pytest.raises(ApprovalError, match="lock"):
+        store.grant(challenge, approved_by="operator", now=fixed_now)
+
+    lock.unlink()
+    lock.touch(mode=0o600)
+    os.link(lock, tmp_path / "lock-hardlink")
+    with pytest.raises(ApprovalError, match="lock"):
+        store.grant(challenge, approved_by="operator", now=fixed_now)
+
+
+def test_existing_layout_with_broad_mode_is_rejected(store, challenge, issue):
+    issue(store)
+    root = Path(store.root)
+    root.chmod(0o755)
+    with pytest.raises(ApprovalError, match="unsafe"):
+        store.status(challenge.challenge_digest)
+
+
+def test_expired_pending_artifact_has_a_strict_readable_status(store, challenge, fixed_now, issue):
+    issue(store)
+    with pytest.raises(ApprovalError, match="expired"):
+        store.grant(challenge, approved_by="operator", now=challenge.expires_at)
+    assert store.status(challenge.challenge_digest) == "expired"
+    assert len(_state_paths(store, challenge.challenge_digest)) == 1
+
+
+def test_grant_consume_and_expire_races_leave_one_terminal_state(
+    store, challenge, fixed_now, issue
+):
+    issue(store)
+
+    def grant_once(at: datetime) -> str:
+        try:
+            return store.grant(challenge, approved_by="operator", now=at).challenge_digest
+        except ApprovalError as error:
+            return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        grant_results = list(executor.map(grant_once, (fixed_now, challenge.expires_at)))
+
+    paths = _state_paths(store, challenge.challenge_digest)
+    assert len(paths) == 1
+    if paths[0].parent.name == "granted":
+        artifact = json.loads(paths[0].read_text(encoding="utf-8"))
+        persisted_grant = ApprovalGrant(
+            challenge_digest=challenge.challenge_digest,
+            policy_digest=challenge.policy_digest,
+            approved_by=str(artifact["approved_by"]),
+            approved_at=datetime.fromisoformat(str(artifact["approved_at"]).replace("Z", "+00:00")),
+            expires_at=challenge.expires_at,
+        )
+
+        def consume_once(at: datetime) -> str:
+            try:
+                return store.consume(persisted_grant, challenge, now=at).status
+            except ApprovalError as error:
+                return error.code
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            list(
+                executor.map(
+                    consume_once,
+                    (fixed_now, challenge.expires_at),
+                )
+            )
+        assert len(_state_paths(store, challenge.challenge_digest)) == 1
+    assert grant_results
+
+
+def test_consume_and_expire_race_leaves_one_terminal_state(store, challenge, fixed_now, issue):
+    issue(store)
+    grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+
+    def consume_once(at: datetime) -> str:
+        try:
+            return store.consume(grant, challenge, now=at).status
+        except ApprovalError as error:
+            return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                consume_once,
+                (fixed_now, challenge.expires_at),
+            )
+        )
+
+    assert len(_state_paths(store, challenge.challenge_digest)) == 1
+    assert set(results) & {"consumed", "APPROVAL_CONSUMED", "APPROVAL_EXPIRED"}
+
+
+@pytest.mark.parametrize(
+    ("operation", "phase", "expected_state", "event_result"),
+    [
+        ("create", "after_wal", "pending", "created"),
+        ("create", "after_destination", "pending", "created"),
+        ("create", "after_event", "pending", "created"),
+        ("create", "after_journal_unlink", "pending", "created"),
+        ("grant", "after_wal", "granted", "granted"),
+        ("grant", "after_destination", "granted", "granted"),
+        ("grant", "after_source_unlink", "granted", "granted"),
+        ("grant", "after_event", "granted", "granted"),
+        ("grant", "after_journal_unlink", "granted", "granted"),
+        ("consume", "after_wal", "consumed", "consumed"),
+        ("consume", "after_rename", "consumed", "consumed"),
+        ("consume", "after_destination", "consumed", "consumed"),
+        ("consume", "after_event", "consumed", "consumed"),
+        ("consume", "after_journal_unlink", "consumed", "consumed"),
+        ("expire", "after_wal", "expired", "expired"),
+        ("expire", "after_rename", "expired", "expired"),
+        ("expire", "after_destination", "expired", "expired"),
+        ("expire", "after_event", "expired", "expired"),
+        ("expire", "after_journal_unlink", "expired", "expired"),
+    ],
+)
+def test_wal_recovery_is_idempotent_at_every_phase(
+    store,
+    challenge,
+    fixed_now,
+    issue,
+    monkeypatch,
+    operation,
+    phase,
+    expected_state,
+    event_result,
+):
+    grant = None
+    if operation in {"grant", "consume", "expire"}:
+        issue(store)
+    if operation in {"consume", "expire"}:
+        grant = store.grant(challenge, approved_by="operator", now=fixed_now)
+
+    def crash(point: str) -> None:
+        if point == phase:
+            raise SimulatedCrash(point)
+
+    monkeypatch.setattr(store, "_crash_point", crash, raising=False)
+    with pytest.raises(SimulatedCrash, match=phase):
+        if operation == "create":
+            issue(store)
+        elif operation == "grant":
+            store.grant(challenge, approved_by="operator", now=fixed_now)
+        elif operation == "consume":
+            assert grant is not None
+            store.consume(grant, challenge, now=fixed_now)
+        else:
+            assert grant is not None
+            store.consume(grant, challenge, now=challenge.expires_at)
+
+    monkeypatch.setattr(store, "_crash_point", lambda _phase: None, raising=False)
+    assert store.status(challenge.challenge_digest) == expected_state
+    assert len(_state_paths(store, challenge.challenge_digest)) == 1
+    matching = [
+        event
+        for event in _audit_events(store)
+        if event["challenge_digest"] == challenge.challenge_digest
+        and event["result"] == event_result
+    ]
+    assert len(matching) == 1
+    assert not list((Path(store.root) / "transactions").iterdir())
+
+
+def test_all_local_lifecycle_rejections_are_audited(
+    store, definition, action_request, context, fixed_now
+):
+    def make_challenge(nonce: str):
+        return build_challenge(definition, action_request, context, now=fixed_now, nonce=nonce)
+
+    missing = make_challenge("missing")
+    with pytest.raises(ApprovalError, match="unavailable"):
+        store.grant(missing, approved_by="operator", now=fixed_now)
+
+    invalid_operator = make_challenge("invalid-operator")
+    store.create_pending(
+        definition, action_request, context, now=fixed_now, nonce="invalid-operator"
+    )
+    with pytest.raises(ApprovalError, match="operator"):
+        store.grant(invalid_operator, approved_by="operator label", now=fixed_now)
+
+    policy_mismatch = make_challenge("policy-mismatch")
+    policy_path = store.create_pending(
+        definition, action_request, context, now=fixed_now, nonce="policy-mismatch"
+    )
+    assert policy_path.is_file()
+    with pytest.raises(ApprovalError, match="policy"):
+        store.grant(
+            replace(policy_mismatch, policy_digest="f" * 64),
+            approved_by="operator",
+            now=fixed_now,
+        )
+
+    mismatch = make_challenge("mismatch")
+    store.create_pending(definition, action_request, context, now=fixed_now, nonce="mismatch")
+    mismatch_grant = store.grant(mismatch, approved_by="operator", now=fixed_now)
+    with pytest.raises(ApprovalError, match="grant"):
+        store.consume(
+            replace(mismatch_grant, approved_by="different"),
+            mismatch,
+            now=fixed_now,
+        )
+
+    tampered = make_challenge("tampered")
+    tampered_path = store.create_pending(
+        definition, action_request, context, now=fixed_now, nonce="tampered"
+    )
+    tampered_path.write_text("{}", encoding="utf-8")
+    with pytest.raises(ApprovalError, match="malformed"):
+        store.grant(tampered, approved_by="operator", now=fixed_now)
+
+    replay = make_challenge("replay")
+    store.create_pending(definition, action_request, context, now=fixed_now, nonce="replay")
+    replay_grant = store.grant(replay, approved_by="operator", now=fixed_now)
+    store.consume(replay_grant, replay, now=fixed_now)
+    with pytest.raises(ApprovalError, match="consumed"):
+        store.consume(replay_grant, replay, now=fixed_now)
+
+    expired = make_challenge("expired")
+    store.create_pending(definition, action_request, context, now=fixed_now, nonce="expired")
+    expired_grant = store.grant(expired, approved_by="operator", now=fixed_now)
+    with pytest.raises(ApprovalError, match="expired"):
+        store.consume(expired_grant, expired, now=expired.expires_at)
+
+    reasons = {str(event["reason_code"]) for event in _audit_events(store)}
+    assert {
+        "APPROVAL_MISSING",
+        "APPROVAL_INVALID_OPERATOR",
+        "APPROVAL_POLICY_MISMATCH",
+        "APPROVAL_MISMATCH",
+        "APPROVAL_MALFORMED",
+        "APPROVAL_CONSUMED",
+        "APPROVAL_EXPIRED",
+    } <= reasons
 
 
 def test_append_event_has_only_strict_safe_fields_and_mode(store, challenge, fixed_now, issue):
