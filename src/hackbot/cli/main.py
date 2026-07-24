@@ -68,16 +68,35 @@ def _cmd_scope(args: argparse.Namespace) -> int:
     return 0 if decision.allowed else 1
 
 
+class _SecretsUnavailable(Exception):
+    """Raised (and handled cleanly) when the keychain backend cannot be created."""
+
+
 def _secret_manager():
-    from hackbot.security.secrets import SecretManager, InMemoryBackend, KeyringBackend
+    from hackbot.security.secrets import (
+        SecretManager, InMemoryBackend, KeyringBackend, SecretError,
+    )
     backend = os.environ.get("HACKBOT_SECRET_BACKEND", "keyring").lower()
     if backend == "memory":
         return SecretManager(backend=InMemoryBackend())
-    return SecretManager(backend=KeyringBackend())
+    try:
+        return SecretManager(backend=KeyringBackend())
+    except SecretError as e:
+        raise _SecretsUnavailable(str(e)) from e
 
 
 def _cmd_secrets(args: argparse.Namespace) -> int:
-    mgr = _secret_manager()
+    try:
+        mgr = _secret_manager()
+    except _SecretsUnavailable as e:
+        # Missing optional dependency: guide the user, never dump a traceback.
+        print(
+            "secrets backend unavailable: " + str(e) + "\n"
+            "  install the keychain backend:  pip install 'hackbot[secrets]'\n"
+            "  (or, for tests only:           HACKBOT_SECRET_BACKEND=memory)",
+            file=sys.stderr,
+        )
+        return 3
     if args.action == "list":
         status = mgr.status()
         if args.json:
@@ -107,6 +126,17 @@ def _cmd_secrets(args: argparse.Namespace) -> int:
         ok = mgr.delete(args.name)
         print(f"{'deleted' if ok else 'not found'}: {args.name}")
         return 0 if ok else 1
+    if args.action == "import-claude-settings":
+        from hackbot.security import claude_import as ci
+        directory = args.dir or ".claude"
+        if args.dry_run:
+            results = ci.plan_imports(directory)
+            print(ci.render_plan(results, applied=False))
+            print("\n[dry-run] nothing was imported. Re-run without --dry-run to apply.")
+            return 0
+        results = ci.apply_imports(directory, mgr)
+        print(ci.render_plan(results, applied=True))
+        return 0
     return 2
 
 
@@ -141,8 +171,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=_cmd_scope)
 
     sec = sub.add_parser("secrets", help="manage secrets in the OS keychain (values never shown)")
-    sec.add_argument("action", choices=["list", "set", "test", "delete"])
+    sec.add_argument("action",
+                     choices=["list", "set", "test", "delete", "import-claude-settings"])
     sec.add_argument("name", nargs="?", help="secret name/alias (e.g. shodan, kimi3)")
+    sec.add_argument("--dir", help="directory of Claude settings files (import-claude-settings)")
+    sec.add_argument("--dry-run", action="store_true",
+                     help="import-claude-settings: show the plan, import nothing")
     sec.add_argument("--json", action="store_true")
     sec.set_defaults(func=_cmd_secrets)
 
