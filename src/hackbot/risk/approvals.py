@@ -40,21 +40,89 @@ _NONCE_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$", re.ASCII)
 _APPROVED_BY_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$", re.ASCII)
 _EVENT_RESULT_RE = re.compile(r"^[a-z][a-z-]{0,63}$", re.ASCII)
 _EVENT_REASON_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,127}$", re.ASCII)
-_SECRET_RE = re.compile(
-    r"(?ix)("
-    r"(?:proxy-)?authorization\s*:\s*\S+"
+_SECRET_MATERIAL_RE = re.compile(
+    r"(?is)("
+    r"-----BEGIN(?: [A-Z0-9]+)* PRIVATE KEY-----"
+    r"|-----BEGIN PGP PRIVATE KEY BLOCK-----"
+    r"|(?:proxy-)?authorization\s*:\s*\S+"
     r"|(?:cookie|set-cookie|x-auth-token|x-api-key|authentication-info)\s*:\s*\S+"
-    r"|\b(?:session(?:[ _-]?id)?|sessionid|auth[ _-]?session(?:[ _-]?id)?)"
-    r"\s*[:=]\s*\S+"
-    r"|\b(?:api[ _-]?key|token|secret|password|private[ _-]?key)\s*[:=]\s*\S+"
-    r"|\beyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\b"
-    r"|\b(?:sk|ghp|xox[baprs])[_-][A-Za-z0-9_-]{12,}"
+    r"|[A-Za-z][A-Za-z0-9+.-]*://[^\s/@:]+:[^\s/@]+@"
+    r"|eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}"
+    r"|(?:AKIA|ASIA)[A-Z0-9]{16}"
+    r"|(?:sk|ghp|glpat|xox[baprs])[_-][A-Za-z0-9_-]{12,}"
     r")"
 )
-_SECRET_NAME_RE = re.compile(
-    r"(?i)^(?:authorization|proxy-authorization|cookie|set-cookie|x-auth-token|"
-    r"x-api-key|authentication-info|session(?:[ _-]?id)?|sessionid|"
-    r"auth[ _-]?session(?:[ _-]?id)?)$"
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)(?P<name>[A-Za-z][A-Za-z0-9_. -]{0,95})\s*[:=]\s*(?P<value>\S+)"
+)
+_SECRET_NAMES = frozenset(
+    {
+        "access_token",
+        "anthropic_api_key",
+        "api_key",
+        "auth_session",
+        "auth_session_id",
+        "authentication_info",
+        "authorization",
+        "aws_access_key_id",
+        "aws_secret_access_key",
+        "aws_session_token",
+        "azure_client_secret",
+        "client_secret",
+        "cloudflare_api_token",
+        "cookie",
+        "credential",
+        "credentials",
+        "database_url",
+        "digitalocean_access_token",
+        "gcp_service_account_key",
+        "github_token",
+        "gitlab_token",
+        "google_api_key",
+        "google_application_credentials",
+        "google_credentials",
+        "heroku_api_key",
+        "id_token",
+        "npm_token",
+        "openai_api_key",
+        "password",
+        "private_key",
+        "proxy_authorization",
+        "pypi_token",
+        "refresh_token",
+        "secret",
+        "sendgrid_api_key",
+        "session",
+        "session_id",
+        "sessionid",
+        "set_cookie",
+        "slack_token",
+        "stripe_secret_key",
+        "token",
+        "twilio_auth_token",
+        "x_api_key",
+        "x_auth_token",
+    }
+)
+_SECRET_NAME_SUFFIXES = (
+    "_api_key",
+    "_auth_config",
+    "_auth_token",
+    "_client_secret",
+    "_connection_string",
+    "_credential",
+    "_credentials",
+    "_database_url",
+    "_keyfile_json",
+    "_password",
+    "_private_key",
+    "_secret",
+    "_secret_access_key",
+    "_secret_key",
+    "_service_key",
+    "_session_id",
+    "_session_token",
+    "_token",
 )
 _ARTIFACT_LIMIT = 65_536
 _TRANSACTION_LIMIT = 196_608
@@ -242,10 +310,29 @@ def _challenge_fields(
     }
 
 
+def _normalize_secret_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
+
+
+def _is_secret_name(value: str) -> bool:
+    normalized = _normalize_secret_name(value)
+    return normalized in _SECRET_NAMES or any(
+        normalized.endswith(suffix) for suffix in _SECRET_NAME_SUFFIXES
+    )
+
+
+def _contains_secret_text(value: str) -> bool:
+    if _SECRET_MATERIAL_RE.search(value) or _is_secret_name(value):
+        return True
+    return any(
+        _is_secret_name(match.group("name")) for match in _SECRET_ASSIGNMENT_RE.finditer(value)
+    )
+
+
 def _reject_secrets(value: object) -> None:
     """Reject likely credentials without retaining or echoing their values."""
     if isinstance(value, str):
-        if _SECRET_RE.search(value) or _SECRET_NAME_RE.fullmatch(value.strip()):
+        if _contains_secret_text(value):
             raise ApprovalError("APPROVAL_SECRET", "secret-bearing challenge data is not allowed")
         return
     if isinstance(value, Mapping):
@@ -629,8 +716,7 @@ class ApprovalStore:
             if created:
                 os.fchmod(fd, 0o700)
             cls._validate_directory(os.fstat(fd))
-            if created:
-                os.fsync(parent_fd)
+            os.fsync(parent_fd)
             return fd
         except ApprovalError:
             if "fd" in locals():
