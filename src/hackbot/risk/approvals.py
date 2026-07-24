@@ -644,11 +644,50 @@ class ApprovalStore:
         return True
 
     def _state(self, digest: str) -> str | None:
+        self._recover(digest)
         for state in ("consumed", "expired", "granted", "pending"):
             path = self._path(state, digest)
             if path.exists() or path.is_symlink():
                 return state
         return None
+
+    def _recover(self, digest: str) -> None:
+        """Finish or roll back an interrupted journaled rename deterministically."""
+        journal = Path(self.root) / "transactions" / (self._name(digest) + ".json")
+        if not journal.exists():
+            return
+        try:
+            info = journal.stat()
+            if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600:
+                raise ValueError
+            value = strict_json_loads(journal.read_text(encoding="utf-8"))
+            if (
+                not isinstance(value, dict)
+                or set(value) != {"version", "source", "destination", "challenge_digest"}
+                or value.get("version") != _VERSION
+                or value.get("challenge_digest") != digest
+                or value.get("source") not in {"pending", "granted"}
+                or value.get("destination") not in {"granted", "consumed", "expired"}
+            ):
+                raise ValueError
+        except (
+            OSError,
+            UnicodeError,
+            ValueError,
+            DuplicateJSONKeyError,
+            json.JSONDecodeError,
+        ) as exc:
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval transaction") from exc
+        source = self._path(value["source"], digest)
+        destination = self._path(value["destination"], digest)
+        with self._digest_lock(digest):
+            if destination.exists() and source.exists():
+                source.unlink()
+                self._fsync_directory(source.parent)
+            elif not destination.exists() and not source.exists():
+                raise ApprovalError("APPROVAL_MALFORMED", "approval transaction lost state")
+            journal.unlink()
+            self._fsync_directory(journal.parent)
 
     def create_pending(
         self,

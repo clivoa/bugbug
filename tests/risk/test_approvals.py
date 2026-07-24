@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import stat
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -371,6 +372,32 @@ def test_status_rejects_wrong_artifact_mode(store, challenge, issue):
     pending.chmod(0o644)
     with pytest.raises(ApprovalError, match="malformed"):
         store.status(challenge.challenge_digest)
+
+
+def test_status_recovers_interrupted_transition_without_dual_state(
+    store, challenge, fixed_now, issue
+):
+    issue(store)
+    store.grant(challenge, approved_by="operator", now=fixed_now)
+    granted = Path(store.root) / "granted" / f"{challenge.challenge_digest}.json"
+    consumed = Path(store.root) / "consumed" / granted.name
+    shutil.copyfile(granted, consumed)
+    consumed.chmod(0o600)
+    journal = Path(store.root) / "transactions" / f"{challenge.challenge_digest}.json.json"
+    journal.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "source": "granted",
+                "destination": "consumed",
+                "challenge_digest": challenge.challenge_digest,
+            }
+        ),
+        encoding="utf-8",
+    )
+    journal.chmod(0o600)
+    assert store.status(challenge.challenge_digest) == "consumed"
+    assert not granted.exists()
 
 
 def test_append_event_has_only_strict_safe_fields_and_mode(store, challenge, fixed_now, issue):
