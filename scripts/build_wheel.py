@@ -4,30 +4,52 @@ build_wheel — produce a valid PEP-427 wheel for hackbot using ONLY the standar
 library, so the package can be built and installed fully offline (no build
 backend, no network). Output: dist/hackbot-<version>-py3-none-any.whl
 
+Dependency metadata (Requires-Dist / Provides-Extra) is generated FROM
+pyproject.toml (via stdlib tomllib) so the wheel can never drift from the declared
+dependencies.
+
 Usage: python3 scripts/build_wheel.py
 """
 from __future__ import annotations
 
 import base64
 import hashlib
+import tomllib
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
-NAME = "hackbot"
-VERSION = "0.1.0"
 DIST = ROOT / "dist"
 
-METADATA = f"""Metadata-Version: 2.1
-Name: {NAME}
-Version: {VERSION}
-Summary: bugbug — local, safety-controlled bug bounty research workstation
-Requires-Python: >=3.11
-"""
+
+def _load_project() -> dict:
+    with open(ROOT / "pyproject.toml", "rb") as fh:
+        return tomllib.load(fh)["project"]
+
+
+def _metadata(proj: dict) -> str:
+    lines = [
+        "Metadata-Version: 2.1",
+        f"Name: {proj['name']}",
+        f"Version: {proj['version']}",
+        "Summary: bugbug — local, safety-controlled bug bounty research workstation",
+        f"Requires-Python: {proj.get('requires-python', '>=3.11')}",
+    ]
+    # core runtime deps
+    for dep in proj.get("dependencies", []):
+        lines.append(f"Requires-Dist: {dep}")
+    # extras
+    extras = proj.get("optional-dependencies", {})
+    for extra in sorted(extras):
+        lines.append(f"Provides-Extra: {extra}")
+        for dep in extras[extra]:
+            lines.append(f'Requires-Dist: {dep}; extra == "{extra}"')
+    return "\n".join(lines) + "\n"
+
 
 WHEEL = """Wheel-Version: 1.0
-Generator: hackbot-stdlib-build 0.1
+Generator: hackbot-stdlib-build 0.2
 Root-Is-Purelib: true
 Tag: py3-none-any
 """
@@ -38,32 +60,29 @@ hackbot = hackbot.cli.main:app
 
 
 def _hash(data: bytes) -> str:
-    digest = hashlib.sha256(data).digest()
-    return "sha256=" + base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+    return "sha256=" + base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b"=").decode()
 
 
 def main() -> int:
+    proj = _load_project()
+    name, version = proj["name"], proj["version"]
     DIST.mkdir(exist_ok=True)
-    wheel_path = DIST / f"{NAME}-{VERSION}-py3-none-any.whl"
-    distinfo = f"{NAME}-{VERSION}.dist-info"
+    wheel_path = DIST / f"{name}-{version}-py3-none-any.whl"
+    distinfo = f"{name}-{version}.dist-info"
 
-    # Collect package files (skip caches / compiled).
     members: list[tuple[str, bytes]] = []
-    for py in sorted((SRC / NAME).rglob("*.py")):
+    for py in sorted((SRC / name).rglob("*.py")):
         if "__pycache__" in py.parts:
             continue
-        arc = str(py.relative_to(SRC))
-        members.append((arc, py.read_bytes()))
+        members.append((str(py.relative_to(SRC)), py.read_bytes()))
 
-    members.append((f"{distinfo}/METADATA", METADATA.encode()))
+    members.append((f"{distinfo}/METADATA", _metadata(proj).encode()))
     members.append((f"{distinfo}/WHEEL", WHEEL.encode()))
     members.append((f"{distinfo}/entry_points.txt", ENTRY_POINTS.encode()))
 
-    # RECORD (hashes + sizes; the RECORD line itself has empty hash/size)
     record_lines = [f"{arc},{_hash(data)},{len(data)}" for arc, data in members]
     record_lines.append(f"{distinfo}/RECORD,,")
-    record = ("\n".join(record_lines) + "\n").encode()
-    members.append((f"{distinfo}/RECORD", record))
+    members.append((f"{distinfo}/RECORD", ("\n".join(record_lines) + "\n").encode()))
 
     if wheel_path.exists():
         wheel_path.unlink()
@@ -73,6 +92,7 @@ def main() -> int:
 
     print(f"built {wheel_path.relative_to(ROOT)} ({wheel_path.stat().st_size} bytes, "
           f"{len(members)} members)")
+    print("  extras: " + ", ".join(sorted(proj.get("optional-dependencies", {}))))
     return 0
 
 
