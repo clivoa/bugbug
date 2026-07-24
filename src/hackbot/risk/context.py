@@ -10,13 +10,13 @@ from typing import Any
 
 from hackbot.programs.loader import ProgramError, load_program_file, load_scope_file
 from hackbot.programs.schema import ValidationError, validate_testing_policy
+from hackbot.risk.identity import EngagementIdentityError, canonical_engagement_identity
 from hackbot.risk.models import AuthorizationState, PolicyContext, TestingPolicy
 
 _AUTHORIZATION_KEYS = frozenset({"confirmed", "confirmation_timestamp", "confirmed_by", "note"})
 _REQUIRED_AUTHORIZATION_KEYS = frozenset({"confirmed", "confirmation_timestamp", "confirmed_by"})
 _IDENTIFIER_LIMIT = 128
 _NOTE_LIMIT = 8_192
-_PATH_LIMIT = 2_048
 
 
 class ContextError(Exception):
@@ -172,11 +172,10 @@ def load_policy_context(
     """Load an independently validated engagement snapshot, or fail closed."""
     del now  # Evaluation, not loading, applies restricted-hour checks against an injected clock.
     try:
-        directory = Path(engagement_dir).resolve(strict=True)
-    except OSError as exc:
-        raise ContextError(f"engagement path could not be resolved: {engagement_dir}") from exc
-    if not directory.is_dir():
-        raise ContextError(f"engagement path is not a directory: {directory}")
+        engagement_path, engagement_id = canonical_engagement_identity(engagement_dir)
+    except EngagementIdentityError as exc:
+        raise ContextError(str(exc)) from exc
+    directory = Path(engagement_path)
     try:
         program_document, program_scope = load_program_file(
             directory / "program.yaml", name=directory.name
@@ -194,8 +193,6 @@ def load_policy_context(
     standalone_snapshot = _scope_snapshot(scope.in_scope, scope.out_of_scope)
     if standalone_snapshot != program_snapshot:
         raise ContextError("scope: standalone scope must exactly match the embedded program scope")
-    engagement_path = _bounded_text(str(directory), name="engagement_path", limit=_PATH_LIMIT)
-    engagement_id = hashlib.sha256(engagement_path.encode("utf-8")).hexdigest()
     program_id = _program_id(program_document)
     active_profile = (
         _bounded_text(profile, name="profile", limit=_IDENTIFIER_LIMIT)

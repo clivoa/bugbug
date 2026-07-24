@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from hackbot.programs.schema import ScopeDoc, ValidationError, validate_program, validate_scope
 from hackbot.scope import Scope
@@ -19,6 +20,32 @@ from hackbot.scope import Scope
 
 class ProgramError(Exception):
     """Raised for load/parse problems (missing yaml dep, unreadable file, bad doc)."""
+
+
+def _strict_yaml_load(text: str, yaml: Any) -> object:
+    """Safe-load YAML while rejecting duplicate mapping keys at every depth."""
+    mapping_tag = yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG
+
+    class StrictSafeLoader(yaml.SafeLoader):
+        pass
+
+    def construct_mapping(loader, node, deep=False):
+        loader.flatten_mapping(node)
+        result = {}
+        for key_node, value_node in node.value:
+            key = loader.construct_object(key_node, deep=deep)
+            if key in result:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    f"found duplicate YAML key {key!r}",
+                    key_node.start_mark,
+                )
+            result[key] = loader.construct_object(value_node, deep=deep)
+        return result
+
+    StrictSafeLoader.add_constructor(mapping_tag, construct_mapping)
+    return yaml.load(text, Loader=StrictSafeLoader)
 
 
 def _load_mapping(path: str | Path) -> dict:
@@ -39,7 +66,7 @@ def _load_mapping(path: str | Path) -> dict:
             "install with: pip install 'hackbot[config]'"
         ) from e
     try:
-        data = yaml.safe_load(text)  # safe_load: no arbitrary tags/objects
+        data = _strict_yaml_load(text, yaml)  # SafeLoader subclass: no arbitrary objects
     except yaml.YAMLError as e:
         raise ProgramError(f"invalid YAML in {p}: {e}") from e
     if not isinstance(data, dict):
