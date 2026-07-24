@@ -23,6 +23,7 @@ from hackbot.risk.models import (
     PolicyDecision,
     RiskLevel,
     TestingPolicy,
+    canonical_tool_identity,
 )
 from hackbot.risk.registry import ActionRegistry, RegistryError
 
@@ -111,23 +112,14 @@ class RiskEngine:
         )
         if rate_denial is not None:
             return rate_denial
-        if risk is RiskLevel.L1:
-            if not definition.low_impact_allowlisted:
-                return self._deny(
-                    "DENY_L1_NOT_ALLOWLISTED",
-                    risk,
-                    context=context,
-                    scope_rule=scope_rule,
-                    program_rule=request.program_rule,
-                )
-            if not context.testing_policy.automated_scanning_allowed:
-                return self._deny(
-                    "DENY_L1_AUTOMATED_SCANNING_NOT_ALLOWED",
-                    risk,
-                    context=context,
-                    scope_rule=scope_rule,
-                    program_rule=request.program_rule,
-                )
+        if risk is RiskLevel.L1 and not definition.low_impact_allowlisted:
+            return self._deny(
+                "DENY_L1_NOT_ALLOWLISTED",
+                risk,
+                context=context,
+                scope_rule=scope_rule,
+                program_rule=request.program_rule,
+            )
         if risk < RiskLevel.L2:
             return PolicyDecision.allow(
                 risk,
@@ -251,7 +243,23 @@ class RiskEngine:
                 scope_rule=scope_rule,
                 program_rule=request.program_rule,
             )
-        if self._tool_is_prohibited(definition, prohibited_tools):
+        if definition.action_id in prohibited_tools:
+            return self._deny(
+                "DENY_PROGRAM_PROHIBITED_TOOL",
+                risk,
+                context=context,
+                scope_rule=scope_rule,
+                program_rule=request.program_rule,
+            )
+        if prohibited_tools and definition.uses_external_tool is None:
+            return self._deny(
+                "DENY_PROGRAM_TOOL_ID_UNSPECIFIED",
+                risk,
+                context=context,
+                scope_rule=scope_rule,
+                program_rule=request.program_rule,
+            )
+        if definition.uses_external_tool and self._tool_is_prohibited(definition, prohibited_tools):
             return self._deny(
                 "DENY_PROGRAM_PROHIBITED_TOOL",
                 risk,
@@ -322,7 +330,7 @@ class RiskEngine:
     ) -> bool:
         if not prohibited_tools:
             return False
-        identities = {definition.action_id}
+        identities: set[str] = set()
         if definition.tool_id is not None:
             identities.add(definition.tool_id)
         if definition.executable is not None:
@@ -395,8 +403,15 @@ class RiskEngine:
             for value in values
         ):
             return None
+        try:
+            prohibited_tools = frozenset(
+                canonical_tool_identity(value, name="prohibited_tools")
+                for value in policy.prohibited_tools
+            )
+        except ValueError:
+            return None
         return (
-            frozenset(policy.prohibited_tools),
+            prohibited_tools,
             frozenset(policy.prohibited_vulnerability_types),
             frozenset(policy.excluded_impacts),
             frozenset(policy.required_headers),
