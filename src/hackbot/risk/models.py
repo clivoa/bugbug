@@ -569,6 +569,13 @@ class ApprovalChallenge:
     expires_at: datetime
     nonce: str
     challenge_digest: str
+    # The canonical path is part of the signed challenge but defaults only to
+    # preserve construction of legacy in-memory fixtures.  Approval storage
+    # rejects a challenge without it.
+    engagement_path: str = ""
+    # Canonical challenge bytes include code-owned definition metadata and the
+    # scope snapshot, neither of which belongs in the presentation fields.
+    binding: bytes = b""
 
     def __post_init__(self) -> None:
         _text(self.engagement_id, name="engagement_id", limit=_IDENTIFIER_LIMIT)
@@ -613,6 +620,16 @@ class ApprovalChallenge:
         _text(self.policy_digest, name="policy_digest", limit=_IDENTIFIER_LIMIT)
         _text(self.nonce, name="nonce", limit=_IDENTIFIER_LIMIT)
         _text(self.challenge_digest, name="challenge_digest", limit=_IDENTIFIER_LIMIT)
+        if self.engagement_path:
+            try:
+                path, engagement_id = canonical_engagement_identity(self.engagement_path)
+            except EngagementIdentityError as exc:
+                raise ValueError(str(exc)) from exc
+            if engagement_id != self.engagement_id:
+                raise ValueError("engagement_id must match the canonical engagement_path")
+            object.__setattr__(self, "engagement_path", path)
+        if not isinstance(self.binding, bytes):
+            raise ValueError("challenge binding must be bytes")
 
 
 @dataclass(frozen=True, slots=True)
