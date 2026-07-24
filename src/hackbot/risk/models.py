@@ -306,7 +306,7 @@ class TestingPolicy:
             ).strip()
             try:
                 ZoneInfo(timezone)
-            except ZoneInfoNotFoundError as exc:
+            except (ZoneInfoNotFoundError, ValueError) as exc:
                 raise ValueError("restricted_hours_timezone must be a valid IANA name") from exc
             object.__setattr__(self, "restricted_hours_timezone", timezone)
         if bool(self.restricted_hours) != bool(timezone):

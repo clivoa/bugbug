@@ -165,3 +165,24 @@ def test_testing_policy_normalizes_header_field_names():
 def test_testing_policy_mixed_type_unknown_keys_raise_validation_error_not_type_error():
     with pytest.raises(ValidationError, match="unknown field"):
         validate_testing_policy({1: "unexpected", "also-unexpected": True})
+
+
+@pytest.mark.parametrize("version", [[], {}])
+def test_schema_version_unhashable_values_raise_validation_error(version):
+    with pytest.raises(ValidationError, match="unsupported schema_version"):
+        validate_scope({"schema_version": version, "in_scope": {"domains": ["example.com"]}})
+    with pytest.raises(ValidationError, match="unsupported schema_version"):
+        validate_program(
+            {
+                "schema_version": version,
+                "scope": {"in_scope": {"domains": ["example.com"]}},
+            }
+        )
+
+
+@pytest.mark.parametrize("timezone", ["/etc/passwd", "../UTC"])
+def test_restricted_hours_invalid_zoneinfo_names_raise_validation_error(timezone):
+    with pytest.raises(ValidationError, match="restricted_hours.timezone"):
+        validate_testing_policy(
+            {"restricted_hours": {"timezone": timezone, "windows": ["09:00-10:00"]}}
+        )

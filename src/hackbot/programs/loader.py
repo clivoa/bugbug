@@ -60,7 +60,10 @@ def _load_mapping(path: str | Path) -> dict:
     p = Path(path)
     if not p.exists():
         raise ProgramError(f"file not found: {p}")
-    text = p.read_text(encoding="utf-8")
+    try:
+        text = p.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise ProgramError(f"unable to read {p}") from exc
     if p.suffix.lower() == ".json":
         try:
             data = strict_json_loads(text)

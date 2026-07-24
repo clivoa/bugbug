@@ -109,6 +109,42 @@ def test_loader_rejects_non_string_or_unhashable_yaml_mapping_keys(tmp_path, map
         loader.load_scope_file(scope)
 
 
+def test_loader_schema_version_unhashable_value_raises_validation_error(tmp_path):
+    scope = tmp_path / "scope.yaml"
+    scope.write_text("schema_version: []\nin_scope:\n  domains: [example.com]\n", encoding="utf-8")
+    with pytest.raises(ValidationError, match="unsupported schema_version"):
+        loader.load_scope_file(scope)
+
+
+def test_loader_rejects_invalid_restricted_hours_zoneinfo_name(tmp_path):
+    program = tmp_path / "program.yaml"
+    program.write_text(
+        """schema_version: 1
+scope:
+  in_scope:
+    domains: [example.com]
+testing_rules:
+  restricted_hours:
+    timezone: /etc/passwd
+    windows: ["09:00-10:00"]
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError, match="restricted_hours.timezone"):
+        loader.load_program_file(program)
+
+
+@pytest.mark.parametrize("filename", ["program.yaml", "scope.json"])
+def test_loader_invalid_utf8_raises_program_error(tmp_path, filename):
+    path = tmp_path / filename
+    path.write_bytes(b"\xff\xfe")
+    with pytest.raises(loader.ProgramError, match=str(path)):
+        if filename == "program.yaml":
+            loader.load_program_file(path)
+        else:
+            loader.load_scope_file(path)
+
+
 # --- engagement creation ---------------------------------------------------
 def _doc():
     import yaml
