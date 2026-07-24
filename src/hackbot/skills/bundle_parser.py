@@ -26,22 +26,38 @@ Bundle structure (observed):
     <blockquote> / warning text
     <ul><li>checklist item</li></ul>
 """
+
 from __future__ import annotations
 
 import html
 import re
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
-
 # Heuristic markers for warnings inside explanatory prose (pt-BR + en).
 _WARN_MARKERS = (
-    "cuidado", "atencao", "atenção", "aviso", "warning", "⚠", "nunca",
-    "so com autorizacao", "só com autorização", "com autorizacao",
-    "autorizacao", "autorização", "ilegal", "barulho", "ruido", "ruído",
-    "rate limit", "rate-limit", "bloqueio", "ban",
+    "cuidado",
+    "atencao",
+    "atenção",
+    "aviso",
+    "warning",
+    "⚠",
+    "nunca",
+    "so com autorizacao",
+    "só com autorização",
+    "com autorizacao",
+    "autorizacao",
+    "autorização",
+    "ilegal",
+    "barulho",
+    "ruido",
+    "ruído",
+    "rate limit",
+    "rate-limit",
+    "bloqueio",
+    "ban",
 )
 _CHECKLIST_HEADINGS = ("checklist",)
 
@@ -54,9 +70,9 @@ class ReconNote:
     difficulty: str = ""
     updated: str = ""
     tags: list[str] = field(default_factory=list)
-    intro: str = ""                       # first explanatory paragraph
-    sections: list[str] = field(default_factory=list)   # h2/h3 headings
-    commands: list[str] = field(default_factory=list)    # code blocks, as DATA
+    intro: str = ""  # first explanatory paragraph
+    sections: list[str] = field(default_factory=list)  # h2/h3 headings
+    commands: list[str] = field(default_factory=list)  # code blocks, as DATA
     warnings: list[str] = field(default_factory=list)
     checklist: list[str] = field(default_factory=list)
     paragraphs: list[str] = field(default_factory=list)
@@ -72,9 +88,9 @@ class _NoteHTMLParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.notes: list[ReconNote] = []
         self._cur: ReconNote | None = None
-        self._depth = 0            # div depth inside the current note
+        self._depth = 0  # div depth inside the current note
         # capture state
-        self._cap: str | None = None      # what text we are currently capturing
+        self._cap: str | None = None  # what text we are currently capturing
         self._buf: list[str] = []
         self._badge_class = ""
         self._in_code = False
@@ -138,18 +154,26 @@ class _NoteHTMLParser(HTMLParser):
             return
         # A code block: consume it whole; do NOT count it in note depth.
         if tag == "div" and "codehilite" in cls:
-            self._flush(); self._in_code = True; self._code_depth = 1; self._cap = "code"
+            self._flush()
+            self._in_code = True
+            self._code_depth = 1
+            self._cap = "code"
             return
         if tag == "div":
             self._depth += 1
         if tag == "span" and "fm-badge" in cls:
-            self._flush(); self._cap = "badge"; self._badge_class = cls
+            self._flush()
+            self._cap = "badge"
+            self._badge_class = cls
         elif tag in ("h1", "h2", "h3"):
-            self._flush(); self._cap = tag
+            self._flush()
+            self._cap = tag
         elif tag == "p":
-            self._flush(); self._cap = "p"
+            self._flush()
+            self._cap = "p"
         elif tag == "li":
-            self._flush(); self._cap = "li"
+            self._flush()
+            self._cap = "li"
 
     def handle_endtag(self, tag: str) -> None:
         if self._cur is None:
@@ -200,9 +224,11 @@ def parse_bundle(path: str | Path) -> list[ReconNote]:
 def bundle_metadata(path: str | Path) -> dict[str, str]:
     """Extract bundle-level attribution WITHOUT executing anything."""
     raw = Path(path).read_text(encoding="utf-8", errors="replace")
+
     def _find(pattern: str) -> str:
         m = re.search(pattern, raw, re.I | re.S)
         return html.unescape(re.sub("<[^>]+>", "", m.group(1))).strip() if m else ""
+
     title = _find(r"<title[^>]*>(.*?)</title>")
     author_link = ""
     m = re.search(r'href="(https?://[^"]*(?:x\.com|twitter\.com)/[^"]+)"', raw, re.I)

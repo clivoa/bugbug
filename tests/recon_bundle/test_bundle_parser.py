@@ -4,12 +4,13 @@ Safety tests for the recon-bundle parser.
 These verify the SAFETY CONTRACT: the bundle is parsed as inert data, no HTML/JS
 is executed, commands are treated as strings, and the original file is untouched.
 """
+
 import hashlib
 from pathlib import Path
 
 import pytest
 
-from hackbot.skills.bundle_parser import parse_bundle, bundle_metadata, _NoteHTMLParser
+from hackbot.skills.bundle_parser import _NoteHTMLParser, bundle_metadata, parse_bundle
 
 ROOT = Path(__file__).resolve().parents[2]
 BUNDLE = ROOT / "references/recon/Recon-bundle.html"
@@ -48,6 +49,7 @@ def test_commands_are_data_strings(notes):
 def test_parser_uses_only_stdlib_htmlparser():
     """The parser must be an html.parser.HTMLParser subclass (no browser/JS engine)."""
     from html.parser import HTMLParser
+
     assert issubclass(_NoteHTMLParser, HTMLParser)
 
 

@@ -16,6 +16,7 @@ Hygiene rules enforced here:
 
 This module never prints a secret. Callers must not log return values of `get()`.
 """
+
 from __future__ import annotations
 
 import re
@@ -25,8 +26,12 @@ SERVICE = "hackbot"
 
 # Canonical secret names + friendly aliases the CLI accepts.
 _CANONICAL = {
-    "ANTHROPIC_API_KEY", "DEEPSEEK_API_KEY", "MOONSHOT_API_KEY",
-    "SHODAN_API_KEY", "OPENROUTER_API_KEY", "LITELLM_MASTER_KEY",
+    "ANTHROPIC_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "MOONSHOT_API_KEY",
+    "SHODAN_API_KEY",
+    "OPENROUTER_API_KEY",
+    "LITELLM_MASTER_KEY",
     "GITHUB_TOKEN",
 }
 _ALIASES = {
@@ -174,4 +179,6 @@ class SecretManager:
         return {k: (k in stored) for k in keys}
 
     def __repr__(self) -> str:  # never expose values
-        return f"<SecretManager backend={type(self._backend).__name__} names={self._backend.names()}>"
+        return (
+            f"<SecretManager backend={type(self._backend).__name__} names={self._backend.names()}>"
+        )

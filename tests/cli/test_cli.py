@@ -1,4 +1,5 @@
 """CLI wiring tests: doctor, scope, secrets (in-memory), version."""
+
 import json
 
 import pytest
@@ -37,13 +38,16 @@ def test_scope_check_deny(capsys):
 
 
 def test_scope_check_allow(capsys):
-    code, out, _ = run(["scope", "check", "https://api.example.com/", "--in", "example.com"], capsys)
+    code, out, _ = run(
+        ["scope", "check", "https://api.example.com/", "--in", "example.com"], capsys
+    )
     assert code == 0 and "ALLOW" in out
 
 
 def test_scope_explain_path_rule(capsys):
     code, out, _ = run(
-        ["scope", "explain", "https://example.com/api/x", "--in", "example.com/api"], capsys)
+        ["scope", "explain", "https://example.com/api/x", "--in", "example.com/api"], capsys
+    )
     assert code == 0 and "IN SCOPE" in out and "example.com/api" in out
 
 
@@ -51,7 +55,8 @@ def test_secrets_set_and_list_memory(capsys, monkeypatch):
     monkeypatch.setenv("HACKBOT_SECRET_BACKEND", "memory")
     # NOTE: memory backend does not persist across app() calls (new instance each
     # time), so we exercise set + list within a single manager via the module API.
-    from hackbot.security.secrets import SecretManager, InMemoryBackend
+    from hackbot.security.secrets import InMemoryBackend, SecretManager
+
     mgr = SecretManager(backend=InMemoryBackend())
     mgr.set("shodan", "abc")
     st = mgr.status()

@@ -4,6 +4,7 @@ Backend availability tests:
   * the real KeyringBackend roundtrips against a throwaway service when `keyring`
     IS installed (skipped otherwise — e.g. offline core install).
 """
+
 import importlib.util
 
 import pytest
@@ -38,6 +39,7 @@ def test_keyring_backend_roundtrip_isolated():
     """
     import keyring
     from keyring.backend import KeyringBackend as _KBackend
+
     from hackbot.security.secrets import KeyringBackend
 
     class _DictKeyring(_KBackend):

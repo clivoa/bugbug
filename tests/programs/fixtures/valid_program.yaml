@@ -1,0 +1,21 @@
+schema_version: 1
+program:
+  name: acme-corp
+  platform: generic-vdp
+  source: manual
+authorization:
+  confirmed: false
+scope:
+  in_scope:
+    domains: [acme-corp.example]
+    wildcard_domains: ["*.api.acme-corp.example"]
+    urls: ["https://acme-corp.example/app"]
+    cidrs: ["203.0.113.0/24", "2001:db8::/32"]
+    repositories: ["github.com/acme-corp/webapp"]
+  out_of_scope:
+    domains: [blog.acme-corp.example]
+testing_rules:
+  max_requests_per_second: 2
+  automated_scanning_allowed: false
+reporting:
+  duplicate_policy: first-reporter

@@ -9,10 +9,11 @@ Rules honored:
   * The caller decides WHICH directory/files to process. The original files are
     never modified or deleted by this module.
 """
+
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 # default filename -> canonical secret name mapping
@@ -31,8 +32,8 @@ _PLACEHOLDER_HINTS = ("REPLACE_WITH", "YOUR_", "CHANGEME", "<", "xxxxx")
 class ImportResult:
     source: str
     secret_name: str
-    status: str          # would-import | imported | placeholder-skipped | no-token | missing-file
-    token_len: int = 0   # length only — never the value
+    status: str  # would-import | imported | placeholder-skipped | no-token | missing-file
+    token_len: int = 0  # length only — never the value
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -51,7 +52,9 @@ def _extract_token(path: Path) -> str | None:
     return (data.get("env") or {}).get(_TOKEN_KEY)
 
 
-def plan_imports(directory: str | Path, mapping: dict[str, str] | None = None) -> list[ImportResult]:
+def plan_imports(
+    directory: str | Path, mapping: dict[str, str] | None = None
+) -> list[ImportResult]:
     """Read matching settings files and return the plan (no storage, values hidden)."""
     d = Path(directory)
     m = mapping or DEFAULT_MAP
@@ -66,7 +69,9 @@ def plan_imports(directory: str | Path, mapping: dict[str, str] | None = None) -
         elif _looks_placeholder(token):
             results.append(ImportResult(str(path), secret_name, "placeholder-skipped"))
         else:
-            results.append(ImportResult(str(path), secret_name, "would-import", token_len=len(token)))
+            results.append(
+                ImportResult(str(path), secret_name, "would-import", token_len=len(token))
+            )
     return results
 
 
@@ -96,7 +101,9 @@ def apply_imports(
             continue
         existed = manager.exists(r.secret_name)
         if existed and not force:
-            out.append(ImportResult(r.source, r.secret_name, "exists-skipped", token_len=r.token_len))
+            out.append(
+                ImportResult(r.source, r.secret_name, "exists-skipped", token_len=r.token_len)
+            )
             continue
         token = _extract_token(d / Path(r.source).name)
         if token is None:  # defensive: file changed between plan and apply
@@ -104,7 +111,7 @@ def apply_imports(
             continue
         try:
             manager.set(r.secret_name, token)
-            if manager.get(r.secret_name) != token:            # verify round-trip
+            if manager.get(r.secret_name) != token:  # verify round-trip
                 raise RuntimeError("post-write verification mismatch")
             status = "replaced" if existed else "imported"
             out.append(ImportResult(r.source, r.secret_name, status, token_len=len(token)))
@@ -117,7 +124,9 @@ def summarize(results: list[ImportResult]) -> tuple[int, int, int]:
     """Return (succeeded, skipped, failed) counts for partial-completion reporting."""
     ok = sum(1 for r in results if r.status in ("imported", "replaced"))
     failed = sum(1 for r in results if r.status == "write-failed")
-    skipped = sum(1 for r in results if r.status in ("exists-skipped", "placeholder-skipped", "no-token"))
+    skipped = sum(
+        1 for r in results if r.status in ("exists-skipped", "placeholder-skipped", "no-token")
+    )
     return ok, skipped, failed
 
 

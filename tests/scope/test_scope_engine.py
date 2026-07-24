@@ -4,6 +4,7 @@ out-of-scope blocked, redirects re-checked, deny-wins, default-deny, discovery
 never expands scope, shared CDN/cloud ranges rejected, IP vs domain distinction,
 and target content cannot mutate scope.
 """
+
 import pytest
 
 from hackbot.scope import Scope, ScopeKind, classify_target
@@ -12,8 +13,12 @@ from hackbot.scope import Scope, ScopeKind, classify_target
 @pytest.fixture
 def scope():
     return Scope(
-        in_scope=["example.com", "*.api.example.com", "203.0.113.0/24",
-                  "github.com/exampleorg/webapp"],
+        in_scope=[
+            "example.com",
+            "*.api.example.com",
+            "203.0.113.0/24",
+            "github.com/exampleorg/webapp",
+        ],
         out_of_scope=["internal.example.com", "test.api.example.com"],
         name="unit",
     )
@@ -32,7 +37,7 @@ def test_apex_and_subdomain_allowed(scope):
 
 
 def test_wildcard_requires_subdomain_not_apex(scope):
-    assert scope.check("https://v1.api.example.com/").allowed       # subdomain ok
+    assert scope.check("https://v1.api.example.com/").allowed  # subdomain ok
     # bare apex of a *. rule is NOT matched by that rule; but example.com covers it
     d = scope.check("https://api.example.com/")
     assert d.allowed and d.matched_rule == "example.com"
@@ -89,9 +94,11 @@ def test_shared_cdn_range_allowed_if_explicitly_listed():
 # --- discovery != authorization -------------------------------------------
 def test_scope_is_immutable_no_expansion_api(scope):
     """There must be NO public method that adds scope at runtime."""
-    mutators = [a for a in dir(scope)
-                if a in ("add", "add_domain", "extend", "include", "expand",
-                         "add_in_scope", "update")]
+    mutators = [
+        a
+        for a in dir(scope)
+        if a in ("add", "add_domain", "extend", "include", "expand", "add_in_scope", "update")
+    ]
     assert mutators == [], f"scope must not expose expansion methods: {mutators}"
 
 
@@ -132,7 +139,7 @@ def test_ipv6_cidr_in_scope():
     s = Scope(in_scope=["2001:db8::/32"], out_of_scope=[])
     d = s.check("http://[2001:db8::1]/")
     assert d.allowed and "ip-literal" in d.risk_flags
-    assert s.check("2001:db8:0:0::abcd").allowed          # bare IPv6 literal
+    assert s.check("2001:db8:0:0::abcd").allowed  # bare IPv6 literal
 
 
 def test_ipv6_outside_cidr_denied():
@@ -142,9 +149,9 @@ def test_ipv6_outside_cidr_denied():
 
 def test_ipv4_not_matched_by_ipv6_cidr_and_vice_versa():
     s6 = Scope(in_scope=["2001:db8::/32"], out_of_scope=[])
-    assert not s6.check("http://203.0.113.5/").allowed     # v4 vs v6 rule
+    assert not s6.check("http://203.0.113.5/").allowed  # v4 vs v6 rule
     s4 = Scope(in_scope=["203.0.113.0/24"], out_of_scope=[])
-    assert not s4.check("http://[2001:db8::1]/").allowed    # v6 vs v4 rule
+    assert not s4.check("http://[2001:db8::1]/").allowed  # v6 vs v4 rule
 
 
 # --- URL / path scope rules ------------------------------------------------
@@ -152,7 +159,7 @@ def test_path_rule_segment_aware():
     s = Scope(in_scope=["example.com/api"], out_of_scope=[])
     assert s.check("https://example.com/api").allowed
     assert s.check("https://example.com/api/users/1").allowed
-    d = s.check("https://example.com/api2")               # NOT a path segment match
+    d = s.check("https://example.com/api2")  # NOT a path segment match
     assert not d.allowed and "path-out" in d.risk_flags
     assert not s.check("https://example.com/admin").allowed
 
@@ -172,8 +179,8 @@ def test_host_only_rule_matches_any_path():
 # --- genuine instance immutability ----------------------------------------
 def test_scope_instance_is_frozen(scope):
     with pytest.raises(AttributeError):
-        scope._in = ()                    # cannot reassign internal state
+        scope._in = ()  # cannot reassign internal state
     with pytest.raises(AttributeError):
-        scope.name = "hacked"             # cannot reassign public attr
+        scope.name = "hacked"  # cannot reassign public attr
     with pytest.raises(AttributeError):
-        scope.new_attr = 1                # cannot add attributes (slots + frozen)
+        scope.new_attr = 1  # cannot add attributes (slots + frozen)

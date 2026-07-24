@@ -10,6 +10,7 @@ dependencies.
 
 Usage: python3 scripts/build_wheel.py
 """
+
 from __future__ import annotations
 
 import base64
@@ -90,8 +91,10 @@ def main() -> int:
         for arc, data in members:
             zf.writestr(arc, data)
 
-    print(f"built {wheel_path.relative_to(ROOT)} ({wheel_path.stat().st_size} bytes, "
-          f"{len(members)} members)")
+    print(
+        f"built {wheel_path.relative_to(ROOT)} ({wheel_path.stat().st_size} bytes, "
+        f"{len(members)} members)"
+    )
     print("  extras: " + ", ".join(sorted(proj.get("optional-dependencies", {}))))
     return 0
 

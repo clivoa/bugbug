@@ -6,13 +6,14 @@ discovery never auto-expands scope, shared CDN/cloud ranges excluded, high-volum
 actions require approval, macOS-incompatible commands are detected, and
 attribution survives normalization.
 """
+
 from pathlib import Path
 
 import pytest
 import yaml
 
-from hackbot.skills.bundle_parser import parse_bundle
 from hackbot.skills.bundle_classify import classify_all, detect_portability
+from hackbot.skills.bundle_parser import parse_bundle
 
 ROOT = Path(__file__).resolve().parents[2]
 BUNDLE = ROOT / "references/recon/Recon-bundle.html"
@@ -60,7 +61,7 @@ def test_asn_netblock_requires_explicit_approval(classifications):
     """ASN/netblock is a hypothesis source, never an auto scope expansion."""
     c = classifications["note-asn-netblock"]
     assert c.risk_level == 2
-    assert c.approval_level == "explicit"       # never 'auto-if-in-scope'
+    assert c.approval_level == "explicit"  # never 'auto-if-in-scope'
     assert c.approval_level != "none"
 
 
@@ -77,8 +78,12 @@ def test_no_passive_source_grants_auto_active(classifications):
     Passive evidence sources (cert/github/dork/osint) must be L0 with no active
     follow-up baked in — active follow-up is a separate, gated decision.
     """
-    for nid in ("note-consulta-certificado-tls", "note-github-recon",
-                "note-google-dorking", "note-osint-tools"):
+    for nid in (
+        "note-consulta-certificado-tls",
+        "note-github-recon",
+        "note-google-dorking",
+        "note-osint-tools",
+    ):
         c = classifications[nid]
         assert c.risk_level == 0
         assert c.approval_level == "none"
@@ -87,9 +92,13 @@ def test_no_passive_source_grants_auto_active(classifications):
 
 # --- high-volume active actions require approval ---------------------------
 def test_high_volume_requires_explicit_approval(classifications):
-    for nid in ("note-param-fuzzing", "note-enumeracao-diretorios",
-                "note-port-scanning-bash", "note-banner-scanning",
-                "note-tcp-fin-fingerprint"):
+    for nid in (
+        "note-param-fuzzing",
+        "note-enumeracao-diretorios",
+        "note-port-scanning-bash",
+        "note-banner-scanning",
+        "note-tcp-fin-fingerprint",
+    ):
         c = classifications[nid]
         assert c.risk_level == 2, nid
         assert c.approval_level == "explicit", nid
@@ -130,5 +139,6 @@ def test_manifest_preserves_attribution(manifest):
 
 def test_manifest_source_hash_matches(manifest):
     import hashlib
+
     actual = hashlib.sha256(BUNDLE.read_bytes()).hexdigest()
     assert manifest["source_sha256"] == actual

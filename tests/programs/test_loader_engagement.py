@@ -1,0 +1,101 @@
+"""Loader wiring to the scope engine + atomic/no-overwrite engagement tests."""
+
+from pathlib import Path
+
+import pytest
+
+from hackbot.programs import engagement, loader
+from hackbot.programs.schema import ValidationError
+
+FIX = Path(__file__).parent / "fixtures"
+
+
+def test_loader_builds_working_scope():
+    scope = loader.load_scope_file(FIX / "valid_scope.yaml")
+    assert scope.check("https://api.example.com/").allowed  # apex+sub
+    assert scope.check("https://v1.api.example.com/").allowed  # wildcard
+    assert not scope.check("https://evil.com/").allowed  # default-deny
+    assert not scope.check("https://internal.example.com/").allowed  # deny-wins
+
+
+def test_loader_validation_failure_raises_not_open_scope():
+    with pytest.raises(ValidationError):
+        loader.load_scope_file(FIX / "invalid_malformed.yaml")
+
+
+def test_loader_rejects_non_yaml_safe(tmp_path):
+    # yaml.safe_load must not construct arbitrary objects
+    bad = tmp_path / "danger.yaml"
+    bad.write_text("!!python/object/apply:os.system ['echo pwned']\n")
+    with pytest.raises(loader.ProgramError):
+        loader.load_scope_file(bad)
+
+
+def test_program_load_returns_scope():
+    doc, scope = loader.load_program_file(FIX / "valid_program.yaml")
+    assert scope.check("https://acme-corp.example/app").allowed
+    assert not scope.check("https://blog.acme-corp.example/").allowed
+
+
+# --- engagement creation ---------------------------------------------------
+def _doc():
+    import yaml
+
+    return yaml.safe_load((FIX / "valid_program.yaml").read_text())
+
+
+def test_create_engagement_atomic(tmp_path):
+    doc = _doc()
+    path = engagement.create_engagement(
+        tmp_path,
+        platform="generic-vdp",
+        program="acme-corp",
+        program_doc=doc,
+        scope_doc={"schema_version": 1, **doc["scope"]},
+    )
+    assert (path / "program.yaml").exists()
+    assert (path / "scope.yaml").exists()
+    assert (path / "authorization.json").exists()
+    for sub in ("recon", "evidence", "findings", "reports"):
+        assert (path / sub).is_dir()
+    # scope.yaml is re-loadable and valid
+    s = loader.load_scope_file(path / "scope.yaml")
+    assert s.check("https://acme-corp.example/app").allowed
+
+
+def test_create_engagement_no_overwrite(tmp_path):
+    doc = _doc()
+    kw = dict(
+        platform="generic-vdp",
+        program="acme-corp",
+        program_doc=doc,
+        scope_doc={"schema_version": 1, **doc["scope"]},
+    )
+    engagement.create_engagement(tmp_path, **kw)
+    with pytest.raises(engagement.EngagementExists):
+        engagement.create_engagement(tmp_path, **kw)
+
+
+def test_no_partial_engagement_left_on_failure(tmp_path, monkeypatch):
+    doc = _doc()
+    import hackbot.programs.engagement as eng
+
+    real_rename = eng.os.rename
+
+    def _boom(src, dst):
+        raise OSError("simulated failure during publish")
+
+    monkeypatch.setattr(eng.os, "rename", _boom)
+    with pytest.raises(OSError):
+        eng.create_engagement(
+            tmp_path,
+            platform="p",
+            program="prog",
+            program_doc=doc,
+            scope_doc={"schema_version": 1, **doc["scope"]},
+        )
+    monkeypatch.setattr(eng.os, "rename", real_rename)
+    # target must NOT exist, and no leftover temp dirs
+    assert not (tmp_path / "p" / "prog").exists() or not list((tmp_path / "p" / "prog").iterdir())
+    leftovers = list(tmp_path.rglob(".engagement-tmp-*"))
+    assert leftovers == [], f"partial engagement left behind: {leftovers}"

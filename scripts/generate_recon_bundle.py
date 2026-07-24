@@ -10,18 +10,19 @@ Nothing here executes bundle commands. The original file is never modified.
 
 Usage: PYTHONPATH=src python3 scripts/generate_recon_bundle.py
 """
+
 from __future__ import annotations
 
-import json
 import hashlib
+import json
+import sys
 from pathlib import Path
 
-import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from hackbot.skills.bundle_parser import parse_bundle, bundle_metadata  # noqa: E402
 from hackbot.skills.bundle_classify import classify_all  # noqa: E402
+from hackbot.skills.bundle_parser import bundle_metadata, parse_bundle  # noqa: E402
 
 BUNDLE = ROOT / "references/recon/Recon-bundle.html"
 OUT = ROOT / "generated/recon-bundle"
@@ -58,20 +59,25 @@ def main() -> int:
             "source_sha256": src_hash,
         }
         (OUT / "notes" / f"{n.note_id}.json").write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     # manifest.yaml (required schema: skill/source_file/source_note/... per entry)
     lines: list[str] = []
     lines.append("# Recon bundle normalization manifest")
     lines.append("# Maps each normalized skill back to its immutable source note.")
-    lines.append("# GENERATED — do not edit by hand. Regenerate via scripts/generate_recon_bundle.py")
-    lines.append(f"bundle_title: {_yaml_str(meta.get('title',''))}")
-    lines.append(f"bundle_author: {_yaml_str(meta.get('author',''))}")
-    lines.append(f"bundle_author_link: {_yaml_str(meta.get('author_link',''))}")
-    lines.append(f"bundle_license_declared: {_yaml_str(meta.get('license_declared',''))}")
-    lines.append("bundle_authorization: \"local private use with attribution (operator 2026-07-24); redistribution NOT authorized\"")
-    lines.append(f"source_file: \"references/recon/Recon-bundle.html\"")
-    lines.append(f"source_sha256: \"{src_hash}\"")
+    lines.append(
+        "# GENERATED — do not edit by hand. Regenerate via scripts/generate_recon_bundle.py"
+    )
+    lines.append(f"bundle_title: {_yaml_str(meta.get('title', ''))}")
+    lines.append(f"bundle_author: {_yaml_str(meta.get('author', ''))}")
+    lines.append(f"bundle_author_link: {_yaml_str(meta.get('author_link', ''))}")
+    lines.append(f"bundle_license_declared: {_yaml_str(meta.get('license_declared', ''))}")
+    lines.append(
+        'bundle_authorization: "local private use with attribution (operator 2026-07-24); redistribution NOT authorized"'
+    )
+    lines.append('source_file: "references/recon/Recon-bundle.html"')
+    lines.append(f'source_sha256: "{src_hash}"')
     lines.append(f"note_count: {len(notes)}")
     lines.append("skills:")
     for n in notes:
@@ -88,7 +94,7 @@ def main() -> int:
         adaptations = [f"{m['id']}: {m['adaptation']}" for m in c.macos_findings]
         lines.append(f"  - skill: {_yaml_str(c.skill_target)}")
         lines.append(f"    skill_name: {_yaml_str(skill_name)}")
-        lines.append(f"    source_file: \"references/recon/Recon-bundle.html\"")
+        lines.append('    source_file: "references/recon/Recon-bundle.html"')
         lines.append(f"    source_note: {_yaml_str(n.note_id)}")
         lines.append(f"    source_heading: {_yaml_str(n.title)}")
         lines.append(f"    source_updated_date: {_yaml_str(n.updated)}")
@@ -101,14 +107,16 @@ def main() -> int:
         lines.append(f"    command_count: {len(n.commands)}")
         lines.append(f"    adaptations:{_yaml_list(adaptations, '      ')}")
         lines.append(f"    risk_changes:{_yaml_list(risk_changes, '      ')}")
-        lines.append(f"    commands_rewritten: \"all commands converted to validated tool adapters (see src/hackbot/tools)\"")
+        lines.append(
+            '    commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"'
+        )
         lines.append(f"    commands_excluded:{_yaml_list(commands_excluded, '      ')}")
         lines.append(f"    attribution: {_yaml_str(ATTRIB)}")
 
     (OUT / "manifest.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    print(f"wrote {len(notes)} note JSON files -> {OUT/'notes'}")
-    print(f"wrote manifest -> {OUT/'manifest.yaml'}")
+    print(f"wrote {len(notes)} note JSON files -> {OUT / 'notes'}")
+    print(f"wrote manifest -> {OUT / 'manifest.yaml'}")
     print(f"source sha256 = {src_hash[:16]}...")
     return 0
 

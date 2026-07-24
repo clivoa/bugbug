@@ -12,6 +12,7 @@ Safety:
 Run: .venv/bin/python scripts/keychain_sentinel.py
 Exit 0 on success (round-trip verified AND sentinel removed), non-zero otherwise.
 """
+
 from __future__ import annotations
 
 import os
@@ -45,7 +46,7 @@ def main() -> int:
     try:
         keyring.set_password(SENTINEL_SERVICE, key, value)
         got = keyring.get_password(SENTINEL_SERVICE, key)
-        roundtrip_ok = (got == value)
+        roundtrip_ok = got == value
     except Exception as e:  # never surface the value; report the failure class only
         print(f"FAIL: native keychain round-trip errored ({type(e).__name__})")
         # still attempt cleanup below
