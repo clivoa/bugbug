@@ -1,0 +1,48 @@
+# --- Secrets & local config (NEVER commit) ---
+.env
+.env.local
+*.local.json
+.claude/settings.local.json
+.claude/settings.deepseek.json
+.claude/settings.kimi.json
+.claude/*.secret.json
+secrets/
+*.pem
+*.key
+
+# --- Engagement data (sanitized examples are force-added explicitly) ---
+engagements/*
+!engagements/.gitkeep
+!engagements/sample-*/
+
+# --- Third-party reference clones (reviewed, not vendored) ---
+references/external/
+
+# --- Generated / runtime ---
+generated/**/cache/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+labs/**/data/
+node_modules/
+dist/
+build/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.uv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# --- OS / editor ---
+.DS_Store
+*.swp
+.idea/
+.vscode/

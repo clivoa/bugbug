@@ -1,0 +1,97 @@
+{
+  "note": {
+    "note_id": "note-js-analysis",
+    "title": "js analysis & secrets extraction",
+    "category": "recon",
+    "difficulty": "intermediario",
+    "updated": "2026-07-18",
+    "tags": [
+      "#hacking",
+      "#recon",
+      "#javascript",
+      "#secrets",
+      "#api-discovery",
+      "#active-recon"
+    ],
+    "intro": "analise de arquivos javascript e onde mora o ouro. endpoints escondidos, chaves de api, configuracoes de firebase, urls internas, feature flags. apps modernos empacotam tudo no frontend e expõem muito mais do que dev imagina.",
+    "sections": [
+      "1. coleta de arquivos js",
+      "via crawl",
+      "via browser devtools",
+      "via source maps",
+      "2. extracao de secrets",
+      "linkfinder (endpoints)",
+      "secretfinder / trufflehog",
+      "regex manual (alto rendimento)",
+      "3. ferramentas dedicadas",
+      "jsmon (monitoramento continuo)",
+      "jsfscan (all-in-one)",
+      "nuclei js templates",
+      "4. analise de webpack bundles",
+      "5. workflow completo",
+      "6. o que procurar (priorizado)",
+      "checklist rapido"
+    ],
+    "commands": [
+      "# katana com js extraction\nkatana -u https://alvo.com -d 3 -jc -silent -o urls.txt\n\n# filtrar so .js\ngrep -E \"\\.js$|\\.js\\?\" urls.txt | sort -u > js_files.txt\n\n# gau (wayback + common crawl)\ngau alvo.com --subs | grep -E \"\\.js$|\\.js\\?\" | sort -u >> js_files.txt\n\n# waybackurls\nwaybackurls alvo.com | grep -E \"\\.js$|\\.js\\?\" | sort -u >> js_files.txt",
+      "# f12 > sources > cmd+shift+p > \"open all files\"\n# ou copiar via puppeteer\npython3 -c \"\nimport subprocess, json\n# headless chromium pega todos js carregados\nsubprocess.run(['chromium', '--headless', '--dump-dom', 'https://alvo.com'])\n\"",
+      "# muitos sites servem .js.map em prod (dev esquece de desligar)\nffuf -u https://alvo.com/FUZZ -w js_files.txt -mc 200 | grep \"\\.map$\"\n\n# ou adicionar .map ao final de cada js\ncat js_files.txt | sed 's/$/.map/' | httpx -silent -mc 200 -o sourcemaps.txt\n\n# restaurar source original do sourcemap\nnpx source-map-explorer bundle.js.map\n# ou\nunwebpack-sourcemap bundle.js.map -o restored_src/",
+      "# acha endpoints /api/v1/usuarios etc dentro de js\npython3 linkfinder.py -i https://alvo.com/bundle.js -o cli\n\n# batch\ncat js_files.txt | while read url; do\n  python3 linkfinder.py -i \"$url\" -o cli\ndone > all_endpoints.txt\n\n# alternativa rapida: regex direto\ncat downloaded/*.js | grep -oP '(\\/[a-zA-Z0-9_\\-\\/\\.]+(?:api|v[0-9]|graphql|rest)[a-zA-Z0-9_\\-\\/\\.]*)' | sort -u",
+      "# secretfinder (gerhart/python)\npython3 SecretFinder.py -i https://alvo.com/bundle.js -o cli\n\n# trufflehog (git + filesystem)\ntrufflehog filesystem downloaded_js/\ntrufflehog github --org=alvo\n\n# gitleaks em dir\ngitleaks detect --source=downloaded_js/ --report-path=leaks.json",
+      "# chaves mais comuns\ngrep -rEnE \"(api[_-]?key|apikey|api[_-]?secret|access[_-]?token|auth[_-]?token|bearer|client[_-]?secret|aws[_-]?(access|secret)|firebase|stripe_|sk_live_|pk_live_|ghp_|gho_|xox[bap]-|AKIA[0-9A-Z]{16})[\\\"']?\\s*[:=]\\s*[\\\"']?[a-zA-Z0-9_\\-]{20,}\" downloaded_js/ > secrets.txt\n\n# urls internas\ngrep -oP 'https?:\\/\\/[a-zA-Z0-9\\-\\.]+\\.(alvo\\.com|internal|local|dev|staging)[a-zA-Z0-9\\/_\\-\\.]*' downloaded_js/*.js | sort -u\n\n# firebase\ngrep -oP '[a-z0-9\\-]+\\.firebaseio\\.com' downloaded_js/*.js | sort -u\n\n# s3 buckets\ngrep -oP '[a-z0-9\\-]+\\.s3[\\-a-z]*\\.amazonaws\\.com' downloaded_js/*.js | sort -u",
+      "# registra estado dos js e avisa quando muda\njsmon -u alvo.com -o jsmon_baseline.json\njsmon -u alvo.com -c jsmon_baseline.json  # diff",
+      "# fetch + extract secrets + endpoints em uma tool\njsfscan -u https://alvo.com -o jsfscan_out/",
+      "nuclei -l js_files.txt -t ~/nuclei-templates/exposures/ -o nuclei_js.txt\nnuclei -l js_files.txt -t ~/nuclei-templates/http/exposures/",
+      "# identificar chunks\ngrep -oP '[a-z0-9]+\\.bundle\\.[a-z0-9]+\\.js' downloaded_js/index.js\n\n# muitos bundles tem admin/auth separados — buscar\nffuf -u https://alvo.com/static/js/FUZZ.js -w chunk_names.txt -mc 200\n\n# restore via sourcemap\nnpx reverse-sourcemap bundle.js.map -o restored/",
+      "#!/bin/bash\nDOMAIN=$1\nOUTDIR=\"recon/$DOMAIN/js\"\nmkdir -p \"$OUTDIR\"\n\necho \"[*] coletando js...\"\nkatana -u \"https://$DOMAIN\" -d 3 -jc -silent -o \"$OUTDIR/urls.txt\"\ngau \"$DOMAIN\" --subs | grep -E \"\\.js$|\\.js\\?\" | sort -u >> \"$OUTDIR/urls.txt\"\nsort -u \"$OUTDIR/urls.txt\" -o \"$OUTDIR/urls.txt\"\n\necho \"[*] baixando...\"\nmkdir -p \"$OUTDIR/raw\"\ncd \"$OUTDIR/raw\"\nwhile read url; do\n  fname=$(echo \"$url\" | md5sum | cut -d' ' -f1)\n  curl -s \"$url\" -o \"$fname.js\"\ndone < ../urls.txt\ncd -\n\necho \"[*] sourcemaps...\"\ncat ../urls.txt | sed 's/$/.map/' | httpx -silent -mc 200 -o \"$OUTDIR/sourcemaps.txt\"\n\necho \"[*] endpoints (linkfinder)...\"\ncat \"$OUTDIR/urls.txt\" | while read url; do\n  python3 ~/tools/linkfinder/linkfinder.py -i \"$url\" -o cli 2>/dev/null\ndone > \"$OUTDIR/endpoints.txt\"\n\necho \"[*] secrets (trufflehog)...\"\ntrufflehog filesystem \"$OUTDIR/raw/\" --json > \"$OUTDIR/secrets.json\"\n\necho \"[*] regex manual...\"\ngrep -rEnE \"(api[_-]?key|secret|token|firebase|stripe_|sk_live_|ghp_)\" \"$OUTDIR/raw/\" > \"$OUTDIR/regex_hits.txt\"\n\necho \"[+] $(wc -l < \"$OUTDIR/urls.txt\") js files\"\necho \"[+] $(wc -l < \"$OUTDIR/endpoints.txt\") endpoints\"\necho \"[+] $(jq '. | length' \"$OUTDIR/secrets.json\" 2>/dev/null) secrets verificados\"\necho \"[+] sourcemaps: $(wc -l < \"$OUTDIR/sourcemaps.txt\")\""
+    ],
+    "warnings": [],
+    "checklist": [
+      "Katana com -jc rodado?",
+      "gau/waybackurls coletou js historico?",
+      "Source maps verificados (.js.map)?",
+      "Linkfinder rodado nos js baixados?",
+      "Trufflehog no diretorio de js baixados?",
+      "Regex manual de padroes conhecidos rodado?",
+      "Firebase / s3 / stripe / aws verificados?",
+      "Endpoints internos extraidos?",
+      "Chaves validadas antes de reportar?",
+      "jsmon configurado para diffing continuo?"
+    ],
+    "paragraphs": [
+      "analise de arquivos javascript e onde mora o ouro. endpoints escondidos, chaves de api, configuracoes de firebase, urls internas, feature flags. apps modernos empacotam tudo no frontend e expõem muito mais do que dev imagina.",
+      "wayback arquiva versões velhas de js que podem ter chaves revogadas mas endpoints ainda vivos. sempre rodar gau alem do katana ativo",
+      ".js.map em producao e vazamento de codigo fonte. nao so endpoints e secrets — tem logica de negocio, comentarios, nome real de devs. reportavel em bb se o programa cobrir information disclosure",
+      "trufflehog verifica chaves com fingerprint real da api (aws, gcp, stripe, github). grep acha padrao, mas muitos falsos positivos. cruzar os dois"
+    ]
+  },
+  "classification": {
+    "note_id": "note-js-analysis",
+    "title": "js analysis & secrets extraction",
+    "recon_type": "mixed",
+    "assessment": "external",
+    "bug_bounty": "applicable",
+    "risk_level": 1,
+    "approval_level": "auto-if-in-scope",
+    "skill_target": "recon/javascript-analysis",
+    "internal_pack": false,
+    "macos_findings": [],
+    "disabled_sections": [],
+    "policy_note": "collecting JS from in-scope host is L1; local secret extraction is L0",
+    "required_tools": [
+      "katana",
+      "gau",
+      "subjs",
+      "linkfinder",
+      "jsluice"
+    ],
+    "required_api_keys": [],
+    "network_noise": "low",
+    "request_volume": "medium",
+    "scope_risk": "low",
+    "third_party_impact": "none"
+  },
+  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "source_file": "references/recon/Recon-bundle.html",
+  "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
+}

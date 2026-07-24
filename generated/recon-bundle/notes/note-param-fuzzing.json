@@ -1,0 +1,102 @@
+{
+  "note": {
+    "note_id": "note-param-fuzzing",
+    "title": "fuzzing de parametros & api discovery",
+    "category": "recon",
+    "difficulty": "intermediario",
+    "updated": "2026-07-17",
+    "tags": [
+      "#hacking",
+      "#recon",
+      "#fuzzing",
+      "#parametros",
+      "#api"
+    ],
+    "intro": "descobrir parametros aceitos, endpoints de api escondidos, e metodos http alternativos. onde achar input escondido que as ferramentas de dir fuzzing nao pegam.",
+    "sections": [
+      "1. parametro discovery (GET/POST)",
+      "brute-force em urls conhecidas",
+      "2. metodo http discovery",
+      "content-type bypass",
+      "3. api endpoint discovery",
+      "swagger / openapi",
+      "graphql",
+      "robots.txt e sitemap",
+      "4. wordlists customizadas",
+      "5. 403 bypass em endpoints",
+      "6. param miner (burp extension)",
+      "7. clairvoyance (graphql schema extraction)",
+      "8. openapi 3.0 parsing",
+      "9. cache poisoning params",
+      "checklist rapido"
+    ],
+    "commands": [
+      "# arjun (o melhor, analisa resposta)\narjun -u https://alvo.com/page -o arjun_results.json\narjun -u https://alvo.com/page -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt -t 20\n\n# paramspider (crawler + fuzzer de parametros)\nparamspider -d alvo.com -o paramspider_results/\n\n# x8 (rust, muito rapido)\nx8 -u https://alvo.com/page -w params.txt -o x8_results.txt\n\n# ffuf parametro GET\nffuf -u \"https://alvo.com/page?FUZZ=test\" -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt -mc all -ac\n\n# ffuf parametro POST\nffuf -u \"https://alvo.com/api/login\" -X POST -d \"FUZZ=test\" -w params.txt -mc all -ac -H \"Content-Type: application/x-www-form-urlencoded\"\n\n# ffuf parametro JSON\nffuf -u \"https://alvo.com/api/user\" -X POST -d '{\"FUZZ\":\"test\"}' -w params.txt -mc all -ac -H \"Content-Type: application/json\"",
+      "cat params.txt | while read url; do\n  base=$(echo \"$url\" | sed 's/=.*/=FUZZ/')\n  ffuf -u \"$base\" -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt \\\n    -mc 200,301,302,403 -ac -t 30 -of csv -o param_bruteforce.csv\ndone",
+      "# testar todos os metodos http\nmethods=(GET POST PUT DELETE PATCH OPTIONS HEAD TRACE)\nfor m in \"${methods[@]}\"; do\n  code=$(curl -X \"$m\" https://alvo.com/api/user -s -o /dev/null -w \"%{http_code}\")\n  echo \"$m -> $code\"\ndone\n\n# ffuf com wordlist de metodos\nffuf -u https://alvo.com/api/user -X FUZZ -w <(echo -e \"GET\\nPOST\\nPUT\\nDELETE\\nPATCH\\nOPTIONS\\nHEAD\\nTRACE\") -mc all -ac",
+      "# api so aceita json? tenta form-urlencoded, xml\ncurl -X POST https://alvo.com/api/login -d 'user=admin&pass=test' -H \"Content-Type: application/x-www-form-urlencoded\"\ncurl -X POST https://alvo.com/api/login -d '{\"user\":\"admin\",\"pass\":\"test\"}' -H \"Content-Type: application/json\"\ncurl -X POST https://alvo.com/api/login -d '<user>admin</user><pass>test</pass>' -H \"Content-Type: application/xml\"\n\n# trocar content-type pode bypassar validacao e habilitar xxe ou mass assignment",
+      "for sub in $(cat live_subs.txt); do\n  for doc in swagger.json swagger.yaml openapi.json api-docs api/docs api/v1/docs api/swagger; do\n    code=$(curl -s -o /dev/null -w \"%{http_code}\" \"https://$sub/$doc\")\n    <a class=\"internal-link\" data-target=\"\"$code\" == \"200\"\" href=\"#\"$code\" == \"200\"\">| \"$code\" == \"301\"</a> && echo \"[+] https://$sub/$doc ($code)\"\n  done\ndone",
+      "# endpoints comuns de graphql\nfor sub in $(cat live_subs.txt); do\n  # testar se graphql existe\n  code=$(curl -s \"https://$sub/graphql\" -X POST -H \"Content-Type: application/json\" -d '{\"query\":\"{__schema{types{name}}}\"}' -o /dev/null -w \"%{http_code}\")\n  <a class=\"internal-link\" data-target=\"\"$code\" == \"200\"\" href=\"#\"$code\" == \"200\"\">\"$code\" == \"200\"</a> && echo \"[+] graphql em https://$sub/graphql\"\n\n  # introspection\n  curl -s \"https://$sub/graphql\" -X POST -H \"Content-Type: application/json\" \\\n    -d '{\"query\":\"{__schema { types { name fields { name type { name kind } } } } }\"}' | jq 2>/dev/null\ndone\n\n# graphw00f (fingerprinter de graphql)\ngraphw00f -t https://alvo.com/graphql",
+      "curl -s https://alvo.com/robots.txt\ncurl -s https://alvo.com/sitemap.xml | grep -oP 'https?://[^<]+' | sort -u > sitemap_urls.txt",
+      "# extrair palavras do proprio site\ncewl https://alvo.com -w custom_words.txt -d 3 -m 4\n\n# extrair nomes de funcoes js\ncat js_files.txt | while read url; do\n  curl -s \"$url\" | grep -oP '(var|let|const|function)\\s+\\K\\w+' | sort -u\ndone > js_function_names.txt\n\n# extrair paths relativos dos js\ncat js_files.txt | while read url; do\n  curl -s \"$url\" | grep -oP '[\"\\x27](/[^\"\\x27]+)[\"\\x27]' | tr -d '\"'\\'' | sort -u\ndone > js_paths.txt\n\n# usar wordlists custom no ffuf\nffuf -u \"https://alvo.com/FUZZ\" -w custom_words.txt -mc 200,301,302,403 -ac",
+      "cat interesting_routes.txt | while read url; do\n  # headers de bypass\n  curl -s \"$url\" -H \"X-Original-URL: /admin\" -o /dev/null -w \"$url -> %{http_code}\\n\"\n  curl -s \"$url\" -H \"X-Forwarded-For: 127.0.0.1\" -o /dev/null -w \"$url XFF -> %{http_code}\\n\"\n\n  # verb tampering\n  curl -s -X POST \"$url\" -o /dev/null -w \"$url POST -> %{http_code}\\n\"\n  curl -s -X PUT \"$url\" -o /dev/null -w \"$url PUT -> %{http_code}\\n\"\n\n  # override method header\n  curl -s -X POST \"$url\" -H \"X-HTTP-Method-Override: GET\" -o /dev/null -w \"$url override -> %{http_code}\\n\"\ndone\n\n# bypass com encoded characters\ncurl -s \"https://alvo.com/%2e%2e/admin\"\ncurl -s \"https://alvo.com/admin%20\"\ncurl -s \"https://alvo.com/admin;\"",
+      "clairvoyance -o schema.json -w wordlist.txt https://alvo.com/graphql\nclairvoyance -o schema.json -w wordlist.txt -H \"Authorization: Bearer TOKEN\" https://alvo.com/graphql",
+      "curl -s https://alvo.com/openapi.json | jq '.paths | keys[]'\ncurl -s https://alvo.com/openapi.json | jq -r '.paths | to_entries[] | .key + \" \" + (.value | keys | join(\",\"))'\n# listar parametros de cada endpoint\ncurl -s https://alvo.com/openapi.json | jq '.paths | to_entries[] | {endpoint: .key, methods: .value}'",
+      "curl -H \"X-Forwarded-Host: evil.com\" https://alvo.com/page\ncurl -H \"X-Original-URL: /admin\" https://alvo.com/\ncurl -H \"X-Forwarded-Scheme: http\" https://alvo.com/page"
+    ],
+    "warnings": [
+      "[!warning] ffuf -ac (auto-calibrate) pode esconder findings reais em apps com resposta dinamica (CSRF tokens, timestamps no body). testar com e sem -ac"
+    ],
+    "checklist": [
+      "arjun com wordlist grande rodado?",
+      "ffuf testado com e sem -ac?",
+      "Metodos HTTP enumerados?",
+      "Param miner (Burp) rodado?",
+      "GraphQL com clairvoyance?",
+      "OpenAPI spec parseada?",
+      "Cache poisoning params testados?",
+      "403 bypass testado?",
+      "Content-type bypass testado?",
+      "Wordlist custom (cewl/js) gerada?"
+    ],
+    "paragraphs": [
+      "descobrir parametros aceitos, endpoints de api escondidos, e metodos http alternativos. onde achar input escondido que as ferramentas de dir fuzzing nao pegam.",
+      "parametros que mudam o comportamento (erro diferente, redirect, conteudo diferente) sao candidatos pra sqli, xss, lfi, ssrf.",
+      "/usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt\n/usr/share/seclists/Discovery/Web-Content/api-endpoints.txt\n/usr/share/seclists/Discovery/Web-Content/graphql.txt",
+      "[!warning] ffuf -ac (auto-calibrate) pode esconder findings reais em apps com resposta dinamica (CSRF tokens, timestamps no body). testar com e sem -ac",
+      "[!tip] arjun com -w burp-parameter-names.txt (wordlist maior que a default). default do arjun e pequena e perde params incomuns",
+      "PortSwigger extension. identifica params hidden com binary search ate 65536 nomes por request. util pra cache poisoning e header injection.",
+      "obter schema GraphQL mesmo com introspection desativada. usa field suggestion attack pra reconstruir o schema completo.",
+      "extrair endpoints nao documentados de specs expostas (swagger.json / openapi.json).",
+      "headers que podem virar cache keys e envenenar respostas servidas a outros usuarios."
+    ]
+  },
+  "classification": {
+    "note_id": "note-param-fuzzing",
+    "title": "fuzzing de parametros & api discovery",
+    "recon_type": "active",
+    "assessment": "external",
+    "bug_bounty": "restricted",
+    "risk_level": 2,
+    "approval_level": "explicit",
+    "skill_target": "recon/parameter-discovery",
+    "internal_pack": false,
+    "macos_findings": [],
+    "disabled_sections": [],
+    "policy_note": "parameter/endpoint fuzzing = L2 (high request volume); only when program allows automated testing",
+    "required_tools": [
+      "arjun",
+      "ffuf",
+      "x8",
+      "paramspider"
+    ],
+    "required_api_keys": [],
+    "network_noise": "high",
+    "request_volume": "high",
+    "scope_risk": "medium",
+    "third_party_impact": "none"
+  },
+  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "source_file": "references/recon/Recon-bundle.html",
+  "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
+}

@@ -1,0 +1,104 @@
+{
+  "note": {
+    "note_id": "note-waf-cdn-detection",
+    "title": "waf & cdn detection",
+    "category": "recon",
+    "difficulty": "intermediario",
+    "updated": "2026-07-18",
+    "tags": [
+      "#hacking",
+      "#recon",
+      "#waf",
+      "#cdn",
+      "#bypass",
+      "#passive-recon"
+    ],
+    "intro": "identificar waf e cdn antes de qualquer recon ativo. scanear portas atraves de cloudflare produz ruido gigante e dados falsos. o alvo real ta atras do proxy. sem saber o que ta na frente, tu perde tempo e queima pelego.",
+    "sections": [
+      "1. deteccao rapida (passivo)",
+      "headers http",
+      "wafw00f",
+      "2. dns lookup — o cdn check mais confiavel",
+      "ranges conhecidos (grep rapido)",
+      "3. origin ip discovery (bypass do cdn)",
+      "subdominios esquecidos",
+      "historico dns (passive dns)",
+      "ssl cert fingerprint",
+      "favicon hash (shodan)",
+      "4. bypass via host header",
+      "5. whatweb / tech detection",
+      "6. waf bypass durante scans",
+      "7. script: deteccao completa",
+      "checklist rapido"
+    ],
+    "commands": [
+      "# cloudflare, akamai, sucuri deixam assinaturas nos headers\ncurl -sI https://alvo.com | grep -iE \"server:|cf-ray:|x-sucuri-id:|x-akamai-transformed:|x-cdn:\"\n\n# cloudflare\ncurl -sI https://alvo.com | grep -i \"cf-ray\"\n# akamai\ncurl -sI https://alvo.com | grep -i \"x-akamai\"\n# sucuri\ncurl -sI https://alvo.com | grep -i \"x-sucuri-id\"\n# incapsula\ncurl -sI https://alvo.com | grep -i \"incap_ses\"\n# fastly\ncurl -sI https://alvo.com | grep -i \"fastly\"",
+      "wafw00f https://alvo.com\nwafw00f -l  # lista wafs suportados\nwafw00f -a https://alvo.com  # agressivo, testa mais payloads",
+      "# resolver o dominio e ver se aponta pra cdn\ndig A alvo.com +short\ndig AAAA alvo.com +short\n\n# cloudflare ranges\ndig A alvo.com +short | grep -E \"104\\.|172\\.6[4-9]\\.|172\\.7[0-1]\\.\"\n\n# verificar cnames\ndig CNAME www.alvo.com +short\n# se resolver pra *.cloudfront.net, *.akamaiedge.net, *.edgekey.net -> tem cdn\n\n# tool dedicada\ncdncheck -d alvo.com\n# ou via projectdiscovery\necho \"alvo.com\" | cdncheck",
+      "# cloudflare ipv4\ndig A alvo.com +short | grep -E \"^(104\\.(1[6-9]|[2-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\\.|172\\.(6[4-9]|7[0-1])\\.)\"\n\n# aws cloudfront\ndig A alvo.com +short | grep -E \"^(13\\.(224|225|226|227|228|229|23[0-9]|24[0-9]|25[0-9]|2[0-9][0-9])\\.|99\\.8[4-9]\\.|99\\.9[0-1]\\.|205\\.251\\.|54\\.23[0-9]\\.)\"\n\n# akamai\ndig A alvo.com +short | grep -E \"^(23\\.(3[2-9]|[4-5][0-9]|6[0-3])\\.|104\\.(6[4-9]|7[0-9]|8[0-9]|9[0-5])\\.)\"",
+      "# subdominios internos frequentemente apontam direto pro origin (sem cdn)\nsubfinder -d alvo.com -all -silent | dnsx -silent -a -resp | grep -v -E \"cloudflare|akamai|cloudfront\"\n\n# staging/dev/correio costumam nao ter cdn\ndig A mail.alvo.com +short\ndig A cpanel.alvo.com +short\ndig A direct.alvo.com +short\ndig A origin.alvo.com +short\ndig A test.alvo.com +short",
+      "# securitytrails (historico de ip)\ncurl -s \"https://api.securitytrails.com/v1/history/alvo.com/dns/a\" \\\n  -H \"APIKEY: $ST_KEY\" | jq -r '.records[].values[].ip' | sort -u\n\n# viewdns\ncurl -s \"https://viewdns.info/iphistory/?domain=alvo.com\" | grep -oP '\\d+\\.\\d+\\.\\d+\\.\\d+' | sort -u\n\n# rapiddns\ncurl -s \"https://rapiddns.io/s/alvo.com\" | grep -oP '\\d+\\.\\d+\\.\\d+\\.\\d+' | sort -u",
+      "# shodan via cert\n# ir em https://www.shodan.io/search?query=ssl:\"alvo.com\"\n# ou via cli\nshodan search ssl:\"alvo.com\" --fields ip_str,org",
+      "# hash do favicon\npython3 -c \"\nimport mmh3, requests, codecs\nr = requests.get('https://alvo.com/favicon.ico')\nfavicon = codecs.encode(r.content, 'base64')\nhash = mmh3.hash(favicon)\nprint(hash)\n\"\n\n# buscar no shodan pelo hash\n# https://www.shodan.io/search?query=http.favicon.hash:<hash>\nshodan search \"http.favicon.hash:<hash>\" --fields ip_str,org",
+      "# se servir o site -> e o origin\ncurl -s -H \"Host: alvo.com\" http://<origin_ip> -o /dev/null -w \"%{http_code} %{size_download}\\n\"\n\n# comparar com o site via cdn\ncurl -s https://alvo.com -o /dev/null -w \"%{http_code} %{size_download}\\n\"\n\n# se tamanho/ status forem parecidos -> confirmei o origin",
+      "# whatweb\nwhatweb -a 3 https://alvo.com\n\n# wappalyzer cli\nwappalyzer https://alvo.com\n\n# nuclei tech-detect template\nnuclei -u https://alvo.com -t ~/nuclei-templates/technologies/\n\n# httpx tech-detect\necho \"alvo.com\" | httpx -tech-detect -silent",
+      "# reduzir rate limit (cloudflare bloqueia 100 req/s)\nnuclei -l live.txt -rl 10 -c 15  # rate limit 10 req/s, 15 concorrentes\n\n# usar metodo GET com header custom pra confundir waf\nffuf -u https://alvo.com/FUZZ -w wordlist.txt -H \"X-Forwarded-For: 127.0.0.1\" -mc 200,301,302,403\n\n# user-agent rotativo (waf bloqueia ua de scanner)\nffuf -u https://alvo.com/FUZZ -w wordlist.txt -H \"User-Agent: Mozilla/5.0\" -rate 20",
+      "#!/bin/bash\nDOMAIN=$1\necho \"[*] DNS...\"\ndig A \"$DOMAIN\" +short\necho \"[*] CNAME...\"\ndig CNAME \"www.$DOMAIN\" +short\necho \"[*] WAF (wafw00f)...\"\nwafw00f \"https://$DOMAIN\" 2>/dev/null | grep -E \"is behind|WAF\"\necho \"[*] Headers...\"\ncurl -sI \"https://$DOMAIN\" | grep -iE \"server:|cf-|x-sucuri|x-akamai|x-cdn|incap\"\necho \"[*] Tech (httpx)...\"\necho \"$DOMAIN\" | httpx -tech-detect -silent -title -status-code\necho \"[*] Subdominios sem cdn...\"\nsubfinder -d \"$DOMAIN\" -all -silent 2>/dev/null | dnsx -silent -a -resp 2>/dev/null | \\\n  grep -v -E \"cloudflare|akamai|cloudfront|fastly\" | head -10"
+    ],
+    "warnings": [
+      "identificar waf e cdn antes de qualquer recon ativo. scanear portas atraves de cloudflare produz ruido gigante e dados falsos. o alvo real ta atras do proxy. sem saber o que ta na frente, tu perde tempo e queima pelego."
+    ],
+    "checklist": [
+      "Headers http inspecionados (server, cf-ray, x-akamai)?",
+      "wafw00f rodado?",
+      "DNS lookup — aponta pra range de cdn?",
+      "cdncheck rodado?",
+      "Subdominios verificados por ip direto (sem cdn)?",
+      "Passive dns (securitytrails, viewdns) consultado?",
+      "Favicon hash feito e cruzado no shodan?",
+      "Origin ip validado com host header?",
+      "Tech stack identificado (httpx, whatweb, wappalyzer)?",
+      "Rate limit configurado nos scans se waf detectado?"
+    ],
+    "paragraphs": [
+      "identificar waf e cdn antes de qualquer recon ativo. scanear portas atraves de cloudflare produz ruido gigante e dados falsos. o alvo real ta atras do proxy. sem saber o que ta na frente, tu perde tempo e queima pelego.",
+      "alguns wafs customizados ou de vendors menores nao sao detectados. sempre cruzar com header inspection manual e dns lookup",
+      "cdncheck da projectdiscovery tem base atualizada de ranges de cdn, cloud e waf. prefira ele. grep manual quebra rapido",
+      "quando o alvo esta atras de cloudflare/akamai, o objetivo e achar o ip real do origin server.",
+      "muitos origins expostos em ip direto servem o mesmo favicon do site principal. hashing e cruzar no shodan costuma achar origins que nem passive dns pega",
+      "depois de achar o ip real, validar sem dns:",
+      "se tu tomar block de waf, o ip entra em blocklist. ter VPN/proxy com rotacao pronto antes. nuclei com -rl 10 e -c 15 evita 90% dos blocks"
+    ]
+  },
+  "classification": {
+    "note_id": "note-waf-cdn-detection",
+    "title": "waf & cdn detection",
+    "recon_type": "mixed",
+    "assessment": "external",
+    "bug_bounty": "applicable",
+    "risk_level": 1,
+    "approval_level": "auto-if-in-scope",
+    "skill_target": "recon/waf-cdn-detection",
+    "internal_pack": false,
+    "macos_findings": [],
+    "disabled_sections": [
+      "origin ip discovery (bypass do cdn)",
+      "bypass via host header"
+    ],
+    "policy_note": "passive WAF/CDN detection L1; ORIGIN-IP BYPASS sections DISABLED (defeats protection)",
+    "required_tools": [
+      "wafw00f",
+      "httpx",
+      "dig",
+      "whatweb"
+    ],
+    "required_api_keys": [],
+    "network_noise": "low",
+    "request_volume": "low",
+    "scope_risk": "high",
+    "third_party_impact": "likely (CDN/shared infra)"
+  },
+  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "source_file": "references/recon/Recon-bundle.html",
+  "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
+}

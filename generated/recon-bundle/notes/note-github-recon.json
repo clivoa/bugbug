@@ -1,0 +1,104 @@
+{
+  "note": {
+    "note_id": "note-github-recon",
+    "title": "github recon & leaked secrets",
+    "category": "recon",
+    "difficulty": "intermediario",
+    "updated": "2026-07-18",
+    "tags": [
+      "#hacking",
+      "#recon",
+      "#github",
+      "#git",
+      "#secrets",
+      "#osint",
+      "#passive-recon"
+    ],
+    "intro": "github e uma das maiores fontes de vazamento de credenciais e informacao interna. devs commitem api keys, configs, dockerfiles com endpoints internos, e ate .env em repo publico. dois vetores principais: (1) code search no github por secrets/endpoints do alvo, (2) .git exposto no web server do proprio alvo.",
+    "sections": [
+      "1. github code search (passivo)",
+      "queries manuais",
+      "github dorking avancado",
+      "via cli (gh)",
+      "2. github-subdomains (extrair subdominios do github)",
+      "3. travis-ci / gitlab / gists",
+      "4. ferramentas automatizadas de secret scan",
+      "trufflehog",
+      "gitleaks",
+      "gitrob",
+      "5. .git exposto no web server",
+      "deteccao",
+      "exploracao",
+      "6. github dorks catalog (referencia rapida)",
+      "7. workflow completo",
+      "8. validacao de secrets (antes de reportar)",
+      "checklist rapido"
+    ],
+    "commands": [
+      "# via site:github.com (google)\nsite:github.com \"alvo.com\"\nsite:github.com \"alvo.com\" \"api_key\"\nsite:github.com \"alvo.com\" \"password\"\nsite:github.com \"alvo.com\" \".env\"\nsite:github.com \"alvo.com\" \"aws_secret\"\nsite:github.com \"alvo.com\" filename:docker-compose.yml\nsite:github.com \"alvo.com\" filename:.env\n\n# github code search direto (precisa login)\n# https://github.com/search?q=%22alvo.com%22+password&type=code\n# https://github.com/search?q=org%3Aalvo+AKIA&type=code",
+      "# search code autenticado\ngh search code \"alvo.com\" --limit 100\ngh search code \"org:alvocorp api_key\"\ngh search code \"org:alvocorp password\"\ngh search code \"org:alvocorp AWS_SECRET_ACCESS_KEY\"\ngh search code \"alvo.com extension:env\"\n\n# search repos\ngh search repos --owner alvocorp\ngh repo list alvocorp --limit 100\n\n# commits com secrets\ngh api \"repos/alvocorp/repo_name/commits\" | jq -r '.[].commit.message'",
+      "# projectdiscovery\ngithub-subdomains -d alvo.com -t $GITHUB_TOKEN -o gh_subs.txt\n\n# gitdorks_go\ngitDorks_go -t $GITHUB_TOKEN -d alvo.com -gw gitDorks.txt",
+      "# gists publicos\ngh gist list --public\n# buscar gists por dominio\ncurl -s \"https://api.github.com/search/code?q=alvo.com+extension:py\" \\\n  -H \"Authorization: token $GITHUB_TOKEN\" | jq -r '.items[].html_url'\n\n# gitlab\ncurl -s \"https://gitlab.com/api/v4/search?scope=blobs&search=alvo.com\" | jq -r '.[].data'\ncurl -s \"https://gitlab.com/api/v4/search?scope=projects&search=alvo\" | jq -r '.[].path_with_namespace'\n\n# travis-ci configs (historico)\ncurl -s \"https://api.travis-ci.org/repos/alvocorp\" | jq -r '.[].slug'",
+      "# scan repo\ntrufflehog github --org=alvocorp --token=$GITHUB_TOKEN\n\n# scan repo especifico\ntrufflehog github --repo=https://github.com/alvocorp/repo_name\n\n# scan filesystem\ntrufflehog filesystem /path/to/downloaded_code\n\n# scan git history (importante: secret removido em commit ainda existe no history)\ntrufflehog git https://github.com/alvocorp/repo_name --json",
+      "# scan repo\ngitleaks detect --source=https://github.com/alvocorp/repo_name --report-path=leaks.json\n\n# scan org (precisa config)\ngitleaks detect --source=. --config=github_org.toml\n\n# scan git history\ngitleaks detect --source=. --log-opts=\"--all\" --report-path=history_leaks.json",
+      "# scan org inteira\ngitrob --github-access-token=$GITHUB_TOKEN alvocorp\n\n# salva em db\ngitrob --no-banner --commit alvocorp -dump",
+      "# verificar se .git/ esta acessivel\ncurl -s https://alvo.com/.git/HEAD\n# saida esperada se exposto: ref: refs/heads/master\n\ncurl -s https://alvo.com/.git/config\ncurl -sI https://alvo.com/.git/\n\n# ffuf pra variacoes\nffuf -u https://alvo.com/FUZZ -w git_wordlist.txt -mc 200\n# wordlist: .git, .git/, .git/HEAD, .git/config, .git/index, .git/logs/HEAD",
+      "# git-dumper (baixa o repo inteiro via http)\npython3 git_dumper.py https://alvo.com/.git/ alvo_git/\n\n# ou via wget manual\nmkdir alvo_git && cd alvo_git\nwget -r -nH --cut-dirs=1 --no-parent https://alvo.com/.git/\n\n# restaurar estado\ngit log --oneline\ngit status\ngit checkout -- .  # restaura working tree\ngit log --all --oneline  # todos os commits\ngit diff HEAD~5 HEAD  # ver mudancas recentes",
+      "#!/bin/bash\nORG=$1        # alvocorp\nDOMAIN=$2     # alvo.com\nOUTDIR=\"recon/$DOMAIN/github\"\nmkdir -p \"$OUTDIR\"\n\necho \"[*] repos da org...\"\ngh repo list \"$ORG\" --limit 200 --json name,url -o \"$OUTDIR/repos.json\"\necho \"[+] $(jq '. | length' \"$OUTDIR/repos.json\") repos\"\n\necho \"[*] code search...\"\nfor query in \"api_key\" \"secret\" \"password\" \"aws_secret\" \"BEGIN RSA\" \"extension:env\" \"firebase\"; do\n  echo \"[*] query: $query\"\n  gh search code \"org:$ORG $query\" --limit 100 >> \"$OUTDIR/code_search.txt\" 2>/dev/null\ndone\nsort -u \"$OUTDIR/code_search.txt\" -o \"$OUTDIR/code_search.txt\"\n\necho \"[*] trufflehog em cada repo...\"\njq -r '.[].url' \"$OUTDIR/repos.json\" | while read repo; do\n  trufflehog github --repo=\"$repo\" --json 2>/dev/null >> \"$OUTDIR/trufflehog.json\"\ndone\n\necho \"[*] subdominios via github...\"\ngithub-subdomains -d \"$DOMAIN\" -t \"$GITHUB_TOKEN\" -o \"$OUTDIR/gh_subs.txt\" 2>/dev/null\n\necho \"[*] .git exposto...\"\ncat \"../live.txt\" 2>/dev/null | while read url; do\n  code=$(curl -s -o /dev/null -w \"%{http_code}\" \"$url/.git/HEAD\")\n  if [ \"$code\" = \"200\" ]; then\n    echo \"[!] .git exposed: $url\" >> \"$OUTDIR/git_exposed.txt\"\n  fi\ndone\n\necho \"[+] $(jq -s 'length' \"$OUTDIR/trufflehog.json\" 2>/dev/null) secrets via trufflehog\"\necho \"[+] $(wc -l < \"$OUTDIR/code_search.txt\") code hits\"\necho \"[+] $(wc -l < \"$OUTDIR/gh_subs.txt\") subs via github\"",
+      "# aws — NUNCA rodar nada alem de get-caller-identity\naws sts get-caller-identity --profile leaked\n# se retornar ARN -> valido. NAO testar nada mais.\n\n# github\ncurl -s -H \"Authorization: token ghp_xxx\" https://api.github.com/user | jq -r '.login'\n\n# slack\ncurl -s -H \"Authorization: Bearer xoxp-xxx\" https://slack.com/api/auth.test\n\n# stripe (NUNCA fazer charge)\ncurl -s https://api.stripe.com/v1/charges -u sk_live_xxx: -G | jq '.data | length'\n\n# firebase\ncurl -s \"https://xxx.firebaseio.com/.json\"\n# se retornar dados sem auth -> aberto\n\n# generic jwt\n# decodificar payload em jwt.io — nao usar a chave pra nada alem de ler"
+    ],
+    "warnings": [
+      "validar existencia apenas. nunca usar a credencial pra acessar dados, modificar nada, ou escalar. em bb, reportar com prova de validacao (sem exploitar) maximiza bounty. usar credencial = violar policy = ban"
+    ],
+    "checklist": [
+      "GitHub code search por org feito?",
+      "GitHub dorks por dominio rodados?",
+      "gh cli search code autenticado?",
+      "Trufflehog scan em repos da org?",
+      "Gitleaks com --log-opts=\"--all\" (git history)?",
+      "Gitlab publico da org verificado?",
+      "Travis-CI / gists checados?",
+      "Subdominios extraidos via github-subdomains?",
+      ".git exposto testado nos hosts vivos?",
+      "Secrets validados (apenas existencia, sem explorar)?"
+    ],
+    "paragraphs": [
+      "github e uma das maiores fontes de vazamento de credenciais e informacao interna. devs commitem api keys, configs, dockerfiles com endpoints internos, e ate .env em repo publico. dois vetores principais: (1) code search no github por secrets/endpoints do alvo, (2) .git exposto no web server do proprio alvo.",
+      "results de code search so aparecem autenticado. usar gh search code ou curl com $GITHUB_TOKEN no header. google dorks funcionam sem login mas cobrem menos",
+      "gitlab publico e menos varrido que github. muitas empresas tem mirror la e vazam secrets que github ja teria achado. sempre checar gitlab alem do github",
+      "remover secret em commit novo nao resolve — git history e imutavel. trufflehog git --all ou gitleaks --log-opts=\"--all\" acham chaves em commits antigos. reportavel mesmo se o arquivo atual nao tem",
+      "com .git completo tu tem historico, configs, branches, tudo. frequentemente revela .env, credentials, endpoints internos. em alguns casos git hooks podem levar a rce se o workflow ci/cd for exposto. impacto alto",
+      "validar existencia apenas. nunca usar a credencial pra acessar dados, modificar nada, ou escalar. em bb, reportar com prova de validacao (sem exploitar) maximiza bounty. usar credencial = violar policy = ban"
+    ]
+  },
+  "classification": {
+    "note_id": "note-github-recon",
+    "title": "github recon & leaked secrets",
+    "recon_type": "passive",
+    "assessment": "external",
+    "bug_bounty": "applicable",
+    "risk_level": 0,
+    "approval_level": "none",
+    "skill_target": "recon/github-recon",
+    "internal_pack": false,
+    "macos_findings": [],
+    "disabled_sections": [],
+    "policy_note": "public code search/secret discovery is L0; exposed .git fetch to in-scope host is L1",
+    "required_tools": [
+      "gh",
+      "trufflehog",
+      "gitleaks",
+      "github-subdomains"
+    ],
+    "required_api_keys": [
+      "GITHUB_TOKEN"
+    ],
+    "network_noise": "none",
+    "request_volume": "low",
+    "scope_risk": "low",
+    "third_party_impact": "none"
+  },
+  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "source_file": "references/recon/Recon-bundle.html",
+  "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
+}

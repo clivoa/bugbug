@@ -1,0 +1,105 @@
+{
+  "note": {
+    "note_id": "note-asn-netblock",
+    "title": "asn & netblock enumeration",
+    "category": "recon",
+    "difficulty": "intermediario",
+    "updated": "2026-07-17",
+    "tags": [
+      "#hacking",
+      "#recon",
+      "#asn",
+      "#netblock",
+      "#ip-range"
+    ],
+    "intro": "expandir a superficie de ataque alem dos dominios conhecidos. descobrir ranges de ip, sistemas autonomos, e infraestrutura de rede do alvo. util pra achar shadow it, servidores esquecidos, e ips fora do escopo de dns.",
+    "sections": [
+      "1. asn discovery",
+      "2. ip range discovery",
+      "expandir ranges a partir de ips conhecidos",
+      "3. reverse dns em massa",
+      "4. scan nos ranges descobertos",
+      "5. cloud & cdn (cuidado com escopo)",
+      "6. ferramentas all-in-one",
+      "7. workflow completo",
+      "8. favicon hash fingerprinting",
+      "9. SPF/DKIM como fonte de infra",
+      "10. cloud asset discovery",
+      "checklist rapido"
+    ],
+    "commands": [
+      "# achar o asn a partir do dominio\ndig A alvo.com +short | head -1 | xargs whois | grep -iE \"origin|originas|aut-num\" | head -5\n\n# bgp.he.net\ncurl -s \"https://api.bgpview.io/search?query_term=alvo.com\" | jq '.data.ipv4_prefixes[].asn.asn' | sort -u\n\n# amass intel (busca asn por organizacao)\namass intel -org \"Empresa Alvo\" -o asn_intel.txt\namass intel -asn 12345 -o asn_ips.txt\n\n# asnmap (projectdiscovery)\nasnmap -d alvo.com -silent\nasnmap -org \"Google\" -silent\n\n# hackertarget api\ncurl -s \"https://api.hackertarget.com/aslookup/?q=alvo.com\"",
+      "# whois (rir: arin, ripe, apnic, lacnic, afrinic)\nwhois $(dig +short alvo.com | head -1) | grep -iE \"inetnum|netrange|cidr|route:\" | head -10\n\n# bgpview api\ncurl -s \"https://api.bgpview.io/search?query_term=alvo.com\" | jq -r '.data.ipv4_prefixes[].prefix' | sort -u\n\n# traceroute (ips intermediarios da infra)\ntraceroute -n alvo.com\ntcptraceroute alvo.com 443\n\n# shodan (se tiver api key)\nshodan search \"org:'Empresa Alvo'\" --fields ip_str,port,org\n\n# censys\ncensys search 'services.tls.certificates.leaf_data.subject_dn:\"alvo.com\"' | jq '.[].ip'",
+      "# pegar todos os ips do dominio\ndig A alvo.com +short > ips.txt\ndig MX alvo.com +short | awk '{print $NF}' | while read mx; do dig A \"$mx\" +short; done >> ips.txt\ndig NS alvo.com +short | while read ns; do dig A \"$ns\" +short; done >> ips.txt\n\n# pra cada ip, consultar bgpview\nsort -u ips.txt | while read ip; do\n  curl -s \"https://api.bgpview.io/ip/$ip\" | jq -r '.data.prefixes[].prefix' 2>/dev/null\ndone | sort -u > ip_ranges.txt",
+      "# reverse dns nos ranges\ncat ip_ranges.txt | while read range; do\n  prips \"$range\" 2>/dev/null | xargs -I{} -P 100 host {} 2>/dev/null | grep \"pointer\" | awk '{print $NF}'\ndone | sort -u > ptr_records.txt\n\n# dnsx (mais rapido)\ncat ip_ranges.txt | prips - | dnsx -ptr -resp-only -r resolvers.txt -o dnsx_ptr.txt\n\n# filtrar dominios do alvo\ncat dnsx_ptr.txt | grep \"alvo.com\" | sort -u",
+      "# top 100 portas (rapido)\nnmap -iL ip_ranges.txt --top-ports 100 -T4 -oA range_scan\n\n# so servicos web (menos barulhento)\nnmap -iL ip_ranges.txt -p 80,443,8080,8443,8000,8888,3000,5000,9000 -T4 --open -oA web_scan\n\n# rustscan (mais rapido)\nrustscan -a \"$(cat ip_ranges.txt | head -10)\" --ulimit 5000 -- -sV -oA rustscan_web\n\n# httpx nos ips (titulos e certificados)\ncat live_ips.txt | httpx -silent -title -status-code -tech-detect\n\n# screenshot massivo\ncat live_ips.txt | aquatone -out screenshots/",
+      "# verificar se o ip pertence a cdn/cloud\nwhois $IP | grep -iE \"cloudflare|akamai|fastly|aws|azure|google\"\n\n# achar origem atras do cdn\n# via securitytrails historico de dns\ncurl -s \"https://api.securitytrails.com/v1/history/alvo.com/dns/a\" -H \"APIKEY: TOKEN\" | jq '.records[].values[].ip' | sort -u\n\n# via certificados antigos no crt.sh\n# via dnsdumpster.com\n\n# bypass cloudflare:\n# - testar subdominios diretos (direct.connect, origin.alvo.com)\n# - testar ip do mx (servidor de email geralmente sem cdn)\n# - censys com fingerprint do certificado tls",
+      "# mapcidr — manipular ranges de ip (projectdiscovery)\nmapcidr -l ip_ranges.txt -o expanded_ips.txt\nmapcidr -l ip_ranges.txt -sb 256  # divide em blocos de /24\n\n# metabigor (go, recon via bgp/spf/whois)\nmetabigor net --org \"Empresa Alvo\" -o metabigor_ranges.txt\n\n# cloud_enum (s3, azure, gcp)\ncloud_enum -k alvo -k alvodev -k alvoprod -l cloud_enum_results.txt",
+      "#!/bin/bash\nDOMAIN=$1\nOUTDIR=\"recon/$DOMAIN/netblock\"\nmkdir -p \"$OUTDIR\"\n\necho \"[*] descobrindo ips do dominio...\"\ndig A \"$DOMAIN\" +short > \"$OUTDIR/domain_ips.txt\"\ndig MX \"$DOMAIN\" +short | awk '{print $NF}' | while read mx; do dig A \"$mx\" +short; done >> \"$OUTDIR/domain_ips.txt\"\nsort -u \"$OUTDIR/domain_ips.txt\" -o \"$OUTDIR/domain_ips.txt\"\n\necho \"[*] buscando asn e ranges...\"\nsort -u \"$OUTDIR/domain_ips.txt\" | while read ip; do\n  curl -s \"https://api.bgpview.io/ip/$ip\" | jq -r '.data.prefixes[].prefix' 2>/dev/null\ndone | sort -u > \"$OUTDIR/ip_ranges.txt\"\n\necho \"[*] reverse dns nos ranges...\"\ncat \"$OUTDIR/ip_ranges.txt\" | while read range; do\n  prips \"$range\" 2>/dev/null | xargs -P 50 -I{} host {} 2>/dev/null | grep \"pointer\" | awk '{print $NF}'\ndone | sort -u > \"$OUTDIR/ptr_records.txt\"\n\necho \"[*] filtrando dominios do alvo...\"\ngrep -i \"$DOMAIN\" \"$OUTDIR/ptr_records.txt\" > \"$OUTDIR/target_ptrs.txt\"\n\necho \"[+] ranges: $(wc -l < \"$OUTDIR/ip_ranges.txt\")\"\necho \"[+] ptr records: $(wc -l < \"$OUTDIR/ptr_records.txt\")\"\necho \"[+] ptr do alvo: $(wc -l < \"$OUTDIR/target_ptrs.txt\")\"\necho \"[done] resultados em $OUTDIR/\"",
+      "# calcular hash mmh3 do favicon\npython3 -c \"import mmh3,requests,codecs; r=requests.get('https://alvo.com/favicon.ico'); hash=mmh3.hash(codecs.encode(r.content,'base64')); print(hash)\"\n\n# buscar no shodan todos os hosts com mesmo favicon\nshodan search http.favicon.hash:HASH --fields ip_str,port,hostnames,org",
+      "dig txt alvo.com +short | grep \"include:\" | sed 's/.*include://; s/ //g'\n# resolver IPs do include\ndig txt alvo.com +short | grep -oP 'include:\\K[^ ]+' | while read d; do dig A \"$d\" +short; done",
+      "cloud_enum -k alvo -k alvodev -k alvoprod"
+    ],
+    "warnings": [
+      "[!warning] ranges de CDN (Cloudflare/Akamai/AWS) nao sao do alvo. confirmar com whois antes de atacar. ranges compartilhados sao fora de escopo em BB"
+    ],
+    "checklist": [
+      "ASN descoberto via bgpview/whois?",
+      "IP ranges filtrados (CDN fora)?",
+      "Reverse PTR nos ranges?",
+      "Favicon hash no Shodan?",
+      "SPF includes checados?",
+      "Cloud assets enumerados?"
+    ],
+    "paragraphs": [
+      "expandir a superficie de ataque alem dos dominios conhecidos. descobrir ranges de ip, sistemas autonomos, e infraestrutura de rede do alvo. util pra achar shadow it, servidores esquecidos, e ips fora do escopo de dns.",
+      "reverse dns as vezes revela nomes de servidores internos, funcoes (db01, backup, vpn, monitor), e dominios que nao estao no dns publico.",
+      "ips de cdn (cloudflare, akamai) e ranges compartilhados (aws, azure) provavelmente estao fora do escopo. confirme com o cliente antes de atacar ips.",
+      "[!warning] ranges de CDN (Cloudflare/Akamai/AWS) nao sao do alvo. confirmar com whois antes de atacar. ranges compartilhados sao fora de escopo em BB",
+      "[!tip] ASN via SPF: dig txt alvo.com -> achar include: -> resolver IPs do include pra descobrir infra de email",
+      "fingerprint de servidor pelo hash do favicon (ico). mmh3 hash + shodan http.favicon.hash pra achar origin atras de CDN e clusterizar hosts do mesmo alvo.",
+      "registros SPF revelam servidores de email autorizados. includes apontam pra SendGrid, Mailgun, etc — as vezes do alvo.",
+      "enumerar buckets S3, azure blob, gcp storage, e apps serverless baseados no nome do alvo."
+    ]
+  },
+  "classification": {
+    "note_id": "note-asn-netblock",
+    "title": "asn & netblock enumeration",
+    "recon_type": "active",
+    "assessment": "external",
+    "bug_bounty": "restricted",
+    "risk_level": 2,
+    "approval_level": "explicit",
+    "skill_target": "recon/asn-netblock-analysis",
+    "internal_pack": false,
+    "macos_findings": [
+      {
+        "id": "xargs-parallel",
+        "severity": "portable-ok",
+        "adaptation": "xargs -P works on both; enforce concurrency cap in adapter"
+      }
+    ],
+    "disabled_sections": [
+      "5. cloud & cdn (cuidado com escopo)",
+      "scan nos ranges descobertos"
+    ],
+    "policy_note": "ASN/netblock is a HYPOTHESIS source; probing ranges = L2; CDN/cloud ranges DISABLED; favicon-hash is L0 evidence only",
+    "required_tools": [
+      "whois",
+      "amass",
+      "asnmap",
+      "mapcidr",
+      "dnsx"
+    ],
+    "required_api_keys": [
+      "SHODAN_API_KEY(optional)"
+    ],
+    "network_noise": "high",
+    "request_volume": "high",
+    "scope_risk": "high",
+    "third_party_impact": "likely (ranges may not belong to target)"
+  },
+  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "source_file": "references/recon/Recon-bundle.html",
+  "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
+}

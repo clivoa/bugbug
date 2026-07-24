@@ -1,0 +1,98 @@
+{
+  "note": {
+    "note_id": "note-google-dorking",
+    "title": "google dorking",
+    "category": "recon",
+    "difficulty": "basico",
+    "updated": "2026-07-17",
+    "tags": [
+      "#hacking",
+      "#recon",
+      "#osint",
+      "#google-dorking",
+      "#passive-recon"
+    ],
+    "intro": "tecnica de reconhecimento passivo que usa operadores avancados do google pra encontrar informacoes sensiveis expostas publicamente: arquivos de configuracao, paineis de admin, databases, credenciais e mais.",
+    "sections": [
+      "1. operadores basicos",
+      "2. dorks uteis pra recon",
+      "arquivos sensiveis",
+      "paineis de administracao",
+      "credenciais expostas",
+      "directory listing",
+      "erros e informacoes de debug",
+      "3. dorks genericos (google hacking database)",
+      "4. ferramentas de automacao",
+      "5. github dorks - credenciais em repos publicos",
+      "6. google cache - paginas deletadas",
+      "7. wayback + dorks - cruzar com archive.org",
+      "8. shodan/censys + google - cruzar ips expostos",
+      "9. github code search api - busca programatica",
+      "checklist rapido"
+    ],
+    "commands": [
+      "# pagodo - automatizar dorks do ghdb\npython3 pagodo.py -d alvo.com -g dorks.txt\n\n# googler (busca google via terminal)\ngoogler -n 20 \"site:alvo.com filetype:pdf\"\n\n# google hacking database\n# https://www.exploit-db.com/google-hacking-database",
+      "# listar todas as urls do alvo no wayback\ncurl \"http://web.archive.org/cdx/search/cdx?url=alvo.com/*&output=text&fl=original&collapse=urlkey\" | sort -u\n\n# filtrar urls sensiveis\ncurl \"http://web.archive.org/cdx/search/cdx?url=alvo.com/*&output=text&fl=original&collapse=urlkey\" | grep -iE \"admin|backup|config|env\" | sort -u\n\n# baixar snapshot de uma url especifica\ncurl \"http://web.archive.org/web/2023/https://alvo.com/admin/\"",
+      "# buscar hosts do alvo no shodan\nshodan search \"hostname:alvo.com\" --fields ip_str,port,product\n\n# buscar ips no censys\ncensys search \"services.tls.certificates.leaf_data.subject.common_name: alvo.com\"\n\n# cruzar com google - buscar conteudo no ip\n# depois de obter os IPs:\n# google: site:IP_ENCONTRADO",
+      "# buscar codigo via gh cli\ngh search code \"alvo.com\" --limit 50\n\n# buscar credenciais\ngh search code \"alvo.com password\" --limit 50\n\n# buscar configs\ngh search code \"alvo.com DB_PASSWORD\" --limit 50\n\n# buscar chaves aws\ngh search code \"alvo.com AKIA\" --limit 50\n\n# filtrar por linguagem\ngh search code \"alvo.com\" --language python --limit 50"
+    ],
+    "warnings": [
+      "[!warning] google bloqueia apos ~100 dorks seguidas (captcha). usar delay entre batchs ou google custom search api (cx) pra automacao sem captcha",
+      "[!warning] github code search via api requer autenticacao (gh auth login). limite de 10 requests/minuto na api de search."
+    ],
+    "checklist": [
+      "site:alvo.com filetype:pdf|sql|env|bak (arquivos sensiveis)",
+      "site:alvo.com inurl:admin|login (paineis)",
+      "site:alvo.com intext:password (credenciais)",
+      "site:alvo.com intitle:\"index of” (directory listing)",
+      "intitle:\"index of” “.git\"|\"server.key” (dorks genericos ghdb)",
+      "site:github.com “alvo.com” password|token|AKIA (github dorks)",
+      "cache:alvo.com (paginas deletadas)",
+      "wayback machine cdx api (historico de urls)",
+      "shodan search hostname:alvo.com (servicos expostos)",
+      "gh search code “alvo.com” (github code search api)",
+      "pagodo / googler (automacao com delay)"
+    ],
+    "paragraphs": [
+      "tecnica de reconhecimento passivo que usa operadores avancados do google pra encontrar informacoes sensiveis expostas publicamente: arquivos de configuracao, paineis de admin, databases, credenciais e mais.",
+      "[!warning] google bloqueia apos ~100 dorks seguidas (captcha). usar delay entre batchs ou google custom search api (cx) pra automacao sem captcha",
+      "[!tip] google custom search api (cx) permite 100 queries/dia gratis. pra volume alto, rotacionar entre google, bing e yandex",
+      "github indexa codigo de repos publicos. dorks em github acha credenciais, configs e chaves expostas.",
+      "[!info] github tambem indexa arquivos deletados em commits antigos. vale buscar no historico de commits, nao so no codigo atual.",
+      "google mantem cache de paginas mesmo depois que o alvo removeu. util pra achar conteudo sensivel que foi apagado.",
+      "[!tip] o cache do google expira em dias ou semanas. se tu achar algo interessante, salva imediatamente com curl ou screenshot.",
+      "archive.org mantem historico de paginas web. cruzar dorks com wayback machine acha conteudo que ja foi removido do alvo.",
+      "[!info] wayback machine e a melhor fonte de conteudo historico. combinado com dorks, encontra paginas que o alvo apagou faz meses ou anos.",
+      "cruzar resultados do shodan/censys com google pra achar servicos expostos e correlacionar com conteudo web.",
+      "[!tip] shodan e censys complementam google. shodan acha servicos na rede, google acha conteudo web. cruzar os dois da visao completa do attack surface.",
+      "github code search via api ou gh cli permite buscar em escala sem captcha.",
+      "[!warning] github code search via api requer autenticacao (gh auth login). limite de 10 requests/minuto na api de search."
+    ]
+  },
+  "classification": {
+    "note_id": "note-google-dorking",
+    "title": "google dorking",
+    "recon_type": "passive",
+    "assessment": "external",
+    "bug_bounty": "applicable",
+    "risk_level": 0,
+    "approval_level": "none",
+    "skill_target": "recon/osint",
+    "internal_pack": false,
+    "macos_findings": [],
+    "disabled_sections": [],
+    "policy_note": "search-engine dorking is fully passive",
+    "required_tools": [
+      "browser",
+      "curl"
+    ],
+    "required_api_keys": [],
+    "network_noise": "none",
+    "request_volume": "low",
+    "scope_risk": "low",
+    "third_party_impact": "none"
+  },
+  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "source_file": "references/recon/Recon-bundle.html",
+  "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
+}
