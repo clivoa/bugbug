@@ -70,10 +70,22 @@ def plan_imports(directory: str | Path, mapping: dict[str, str] | None = None) -
     return results
 
 
-def apply_imports(directory: str | Path, manager, mapping: dict[str, str] | None = None) -> list[ImportResult]:
+def apply_imports(
+    directory: str | Path,
+    manager,
+    mapping: dict[str, str] | None = None,
+    *,
+    force: bool = False,
+) -> list[ImportResult]:
     """Import real (non-placeholder) tokens into the keychain via the manager.
 
-    Originals are NOT modified. Values are never printed. Returns the outcomes.
+    Safety:
+      * COLLISION: if a secret already exists it is SKIPPED (status
+        "exists-skipped") unless ``force=True`` (then status "replaced").
+        Never silently overwritten.
+      * write/verify FAILURES are caught: status "write-failed" (name only, no
+        value); the batch continues and reports partial completion.
+      * Originals are NOT modified. Values are never printed.
     """
     d = Path(directory)
     m = mapping or DEFAULT_MAP
@@ -82,11 +94,31 @@ def apply_imports(directory: str | Path, manager, mapping: dict[str, str] | None
         if r.status != "would-import":
             out.append(r)
             continue
+        existed = manager.exists(r.secret_name)
+        if existed and not force:
+            out.append(ImportResult(r.source, r.secret_name, "exists-skipped", token_len=r.token_len))
+            continue
         token = _extract_token(d / Path(r.source).name)
-        assert token is not None  # plan_imports already validated
-        manager.set(r.secret_name, token)
-        out.append(ImportResult(r.source, r.secret_name, "imported", token_len=len(token)))
+        if token is None:  # defensive: file changed between plan and apply
+            out.append(ImportResult(r.source, r.secret_name, "no-token"))
+            continue
+        try:
+            manager.set(r.secret_name, token)
+            if manager.get(r.secret_name) != token:            # verify round-trip
+                raise RuntimeError("post-write verification mismatch")
+            status = "replaced" if existed else "imported"
+            out.append(ImportResult(r.source, r.secret_name, status, token_len=len(token)))
+        except Exception:  # noqa: BLE001 — never surface the value/traceback
+            out.append(ImportResult(r.source, r.secret_name, "write-failed", token_len=len(token)))
     return out
+
+
+def summarize(results: list[ImportResult]) -> tuple[int, int, int]:
+    """Return (succeeded, skipped, failed) counts for partial-completion reporting."""
+    ok = sum(1 for r in results if r.status in ("imported", "replaced"))
+    failed = sum(1 for r in results if r.status == "write-failed")
+    skipped = sum(1 for r in results if r.status in ("exists-skipped", "placeholder-skipped", "no-token"))
+    return ok, skipped, failed
 
 
 def render_plan(results: list[ImportResult], applied: bool = False) -> str:
@@ -95,12 +127,20 @@ def render_plan(results: list[ImportResult], applied: bool = False) -> str:
     verb = "IMPORTED" if applied else "WOULD IMPORT"
     lines = []
     for r in results:
-        if r.status in ("would-import", "imported"):
-            lines.append(f"  [{verb}] {r.secret_name:<18} <- {r.source}  "
-                         f"(token length {r.token_len}, value not shown)")
+        n, src = f"{r.secret_name:<18}", r.source
+        if r.status in ("would-import", "imported", "replaced"):
+            tag = {"would-import": verb, "imported": "IMPORTED", "replaced": "REPLACED"}[r.status]
+            lines.append(f"  [{tag}] {n} <- {src}  (token length {r.token_len}, value not shown)")
+        elif r.status == "exists-skipped":
+            lines.append(f"  [skip]  {n} <- {src}  (already in keychain; use --force to replace)")
         elif r.status == "placeholder-skipped":
-            lines.append(f"  [skip]  {r.secret_name:<18} <- {r.source}  (placeholder, not a real token)")
+            lines.append(f"  [skip]  {n} <- {src}  (placeholder, not a real token)")
         elif r.status == "no-token":
-            lines.append(f"  [skip]  {r.secret_name:<18} <- {r.source}  (no {_TOKEN_KEY} field)")
+            lines.append(f"  [skip]  {n} <- {src}  (no {_TOKEN_KEY} field)")
+        elif r.status == "write-failed":
+            lines.append(f"  [FAIL]  {n} <- {src}  (keychain write/verify failed; value not shown)")
+    if applied:
+        ok, skipped, failed = summarize(results)
+        lines.append(f"  summary: {ok} imported, {skipped} skipped, {failed} failed")
     lines.append("  originals left untouched; verify with: hackbot secrets test <name>")
     return "\n".join(lines)

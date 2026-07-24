@@ -60,3 +60,47 @@ def test_originals_not_modified(synthetic_dir):
 
 def test_missing_dir_is_empty_plan(tmp_path):
     assert plan_imports(tmp_path / "does-not-exist") == []
+
+
+def test_collision_is_skipped_by_default(synthetic_dir):
+    mgr = SecretManager(backend=InMemoryBackend())
+    mgr.set("deepseek", "pre-existing-value")
+    results = {r.secret_name: r for r in apply_imports(synthetic_dir, mgr)}
+    assert results["DEEPSEEK_API_KEY"].status == "exists-skipped"
+    assert mgr.get("deepseek") == "pre-existing-value"   # NOT overwritten
+
+
+def test_collision_replaced_with_force(synthetic_dir):
+    mgr = SecretManager(backend=InMemoryBackend())
+    mgr.set("deepseek", "old")
+    results = {r.secret_name: r for r in apply_imports(synthetic_dir, mgr, force=True)}
+    assert results["DEEPSEEK_API_KEY"].status == "replaced"
+    assert mgr.get("deepseek") == "sk-deepseek-FAKE-abcdef0123456789"
+
+
+def test_write_failure_reports_without_traceback(synthetic_dir):
+    class FailingBackend(InMemoryBackend):
+        def set(self, name, value):
+            raise OSError("keychain write denied")
+    from hackbot.security.claude_import import summarize
+    mgr = SecretManager(backend=FailingBackend())
+    results = apply_imports(synthetic_dir, mgr)
+    r = {x.secret_name: x for x in results}["DEEPSEEK_API_KEY"]
+    assert r.status == "write-failed"
+    assert r.token_len > 0            # length recorded, value never present
+    ok, skipped, failed = summarize(results)
+    assert failed == 1 and ok == 0
+
+
+def test_dry_run_needs_no_backend(synthetic_dir, monkeypatch):
+    """import --dry-run must run without constructing any keychain backend."""
+    from hackbot.cli.main import app
+    monkeypatch.delenv("HACKBOT_SECRET_BACKEND", raising=False)
+    import hackbot.security.secrets as s
+
+    def _boom(*a, **k):
+        raise s.SecretError("keyring absent")
+
+    monkeypatch.setattr(s, "KeyringBackend", _boom)  # any backend use would fail
+    code = app(["secrets", "import-claude-settings", "--dir", str(synthetic_dir), "--dry-run"])
+    assert code == 0   # dry-run succeeded despite no usable backend
