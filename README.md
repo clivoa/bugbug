@@ -11,13 +11,26 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 
 ## Status
 
-Early build. Implemented and tested so far:
-- Cross-platform read-only diagnostic (`scripts/doctor.sh`, macOS + Linux).
-- Reference review of 17 upstream projects + PortSwigger MCP
-  ([`docs/reference-review.md`](docs/reference-review.md),
+Early build; **64 automated tests passing** on **Python 3.14** (project minimum
+3.11). Implemented and verified so far:
+- **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `version`) — stdlib-only core,
+  runs offline; installable as a wheel (`scripts/build_wheel.py` +
+  `scripts/smoke_test.sh`, both fully offline).
+- **Diagnostic** available two ways: packaged Python (`hackbot doctor [--json]`,
+  cross-platform, flags Python <3.11 as incompatible) and the pre-install shell
+  script (`scripts/doctor.sh`).
+- **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen
+  instances (no runtime expansion), IPv4/IPv6 CIDRs, segment-aware URL/path rules,
+  redirect re-checking, shared-CDN/cloud rejection.
+- **Secrets** (`src/hackbot/security/`) — native keychain via `keyring`
+  (values never in argv/logs), case-insensitive aliases, existence-only disclosure.
+- **Reference review** of 17 upstream projects total (including the PortSwigger MCP
+  server) ([`docs/reference-review.md`](docs/reference-review.md),
   [`docs/licenses-and-attribution.md`](docs/licenses-and-attribution.md)).
-- Recon-bundle normalization pipeline (parser → classifier → generated manifest +
-  review docs), with a 20-test safety suite. See below.
+- **Recon-bundle normalization** pipeline (parser → classifier → generated manifest
+  + review docs) with a 20-test safety suite, plus a **publication guard**
+  ([`docs/publication-guard.md`](docs/publication-guard.md)) that blocks pushing the
+  unlicensed bundle and its derivatives.
 
 ## Design principles
 
@@ -46,19 +59,34 @@ generated/   normalized (reviewed) layer built from immutable references
 references/  immutable source material (recon bundle; external clones git-ignored)
 ```
 
-## Quick start (diagnostic only — installs nothing)
+## Requirements
+
+- **Python ≥ 3.11** (developed/tested on 3.14). The CLI core has no third-party
+  runtime deps and runs offline.
+- macOS or Linux.
+
+## Quick start (read-only; installs nothing system-wide)
 
 ```bash
-scripts/doctor.sh            # human-readable environment report
-scripts/doctor.sh --json     # machine-readable
+# 1) diagnostic — pre-install shell version
+scripts/doctor.sh                       # human-readable
+scripts/doctor.sh --json                # machine-readable
+
+# 2) build + install the CLI offline into a local venv, then use it
+python3.11 -m venv .venv                # or any >=3.11 interpreter
+.venv/bin/python scripts/build_wheel.py
+.venv/bin/python -m pip install --no-index --no-deps dist/hackbot-*.whl
+.venv/bin/hackbot doctor --json
+.venv/bin/hackbot scope explain https://api.example.com/v1 --in example.com
+.venv/bin/hackbot secrets list          # existence only; values never shown
 ```
 
 ## Recon bundle pipeline
 
 ```bash
-PYTHONPATH=src python3 scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
-PYTHONPATH=src python3 scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/pytest tests/recon_bundle -q                    # safety tests
+.venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
+.venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
+.venv/bin/python -m pytest tests -q                 # full safety suite (64 tests)
 ```
 
 ## Documentation

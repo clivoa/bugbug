@@ -29,6 +29,15 @@ def test_unknown_name_rejected():
         canonical_name("not a valid name!!")
 
 
+def test_alias_resolution_is_case_insensitive():
+    for variant in ("kimi3", "Kimi3", "KIMI3", "KiMi3"):
+        assert canonical_name(variant) == "MOONSHOT_API_KEY", variant
+    for variant in ("shodan", "Shodan", "SHODAN"):
+        assert canonical_name(variant) == "SHODAN_API_KEY", variant
+    for variant in ("claude", "Claude", "CLAUDE", "anthropic", "Anthropic"):
+        assert canonical_name(variant) == "ANTHROPIC_API_KEY", variant
+
+
 def test_set_get_roundtrip(mgr):
     cname = mgr.set("shodan", "s3cr3t-value")
     assert cname == "SHODAN_API_KEY"

@@ -125,3 +125,55 @@ def test_repo_scope(scope):
 def test_contract_and_mobile_classification():
     assert classify_target("eth:0x" + "a" * 40) == ScopeKind.CONTRACT
     assert classify_target("com.example.app") == ScopeKind.MOBILE
+
+
+# --- IPv6 CIDR -------------------------------------------------------------
+def test_ipv6_cidr_in_scope():
+    s = Scope(in_scope=["2001:db8::/32"], out_of_scope=[])
+    d = s.check("http://[2001:db8::1]/")
+    assert d.allowed and "ip-literal" in d.risk_flags
+    assert s.check("2001:db8:0:0::abcd").allowed          # bare IPv6 literal
+
+
+def test_ipv6_outside_cidr_denied():
+    s = Scope(in_scope=["2001:db8::/32"], out_of_scope=[])
+    assert not s.check("http://[2001:dead::1]/").allowed
+
+
+def test_ipv4_not_matched_by_ipv6_cidr_and_vice_versa():
+    s6 = Scope(in_scope=["2001:db8::/32"], out_of_scope=[])
+    assert not s6.check("http://203.0.113.5/").allowed     # v4 vs v6 rule
+    s4 = Scope(in_scope=["203.0.113.0/24"], out_of_scope=[])
+    assert not s4.check("http://[2001:db8::1]/").allowed    # v6 vs v4 rule
+
+
+# --- URL / path scope rules ------------------------------------------------
+def test_path_rule_segment_aware():
+    s = Scope(in_scope=["example.com/api"], out_of_scope=[])
+    assert s.check("https://example.com/api").allowed
+    assert s.check("https://example.com/api/users/1").allowed
+    d = s.check("https://example.com/api2")               # NOT a path segment match
+    assert not d.allowed and "path-out" in d.risk_flags
+    assert not s.check("https://example.com/admin").allowed
+
+
+def test_path_rule_with_scheme_and_wildcard():
+    s = Scope(in_scope=["https://*.example.com/admin"], out_of_scope=[])
+    assert s.check("https://panel.example.com/admin/x").allowed
+    assert not s.check("https://panel.example.com/public").allowed
+    assert not s.check("https://example.com/admin").allowed  # bare apex excluded by *.
+
+
+def test_host_only_rule_matches_any_path():
+    s = Scope(in_scope=["example.com"], out_of_scope=[])
+    assert s.check("https://example.com/anything/at/all").allowed
+
+
+# --- genuine instance immutability ----------------------------------------
+def test_scope_instance_is_frozen(scope):
+    with pytest.raises(AttributeError):
+        scope._in = ()                    # cannot reassign internal state
+    with pytest.raises(AttributeError):
+        scope.name = "hacked"             # cannot reassign public attr
+    with pytest.raises(AttributeError):
+        scope.new_attr = 1                # cannot add attributes (slots + frozen)

@@ -83,7 +83,25 @@ if has brew; then emit toolchain homebrew "$(brew --version 2>/dev/null | head -
 elif [ "$OS" = "Darwin" ]; then emit toolchain homebrew "not installed" missing
 else emit toolchain homebrew "n/a (Linux)" info; fi
 
-PYV="$(ver python3 --version)"; [ -n "$PYV" ] && emit toolchain python3 "$PYV" ok || emit toolchain python3 "not found" missing
+PYV="$(ver python3 --version)"
+if [ -n "$PYV" ]; then
+  # require Python >= 3.11 (hackbot minimum)
+  PYNUM="$(printf '%s' "$PYV" | sed -E 's/[^0-9.]//g')"
+  PYMAJ="${PYNUM%%.*}"; PYREST="${PYNUM#*.}"; PYMIN="${PYREST%%.*}"
+  if [ "${PYMAJ:-0}" -gt 3 ] 2>/dev/null || { [ "${PYMAJ:-0}" -eq 3 ] && [ "${PYMIN:-0}" -ge 11 ]; } 2>/dev/null; then
+    emit toolchain python3 "$PYV" ok
+  else
+    emit toolchain python3 "$PYV (INCOMPATIBLE: need >= 3.11)" warn
+  fi
+  # note a newer interpreter if the default python3 is too old
+  for alt in python3.14 python3.13 python3.12 python3.11; do
+    if command -v "$alt" >/dev/null 2>&1; then
+      emit toolchain python311plus "$alt -> $($alt --version 2>&1)" ok; break
+    fi
+  done
+else
+  emit toolchain python3 "not found" missing
+fi
 has uv   && emit toolchain uv   "$(uv --version 2>/dev/null)" ok   || emit toolchain uv   "not installed (recommended)" warn
 has pipx && emit toolchain pipx "$(pipx --version 2>/dev/null)" ok || emit toolchain pipx "not installed (recommended)" warn
 NODEV="$(ver node --version)"; [ -n "$NODEV" ] && emit toolchain node "$NODEV" ok || emit toolchain node "not found" warn
