@@ -149,6 +149,7 @@ Final verification after the remediation commit:
 - `mypy src`: passed for 33 source files.
 - Changed-file `ruff format --check`: passed.
 - `git diff --check`: passed.
+
 - Repository-wide `ruff format --check .` still reports only the pre-existing
   root `conftest.py`; 74 other files, including both Task 4 files, are formatted.
 
@@ -200,6 +201,43 @@ Final verification:
 
 - Focused approval suite: `104 passed in 0.55s`.
 - Full suite: `438 passed in 3.31s`.
+- `ruff check .`: passed.
+- `mypy src`: passed for 33 source files.
+- Changed-file `ruff format --check`: passed.
+- `git diff --check`: passed.
+
+## Final follow-up — credential variants and directory-fsync retry
+
+- Secret screening now normalizes spaces, underscores, hyphens, dots, and other
+  separators before classifying credential key names. It rejects conservative
+  generic and provider-specific names such as `client_secret`,
+  `refresh_token`, `access_token`, AWS access/secret/session keys,
+  `database_url`, Google/Azure/GitHub/OpenAI-style credential environment
+  names, and suffix-equivalent nested names.
+- Direct material screening rejects PEM/OpenSSH/PGP private-key blocks, JWTs,
+  high-confidence provider token prefixes, and credential-bearing URI userinfo
+  for any syntactically valid URI scheme. Mapping keys and values and sequence
+  elements remain recursively screened, and the controlled rejection never
+  includes the rejected value.
+- A cross-product regression test places reviewer credential examples and
+  underscore, hyphen, and dotted variants into every persisted request text
+  field and exact argv. Sensitive required-header names receive separate
+  separator-variant coverage.
+- Every validated approval root/state-directory open now fsyncs its parent
+  descriptor, regardless of whether that attempt created the directory. Exact
+  fault/retry tests fail the first parent fsync after a successful `mkdir` for
+  both `approvals/` and `pending/`, then verify the retry flushes the engagement
+  or approval-root parent before opening the next child.
+
+RED evidence: the new credential matrix exposed accepted PEM, normalized-key,
+cloud-environment, and credential-URI variants; the retry spies showed no
+parent fsync between the retried directory open and the next child open. Both
+failures were observed before their production changes.
+
+Final verification:
+
+- Focused approval suite: `292 passed in 1.60s`.
+- Full suite: `626 passed in 3.90s`.
 - `ruff check .`: passed.
 - `mypy src`: passed for 33 source files.
 - Changed-file `ruff format --check`: passed.

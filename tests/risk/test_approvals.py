@@ -306,6 +306,115 @@ def test_challenge_rejects_sensitive_required_header_names(
     assert header_name not in str(captured.value)
 
 
+_PERSISTED_REQUEST_TEXT_FIELDS = (
+    "target",
+    "argv",
+    "hypothesis_id",
+    "rationale",
+    "data_touched",
+    "expected_impact",
+    "stop_condition",
+    "cleanup_plan",
+    "program_rule",
+)
+
+_REVIEW_SECRET_VARIANTS = (
+    "-----BEGIN PRIVATE KEY-----\nZmFrZS1rZXktbWF0ZXJpYWw=\n-----END PRIVATE KEY-----",
+    "-----BEGIN OPENSSH PRIVATE KEY-----\nZmFrZS1vcGVuc3NoLWtleQ==",
+    "client_secret=client-value-0123456789",
+    "client-secret: client-value-0123456789",
+    "config.client.secret = client-value-0123456789",
+    "refresh_token=refresh-value-0123456789",
+    "access-token: access-value-0123456789",
+    "AWS_ACCESS_KEY_ID=AKIA0123456789ABCDEF",
+    "aws.secret.access.key=aws-value-0123456789",
+    "AWS_SECRET_ACCESS_KEY=aws-value-0123456789",
+    "DATABASE_URL=postgresql://dbuser:dbpass@db.example/research",
+    "postgresql://dbuser:dbpass@db.example/research",
+    "GOOGLE_APPLICATION_CREDENTIALS=/tmp/service-account.json",
+    "AZURE_CLIENT_SECRET=azure-value-0123456789",
+    "AZURE_STORAGE_CONNECTION_STRING=AccountName=fake;AccountKey=fake",
+    "GOOGLE_CLOUD_KEYFILE_JSON=/tmp/provider-key.json",
+    "GCLOUD_SERVICE_KEY=provider-value-0123456789",
+    "DOCKER_AUTH_CONFIG=provider-value-0123456789",
+    "OPENAI_API_KEY=provider-value-0123456789",
+    "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJyZXNlYXJjaGVyIn0.signaturevalue",
+)
+
+
+def _secret_bearing_request(definition, action_request, field, secret_text):
+    if field == "target":
+        definition = replace(
+            definition,
+            argv_template=("/opt/reviewed/probe", "--rate", "{rate}"),
+        )
+        action_request = replace(
+            action_request,
+            target=secret_text,
+            argv=("/opt/reviewed/probe", "--rate", "1"),
+        )
+    elif field == "argv":
+        definition = replace(
+            definition,
+            argv_template=(*definition.argv_template, secret_text),
+        )
+        action_request = replace(action_request, argv=(*action_request.argv, secret_text))
+    else:
+        action_request = replace(action_request, **{field: secret_text})
+    return definition, action_request
+
+
+@pytest.mark.parametrize("field", _PERSISTED_REQUEST_TEXT_FIELDS)
+@pytest.mark.parametrize("secret_text", _REVIEW_SECRET_VARIANTS)
+def test_challenge_rejects_credential_variants_in_every_persisted_request_text(
+    definition,
+    action_request,
+    context,
+    fixed_now,
+    field,
+    secret_text,
+):
+    secret_definition, secret_request = _secret_bearing_request(
+        definition, action_request, field, secret_text
+    )
+    with pytest.raises(ApprovalError) as captured:
+        build_challenge(
+            secret_definition,
+            secret_request,
+            context,
+            now=fixed_now,
+            nonce="abc123",
+        )
+    assert captured.value.code == "APPROVAL_SECRET"
+    assert secret_text not in str(captured.value)
+
+
+@pytest.mark.parametrize(
+    "header_name",
+    (
+        "client-secret",
+        "refresh-token",
+        "access-token",
+        "aws-access-key-id",
+        "aws-secret-access-key",
+        "database-url",
+    ),
+)
+def test_challenge_rejects_separator_variant_credential_header_names(
+    definition, action_request, context, fixed_now, header_name
+):
+    with pytest.raises(ApprovalError) as captured:
+        build_challenge(
+            definition,
+            replace(action_request, required_headers=(header_name,)),
+            context,
+            now=fixed_now,
+            nonce="abc123",
+        )
+    assert captured.value.code == "APPROVAL_SECRET"
+    assert header_name not in str(captured.value)
+
+
 def test_build_challenge_converts_expiry_overflow_to_approval_error(
     definition, action_request, context
 ):
@@ -1017,6 +1126,74 @@ def test_first_use_fsyncs_each_new_directory_parent(store, issue, monkeypatch):
         )
         parent_fd = calls[index][2]
         assert ("fsync", parent_fd, None) in calls[index + 1 : next_index]
+
+
+@pytest.mark.parametrize(
+    ("directory_name", "next_directory", "parent_label"),
+    (
+        ("approvals", "pending", "engagement"),
+        ("pending", "granted", "root"),
+    ),
+)
+def test_directory_parent_fsync_is_retried_after_mkdir_fsync_failure(
+    store,
+    monkeypatch,
+    directory_name,
+    next_directory,
+    parent_label,
+):
+    import hackbot.risk.approvals as approvals
+
+    engagement_fd = store._engagement_fd
+    assert engagement_fd is not None
+    engagement_inode = os.fstat(engagement_fd).st_ino
+    root_inode: int | None = None
+    events: list[tuple[str, str]] = []
+    failed = False
+    real_open = approvals.os.open
+    real_fsync = approvals.os.fsync
+
+    def record_open(path, *args, **kwargs) -> int:
+        nonlocal root_inode
+        fd = real_open(path, *args, **kwargs)
+        if path == "approvals":
+            root_inode = os.fstat(fd).st_ino
+        if isinstance(path, str):
+            events.append(("open", path))
+        return fd
+
+    def parent_name(fd: int) -> str | None:
+        inode = os.fstat(fd).st_ino
+        if inode == engagement_inode:
+            return "engagement"
+        if root_inode is not None and inode == root_inode:
+            return "root"
+        return None
+
+    def fail_first_parent_fsync(fd: int) -> None:
+        nonlocal failed
+        label = parent_name(fd)
+        if label is not None:
+            events.append(("fsync", label))
+        if not failed and label == parent_label:
+            failed = True
+            raise OSError("simulated parent fsync failure")
+        real_fsync(fd)
+
+    monkeypatch.setattr(approvals.os, "open", record_open)
+    monkeypatch.setattr(approvals.os, "fsync", fail_first_parent_fsync)
+    with pytest.raises(ApprovalError):
+        with store._layout():
+            pass
+    assert failed
+
+    events.clear()
+    with store._layout():
+        pass
+
+    opened_index = events.index(("open", directory_name))
+    next_opened_index = events.index(("open", next_directory))
+    assert ("fsync", parent_label) in events[opened_index + 1 : next_opened_index]
 
 
 def _crash_after_transition(
