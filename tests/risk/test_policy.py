@@ -6,7 +6,12 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from hackbot.risk.context import load_policy_context
+from hackbot.risk.context import (
+    _canonical_policy_data,
+    _policy_digest,
+    _scope_snapshot,
+    load_policy_context,
+)
 from hackbot.risk.models import (
     ActionDefinition,
     ActionRequest,
@@ -72,7 +77,21 @@ def engine():
 
 
 def _context(context, **policy_changes):
-    return replace(context, testing_policy=replace(context.testing_policy, **policy_changes))
+    testing_policy = replace(context.testing_policy, **policy_changes)
+    scope_in, scope_out = _scope_snapshot(context.scope.in_scope, context.scope.out_of_scope)
+    digest = _policy_digest(
+        _canonical_policy_data(
+            engagement_id=context.engagement_id,
+            engagement_path=context.engagement_path,
+            program_id=context.program_id,
+            authorization=context.authorization,
+            scope_in=scope_in,
+            scope_out=scope_out,
+            testing_policy=testing_policy,
+            active_profile=context.active_profile,
+        )
+    )
+    return replace(context, testing_policy=testing_policy, policy_digest=digest)
 
 
 def test_unknown_action_is_denied(engine, context, action_request):
@@ -152,19 +171,25 @@ def test_l3_is_denied_even_with_grant(engine, context, action_request):
 
 def test_request_cannot_lower_registered_floor(engine, context, action_request):
     decision = engine.evaluate(
-        replace(action_request, action_id="fixture.l2", requested_risk=RiskLevel.L0), context
+        replace(action_request, action_id="fixture.l2", requested_risk=RiskLevel.L0),
+        context,
+        now=datetime(2026, 7, 24, 12, 0, tzinfo=UTC),
     )
     assert decision.kind is DecisionKind.REQUIRES_APPROVAL
     assert decision.effective_risk is RiskLevel.L2
     assert decision.reason_code == "REQUIRES_APPROVAL"
+    assert decision.challenge is not None
 
 
-def test_l2_ignores_grants_in_this_task(engine, context, action_request):
+def test_l2_rejects_an_invalid_grant(engine, context, action_request):
     decision = engine.evaluate(
-        replace(action_request, action_id="fixture.l2"), context, grant=object()
+        replace(action_request, action_id="fixture.l2"),
+        context,
+        grant=object(),
+        now=datetime(2026, 7, 24, 12, 0, tzinfo=UTC),
     )
-    assert decision.kind is DecisionKind.REQUIRES_APPROVAL
-    assert decision.reason_code == "REQUIRES_APPROVAL"
+    assert decision.kind is DecisionKind.DENY
+    assert decision.reason_code == "DENY_APPROVAL_MISMATCH"
     assert decision.challenge is None
 
 
@@ -622,7 +647,7 @@ def test_out_of_band_l0_action_is_elevated_to_l2_and_still_requires_approval(
     approval = out_of_band_engine.evaluate(
         action_request,
         _context(context, out_of_band_testing_allowed=True),
-        grant=object(),
+        now=datetime(2026, 7, 24, 12, 0, tzinfo=UTC),
     )
     assert approval.kind is DecisionKind.REQUIRES_APPROVAL
     assert approval.effective_risk is RiskLevel.L2

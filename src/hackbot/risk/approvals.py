@@ -416,7 +416,7 @@ def _validate_inputs(
         from hackbot.risk.policy import RiskEngine
         from hackbot.risk.registry import ActionRegistry
 
-        decision = RiskEngine(ActionRegistry([definition])).evaluate(
+        decision = RiskEngine(ActionRegistry([definition]))._evaluate_without_approval(
             request, context, now=_utc(now, name="now")
         )
     except (TypeError, ValueError) as exc:
@@ -1744,6 +1744,29 @@ class ApprovalStore:
                 return
             raise
 
+    def _audit_artifact_rejection(
+        self,
+        artifact: dict[str, object],
+        error: ApprovalError,
+        *,
+        now: datetime,
+    ) -> None:
+        """Audit a rejection using only a previously validated safe projection."""
+        kind = artifact.get("kind")
+        allowed_kinds = frozenset({"pending"}) if kind == "pending" else frozenset({"granted"})
+        self._validate_artifact_value(artifact, allowed_kinds=allowed_kinds)
+        event = {
+            "timestamp": _timestamp(now),
+            "engagement_id": artifact["engagement_id"],
+            "action_id": artifact["action_id"],
+            "challenge_digest": artifact["challenge_digest"],
+            "effective_risk": artifact["effective_risk"],
+            "result": "rejected",
+            "reason_code": error.code,
+        }
+        with self._layout() as layout:
+            self._append_event_record(layout, event, idempotent=False)
+
     def create_pending(
         self,
         definition: ActionDefinition | ApprovalChallenge,
@@ -1867,6 +1890,78 @@ class ApprovalStore:
             except ApprovalError as error:
                 self._audit_rejection(layout, challenge, error, now=granted_at)
                 raise
+
+    def challenge_for_grant(
+        self,
+        grant: ApprovalGrant,
+        definition: ActionDefinition,
+        request: ActionRequest,
+        context: PolicyContext,
+        *,
+        now: datetime,
+    ) -> ApprovalChallenge:
+        """Rebuild the current exact challenge from validated persisted timing data.
+
+        This returns the typed, presentation-safe challenge rather than exposing
+        the approval artifact.  Final state and race checks remain the
+        responsibility of :meth:`consume`.
+        """
+        checked_now = _utc(now, name="now")
+        if not isinstance(grant, ApprovalGrant):
+            raise ApprovalError("APPROVAL_MISMATCH", "approval grant does not match")
+        digest = self._name(grant.challenge_digest).removesuffix(".json")
+        with self._layout() as layout:
+            with self._digest_lock(layout, digest):
+                self._recover_locked(layout, digest)
+                current = self._state_locked(layout, digest)
+                if current is None:
+                    raise ApprovalError("APPROVAL_MISSING", "approval is unavailable")
+                _state, record = current
+                artifact = record.value
+                if (
+                    artifact.get("engagement_id") != self.engagement_id
+                    or artifact.get("engagement_path") != self.engagement_path
+                ):
+                    raise ApprovalError(
+                        "APPROVAL_ENGAGEMENT_MISMATCH",
+                        "approval engagement does not match",
+                    )
+                created_at = _parse_timestamp(artifact.get("created_at"), name="created_at")
+                nonce = artifact.get("nonce")
+                if not isinstance(nonce, str):
+                    raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
+
+        try:
+            if (
+                context.engagement_id != self.engagement_id
+                or context.engagement_path != self.engagement_path
+            ):
+                raise ApprovalError(
+                    "APPROVAL_ENGAGEMENT_MISMATCH",
+                    "approval engagement does not match",
+                )
+            if grant.policy_digest != context.policy_digest:
+                raise ApprovalError("APPROVAL_POLICY_MISMATCH", "approval policy does not match")
+            challenge = build_challenge(
+                definition,
+                request,
+                context,
+                now=created_at,
+                nonce=nonce,
+            )
+            self._assert_local(challenge)
+            if challenge.challenge_digest != grant.challenge_digest:
+                raise ApprovalError("APPROVAL_MISMATCH", "approval challenge does not match")
+            if not self._matches(challenge, artifact):
+                if artifact.get("policy_digest") != challenge.policy_digest:
+                    raise ApprovalError(
+                        "APPROVAL_POLICY_MISMATCH", "approval policy does not match"
+                    )
+                raise ApprovalError("APPROVAL_MISMATCH", "approval challenge does not match")
+            return challenge
+        except ApprovalError as error:
+            self._audit_artifact_rejection(artifact, error, now=checked_now)
+            raise
 
     def consume(
         self, grant: ApprovalGrant, challenge: ApprovalChallenge, *, now: datetime
