@@ -46,7 +46,7 @@ _SECRET_MATERIAL_RE = re.compile(
     r"|-----BEGIN PGP PRIVATE KEY BLOCK-----"
     r"|(?:proxy-)?authorization\s*:\s*\S+"
     r"|(?:cookie|set-cookie|x-auth-token|x-api-key|authentication-info)\s*:\s*\S+"
-    r"|[A-Za-z][A-Za-z0-9+.-]*://[^\s/@:]+:[^\s/@]+@"
+    r"|[A-Za-z][A-Za-z0-9+.-]*://[^\s/@?#]+@"
     r"|eyJ[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}\.[A-Za-z0-9_-]{4,}"
     r"|(?:AKIA|ASIA)[A-Z0-9]{16}"
     r"|(?:sk|ghp|glpat|xox[baprs])[_-][A-Za-z0-9_-]{12,}"

@@ -458,6 +458,15 @@ def test_challenge_rejects_separator_variant_credential_header_names(
     assert header_name not in str(captured.value)
 
 
+@pytest.mark.parametrize(
+    "secret_rule",
+    (
+        "https://dbuser:dbpass@hidden.example/private",
+        "https://opaquecredentialvalue@hidden.example/private",
+        "https://:passwordonly@hidden.example/private",
+        "https://usernameonly:@hidden.example/private",
+    ),
+)
 @pytest.mark.parametrize("scope_side", ("in_scope", "out_of_scope"))
 def test_challenge_rejects_url_userinfo_anywhere_in_scope_snapshot_without_echo(
     definition,
@@ -465,8 +474,8 @@ def test_challenge_rejects_url_userinfo_anywhere_in_scope_snapshot_without_echo(
     context,
     fixed_now,
     scope_side,
+    secret_rule,
 ):
-    secret_rule = "https://dbuser:dbpass@hidden.example/private"
     in_scope = context.scope.in_scope
     out_of_scope = context.scope.out_of_scope
     if scope_side == "in_scope":
@@ -495,7 +504,7 @@ def test_engine_maps_canonical_scope_secret_to_stable_denial(
     context,
     fixed_now,
 ):
-    secret_rule = "https://dbuser:dbpass@hidden.example/private"
+    secret_rule = "https://opaquecredentialvalue@hidden.example/private"
     secret_scope = Scope((*context.scope.in_scope, secret_rule), context.scope.out_of_scope)
     secret_context = _replace_context(context, scope=secret_scope)
     engine = RiskEngine(ActionRegistry([definition]))
@@ -549,7 +558,7 @@ def test_failed_pending_issue_leaves_no_secret_in_files_or_audit(
     context,
     fixed_now,
 ):
-    secret_rule = "https://dbuser:dbpass@hidden.example/private"
+    secret_rule = "https://opaquecredentialvalue@hidden.example/private"
     secret_scope = Scope((*context.scope.in_scope, secret_rule), context.scope.out_of_scope)
     secret_context = _replace_context(context, scope=secret_scope)
 
@@ -579,6 +588,35 @@ def test_safe_scope_rule_is_still_allowed_in_canonical_binding(
     fixed_now,
 ):
     safe_rule = "https://hidden.example/private"
+    safe_scope = Scope((*context.scope.in_scope, safe_rule), context.scope.out_of_scope)
+    safe_context = _replace_context(context, scope=safe_scope)
+
+    challenge = build_challenge(
+        definition,
+        action_request,
+        safe_context,
+        now=fixed_now,
+        nonce="abc123",
+    )
+
+    assert safe_rule.encode() in challenge.binding
+
+
+@pytest.mark.parametrize(
+    "safe_rule",
+    (
+        "https://hidden.example/private",
+        "https://hidden.example/users/operator@example.test",
+        "mailto:operator@example.test",
+    ),
+)
+def test_plain_urls_and_email_like_text_do_not_trigger_uri_userinfo_filter(
+    definition,
+    action_request,
+    context,
+    fixed_now,
+    safe_rule,
+):
     safe_scope = Scope((*context.scope.in_scope, safe_rule), context.scope.out_of_scope)
     safe_context = _replace_context(context, scope=safe_scope)
 
