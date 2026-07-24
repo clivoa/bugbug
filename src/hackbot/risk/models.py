@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, IntEnum
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from hackbot.scope import Scope
 
@@ -76,6 +77,30 @@ def _bounded_optional_int(
     if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
         raise ValueError(f"{name} must be an integer from {minimum} through {maximum}")
     return value
+
+
+def _bounded_int(value: object, *, name: str, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+        raise ValueError(f"{name} must be an integer from {minimum} through {maximum}")
+    return value
+
+
+def _normalized_unique_strings(value: object, *, name: str) -> tuple[str, ...]:
+    if isinstance(value, str):
+        raise ValueError(f"{name} must be a sequence of strings")
+    try:
+        values: tuple[object, ...] = tuple(value)  # type: ignore[arg-type]
+    except TypeError as exc:
+        raise ValueError(f"{name} must be a sequence of strings") from exc
+    normalized = tuple(
+        _text(item, name=f"{name}[{index}]", limit=_DESCRIPTIVE_LIMIT).strip().lower()
+        for index, item in enumerate(values)
+    )
+    if any(not item for item in normalized):
+        raise ValueError(f"{name} values must be non-empty")
+    if len(set(normalized)) != len(normalized):
+        raise ValueError(f"{name} values must be unique")
+    return normalized
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,11 +226,28 @@ class TestingPolicy:
     source_ip_requirements: tuple[str, ...] = ()
     required_headers: tuple[str, ...] = ()
     restricted_hours: tuple[str, ...] = ()
+    restricted_hours_timezone: str | None = None
     prohibited_tools: tuple[str, ...] = ()
     prohibited_vulnerability_types: tuple[str, ...] = ()
     excluded_impacts: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        _bounded_int(
+            self.max_requests_per_second,
+            name="max_requests_per_second",
+            minimum=_RATE_MIN,
+            maximum=_RATE_MAX,
+        )
+        _bounded_int(
+            self.concurrency,
+            name="concurrency",
+            minimum=_CONCURRENCY_MIN,
+            maximum=_CONCURRENCY_MAX,
+        )
+        if self.social_engineering_allowed is not False:
+            raise ValueError("social_engineering_allowed must be false")
+        if self.denial_of_service_allowed is not False:
+            raise ValueError("denial_of_service_allowed must be false")
         for name in (
             "source_ip_requirements",
             "required_headers",
@@ -217,7 +259,23 @@ class TestingPolicy:
             object.__setattr__(
                 self,
                 name,
-                tuple(getattr(self, name)),
+                _normalized_unique_strings(getattr(self, name), name=name),
+            )
+        timezone = self.restricted_hours_timezone
+        if timezone is not None:
+            timezone = _text(
+                timezone,
+                name="restricted_hours_timezone",
+                limit=_IDENTIFIER_LIMIT,
+            ).strip()
+            try:
+                ZoneInfo(timezone)
+            except ZoneInfoNotFoundError as exc:
+                raise ValueError("restricted_hours_timezone must be a valid IANA name") from exc
+            object.__setattr__(self, "restricted_hours_timezone", timezone)
+        if bool(self.restricted_hours) != bool(timezone):
+            raise ValueError(
+                "restricted_hours and restricted_hours_timezone must be supplied together"
             )
 
 
@@ -262,6 +320,18 @@ class ApprovalChallenge:
     expires_at: datetime
     nonce: str
     challenge_digest: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "argv",
+            _tuple_of_strings(
+                self.argv,
+                name="argv",
+                item_limit=_ARGV_ITEM_LIMIT,
+                maximum_items=_ARGV_LIMIT,
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)

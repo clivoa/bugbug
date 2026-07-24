@@ -1,8 +1,15 @@
 from dataclasses import FrozenInstanceError
+from datetime import UTC, datetime
 
 import pytest
 
-from hackbot.risk.models import ActionDefinition, ActionRequest, RiskLevel
+from hackbot.risk.models import (
+    ActionDefinition,
+    ActionRequest,
+    ApprovalChallenge,
+    RiskLevel,
+)
+from hackbot.risk.models import TestingPolicy as _TestingPolicy
 from hackbot.risk.registry import ActionRegistry, RegistryError
 
 
@@ -70,3 +77,129 @@ def test_registry_rejects_duplicate_and_unknown_actions():
     registry = ActionRegistry([action])
     with pytest.raises(RegistryError):
         registry.require("missing")
+
+
+def _testing_policy(**changes):
+    values = {
+        "max_requests_per_second": 2,
+        "concurrency": 2,
+        "automated_scanning_allowed": False,
+        "authenticated_testing_allowed": False,
+        "account_creation_allowed": False,
+        "multiple_accounts_allowed": False,
+        "social_engineering_allowed": False,
+        "denial_of_service_allowed": False,
+        "out_of_band_testing_allowed": False,
+    }
+    values.update(changes)
+    return _TestingPolicy(**values)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_requests_per_second", 0),
+        ("max_requests_per_second", True),
+        ("max_requests_per_second", 1_001),
+        ("max_requests_per_second", None),
+        ("concurrency", 0),
+        ("concurrency", "1"),
+        ("concurrency", 101),
+        ("concurrency", None),
+    ],
+)
+def test_testing_policy_rejects_invalid_rate_and_concurrency(field, value):
+    with pytest.raises(ValueError, match=field):
+        _testing_policy(**{field: value})
+
+
+@pytest.mark.parametrize(
+    "field", ["social_engineering_allowed", "denial_of_service_allowed"]
+)
+def test_testing_policy_rejects_absolute_l3_flags(field):
+    with pytest.raises(ValueError, match=field):
+        _testing_policy(**{field: True})
+
+
+def test_testing_policy_normalizes_immutable_collections_and_timezone():
+    policy = _testing_policy(
+        source_ip_requirements=[" OFFICE-IP "],
+        required_headers=[" X-Research-Id "],
+        restricted_hours=["09:00-10:00"],
+        restricted_hours_timezone="Europe/Madrid",
+        prohibited_tools=[" NMAP "],
+        prohibited_vulnerability_types=[" XSS "],
+        excluded_impacts=[" Availability "],
+    )
+
+    assert policy.source_ip_requirements == ("office-ip",)
+    assert policy.required_headers == ("x-research-id",)
+    assert policy.restricted_hours == ("09:00-10:00",)
+    assert policy.restricted_hours_timezone == "Europe/Madrid"
+    assert policy.prohibited_tools == ("nmap",)
+    assert policy.prohibited_vulnerability_types == ("xss",)
+    assert policy.excluded_impacts == ("availability",)
+
+
+@pytest.mark.parametrize("field", ["required_headers", "prohibited_tools", "excluded_impacts"])
+def test_testing_policy_rejects_duplicate_normalized_collection_values(field):
+    with pytest.raises(ValueError, match=field):
+        _testing_policy(**{field: ["NMAP", " nmap "]})
+
+
+def test_testing_policy_rejects_unknown_restricted_hours_timezone():
+    with pytest.raises(ValueError, match="restricted_hours_timezone"):
+        _testing_policy(restricted_hours_timezone="Mars/Olympus")
+
+
+def test_approval_challenge_canonicalizes_and_validates_argv():
+    now = datetime(2026, 7, 24, tzinfo=UTC)
+    challenge = ApprovalChallenge(
+        engagement_id="sample",
+        program_id="program",
+        target="https://example.com",
+        action_id="fixture.scan",
+        argv=["fixture", "scan"],
+        effective_risk=RiskLevel.L2,
+        rationale="Validate one authorized hypothesis.",
+        hypothesis_id="hyp-1",
+        expected_impact="One low-rate request.",
+        rate=1,
+        concurrency=1,
+        data_touched="Public response headers.",
+        stop_condition="Stop on any rate limit.",
+        program_rule="Automated testing rule.",
+        cleanup_plan="No state is created.",
+        scope_digest="scope-digest",
+        policy_digest="policy-digest",
+        created_at=now,
+        expires_at=now,
+        nonce="nonce",
+        challenge_digest="challenge-digest",
+    )
+
+    assert challenge.argv == ("fixture", "scan")
+    with pytest.raises(ValueError, match="argv"):
+        ApprovalChallenge(
+            engagement_id="sample",
+            program_id="program",
+            target="https://example.com",
+            action_id="fixture.scan",
+            argv=["fixture"] * 129,
+            effective_risk=RiskLevel.L2,
+            rationale="Validate one authorized hypothesis.",
+            hypothesis_id="hyp-1",
+            expected_impact="One low-rate request.",
+            rate=1,
+            concurrency=1,
+            data_touched="Public response headers.",
+            stop_condition="Stop on any rate limit.",
+            program_rule="Automated testing rule.",
+            cleanup_plan="No state is created.",
+            scope_digest="scope-digest",
+            policy_digest="policy-digest",
+            created_at=now,
+            expires_at=now,
+            nonce="nonce",
+            challenge_digest="challenge-digest",
+        )
