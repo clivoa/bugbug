@@ -1,0 +1,28 @@
+"""Immutable registry of code-owned action definitions."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable
+from types import MappingProxyType
+
+from hackbot.risk.models import ActionDefinition
+
+
+class RegistryError(Exception):
+    """Raised when a registry cannot safely resolve an action definition."""
+
+
+class ActionRegistry:
+    def __init__(self, definitions: Iterable[ActionDefinition]) -> None:
+        items: dict[str, ActionDefinition] = {}
+        for definition in definitions:
+            if definition.action_id in items:
+                raise RegistryError(f"duplicate action id: {definition.action_id}")
+            items[definition.action_id] = definition
+        self._items = MappingProxyType(items)
+
+    def require(self, action_id: str) -> ActionDefinition:
+        try:
+            return self._items[action_id]
+        except KeyError as exc:
+            raise RegistryError(f"unknown action id: {action_id}") from exc
