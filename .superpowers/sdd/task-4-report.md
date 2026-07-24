@@ -87,3 +87,16 @@ review text, free-standing challenge issuance, concurrent pending issuance,
 and wrong artifact modes were added before the corresponding changes. Focused
 approval suite completed with `30 passed`; full suite completed with `364
 passed`; Ruff and mypy passed.
+
+## Follow-up remediation — interrupted transition recovery
+
+Commit: `b4606034b064ea974e3b11f876c098df6fb45e67`
+(`fix: recover interrupted approval transitions`).
+
+State lookup now reads a strict, mode-checked transaction journal before
+reporting state. A journal with both source and destination artifacts removes
+the source, a journal with just the destination confirms the completed rename,
+and a journal with only source rolls back the unperformed transition. Missing
+both artifacts is a controlled malformed-state failure. The new adversarial
+test creates a valid dual-state crash image and verifies that `status` produces
+the destination state with no remaining source file.
