@@ -113,3 +113,27 @@ the rejected secret, safe ordinary scope rules, sensitive request-header
 coverage, definition/tool metadata coverage, program metadata coverage, and
 that non-persisted policy text remains represented only through
 `policy_digest`.
+
+### URI-userinfo follow-up
+
+Follow-up commit: `616bf4f033caa4beb285d103ca8f7b9e9ed8cc54`
+(`fix: reject all URI userinfo in approvals`).
+
+The first remediation exposed a narrower detector gap: the credential-URI
+pattern required non-empty values on both sides of `:`, so
+`scheme://opaque-token@host`, `scheme://:password@host`, and
+`scheme://username:@host` could still reach the now-complete field scanner.
+
+Parameterized RED tests reproduced six failures across the three missing forms
+in both in-scope and out-of-scope snapshots. The detector now rejects any
+non-empty userinfo between `scheme://` and `@`, bounded by the authority
+terminators `/`, `?`, and `#`. Controls cover ordinary URLs, `@` in URL paths,
+plain email-like text, and `mailto:` without triggering the filter. The
+single-token form also drives the engine-denial and no-persistence tests.
+
+Fresh final verification:
+
+- Entire approval suite: `309 passed in 1.41s`.
+- Task 5 focused suites: `372 passed in 1.99s`.
+- Full suite: `660 passed in 4.46s`.
+- Risk-package Ruff check/format, mypy, and `git diff --check` passed.
