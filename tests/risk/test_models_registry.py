@@ -89,7 +89,13 @@ def test_action_definition_requires_exact_boolean_characteristics(field):
 
 
 def test_shell_execution_is_an_absolute_l3_definition_characteristic():
-    action = ActionDefinition("fixture.shell", RiskLevel.L0, shell_execution=True)
+    action = ActionDefinition(
+        "fixture.shell",
+        RiskLevel.L0,
+        uses_external_tool=True,
+        executable="/bin/sh",
+        shell_execution=True,
+    )
     assert action.effective_floor is RiskLevel.L3
 
 
@@ -115,6 +121,7 @@ def test_trusted_action_characteristics_raise_the_effective_floor(field, expecte
         {"uses_external_tool": False, "tool_id": "nmap"},
         {"uses_external_tool": False, "executable": "/opt/nmap"},
         {"uses_external_tool": True},
+        {"uses_external_tool": True, "tool_id": "nmap"},
         {"uses_external_tool": True, "tool_id": "nmap", "executable": "/opt//nmap"},
         {"uses_external_tool": True, "executable": "/opt/../nmap"},
     ],
@@ -132,6 +139,31 @@ def test_external_tool_metadata_normalizes_windows_paths_lexically():
         executable="C:\\Tools\\Nmap.EXE",
     )
     assert action.executable == "c:/tools/nmap.exe"
+
+
+@pytest.mark.parametrize(
+    "executable",
+    [
+        "/bin/sh",
+        "/usr/bin/bash",
+        "c:/windows/system32/cmd.exe",
+        "c:/windows/system32/windowspowershell/v1.0/powershell.exe",
+        "c:/program files/powershell/7/pwsh.exe",
+    ],
+)
+def test_known_shell_executables_require_explicit_shell_execution(executable):
+    with pytest.raises(ValueError, match="shell_execution"):
+        ActionDefinition(
+            "fixture.shell",
+            RiskLevel.L0,
+            uses_external_tool=True,
+            executable=executable,
+        )
+
+
+def test_shell_execution_requires_a_trusted_external_executable():
+    with pytest.raises(ValueError, match="external"):
+        ActionDefinition("fixture.shell", RiskLevel.L0, shell_execution=True)
 
 
 def test_registry_revalidates_mutated_action_definition():

@@ -30,7 +30,7 @@ def action_request(context):
         engagement_path=context.engagement_path,
         action_id="fixture.l0-network",
         target="https://acme-corp.example/app",
-        argv=("fixture", "scan"),
+        argv=(),
         hypothesis_id="hyp-1",
         rationale="Validate one authorized hypothesis.",
         rate=1,
@@ -242,9 +242,9 @@ def test_prohibited_tool_uses_only_code_owned_tool_identity(engine, context, act
     assert executable_mismatch.reason_code == "DENY_EXECUTABLE_MISMATCH"
 
 
-def test_prohibited_tool_requires_explicit_trusted_tool_status(engine, context, action_request):
-    unspecified = engine.evaluate(action_request, _context(context, prohibited_tools=("nmap",)))
-    assert unspecified.reason_code == "DENY_PROGRAM_TOOL_ID_UNSPECIFIED"
+def test_prohibited_tool_allows_an_explicit_no_tool_action(engine, context, action_request):
+    no_tool = engine.evaluate(action_request, _context(context, prohibited_tools=("nmap",)))
+    assert no_tool.kind is DecisionKind.ALLOW
 
     directly_prohibited = engine.evaluate(
         action_request,
@@ -278,6 +278,40 @@ def test_prohibited_tool_paths_use_lexical_canonicalization(context, action_requ
         _context(context, prohibited_tools=("c:/tools//nmap.exe",)),
     )
     assert malformed.reason_code == "DENY_PROGRAM_INVALID_POLICY"
+
+
+def test_external_action_requires_its_exact_code_owned_executable(context, action_request):
+    external_engine = RiskEngine(
+        ActionRegistry(
+            [
+                ActionDefinition(
+                    "fixture.l0-network",
+                    RiskLevel.L0,
+                    network_access=True,
+                    uses_external_tool=True,
+                    executable="/usr/bin/sqlmap",
+                )
+            ]
+        )
+    )
+    mismatch = external_engine.evaluate(replace(action_request, argv=("/usr/bin/nmap",)), context)
+    assert mismatch.reason_code == "DENY_EXECUTABLE_MISMATCH"
+
+    shell_argv = external_engine.evaluate(replace(action_request, argv=("/bin/sh",)), context)
+    assert shell_argv.reason_code == "DENY_EXECUTABLE_MISMATCH"
+
+    exact = external_engine.evaluate(
+        replace(action_request, argv=("/usr/bin/sqlmap", "--batch")), context
+    )
+    assert exact.kind is DecisionKind.ALLOW
+
+
+def test_no_tool_action_requires_empty_argv(engine, context, action_request):
+    valid = engine.evaluate(action_request, context)
+    assert valid.kind is DecisionKind.ALLOW
+
+    invalid = engine.evaluate(replace(action_request, argv=("/bin/sh",)), context)
+    assert invalid.reason_code == "DENY_NO_TOOL_ARGV"
 
 
 def test_vulnerability_and_impact_restrictions_use_code_owned_classifications(
@@ -441,6 +475,8 @@ def test_shell_execution_definition_is_absolute_l3(context, action_request):
                     "fixture.l0-network",
                     RiskLevel.L0,
                     network_access=True,
+                    uses_external_tool=True,
+                    executable="/bin/sh",
                     shell_execution=True,
                 )
             ]
