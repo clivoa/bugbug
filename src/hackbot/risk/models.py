@@ -85,6 +85,12 @@ def _bounded_int(value: object, *, name: str, minimum: int, maximum: int) -> int
     return value
 
 
+def _bool(value: object, *, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
 def _normalized_unique_strings(value: object, *, name: str) -> tuple[str, ...]:
     if isinstance(value, str):
         raise ValueError(f"{name} must be a sequence of strings")
@@ -244,6 +250,16 @@ class TestingPolicy:
             minimum=_CONCURRENCY_MIN,
             maximum=_CONCURRENCY_MAX,
         )
+        for name in (
+            "automated_scanning_allowed",
+            "authenticated_testing_allowed",
+            "account_creation_allowed",
+            "multiple_accounts_allowed",
+            "social_engineering_allowed",
+            "denial_of_service_allowed",
+            "out_of_band_testing_allowed",
+        ):
+            _bool(getattr(self, name), name=name)
         if self.social_engineering_allowed is not False:
             raise ValueError("social_engineering_allowed must be false")
         if self.denial_of_service_allowed is not False:
