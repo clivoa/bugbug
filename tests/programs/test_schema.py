@@ -160,3 +160,8 @@ def test_testing_policy_rejects_non_field_name_required_headers(headers):
 def test_testing_policy_normalizes_header_field_names():
     policy = validate_testing_policy({"required_headers": ["X-Research-ID", "!Custom"]})
     assert policy.required_headers == ("x-research-id", "!custom")
+
+
+def test_testing_policy_mixed_type_unknown_keys_raise_validation_error_not_type_error():
+    with pytest.raises(ValidationError, match="unknown field"):
+        validate_testing_policy({1: "unexpected", "also-unexpected": True})

@@ -243,8 +243,9 @@ def _restricted_hours(value: object) -> tuple[tuple[str, ...], str | None]:
     if not isinstance(value, dict):
         raise ValidationError(["restricted_hours: must be a mapping"])
     allowed = {"timezone", "windows"}
-    unknown = set(value) - allowed
-    if unknown or set(value) != allowed:
+    unknown = [key for key in value if key not in allowed]
+    missing = [key for key in allowed if key not in value]
+    if unknown or missing:
         raise ValidationError(["restricted_hours: requires only timezone and windows"])
     timezone = value["timezone"]
     if not isinstance(timezone, str) or not timezone.strip():
@@ -274,9 +275,9 @@ def validate_testing_policy(value: object) -> TestingPolicy:
     """Strictly validate testing rules and return a conservative frozen policy."""
     if not isinstance(value, dict):
         raise ValidationError(["testing_rules: must be a mapping"])
-    unknown = set(value) - set(_TESTING_KEYS)
+    unknown = [key for key in value if key not in _TESTING_KEYS]
     if unknown:
-        raise ValidationError([f"testing_rules: unknown field {key!r}" for key in sorted(unknown)])
+        raise ValidationError([f"testing_rules: unknown field {key!r}" for key in unknown])
 
     restricted_hours, restricted_hours_timezone = _restricted_hours(value.get("restricted_hours"))
     try:
