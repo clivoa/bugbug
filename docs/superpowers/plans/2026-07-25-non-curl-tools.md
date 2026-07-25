@@ -138,9 +138,24 @@ def tls_server(tmp_path):
     key = tmp_path / "key.pem"
     cert = tmp_path / "cert.pem"
     subprocess.run(
-        [openssl, "req", "-x509", "-newkey", "rsa:2048", "-keyout", str(key),
-         "-out", str(cert), "-days", "1", "-nodes", "-subj", "/CN=localhost"],
-        check=True, capture_output=True,
+        [
+            openssl,
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-keyout",
+            str(key),
+            "-out",
+            str(cert),
+            "-days",
+            "1",
+            "-nodes",
+            "-subj",
+            "/CN=localhost",
+        ],
+        check=True,
+        capture_output=True,
     )
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(str(cert), str(key))
@@ -243,7 +258,10 @@ def test_tls_cert_captures_certificate_in_scope(lab_engagement, tls_server):
     outcome = _run(lab_engagement, _request(context, "tls.cert", tls_server, argv), definition)
     assert outcome.decision.kind is DecisionKind.ALLOW
     assert outcome.executed is True
-    assert b"CERTIFICATE" in outcome.command_result.stdout or b"subject=" in outcome.command_result.stdout
+    assert (
+        b"CERTIFICATE" in outcome.command_result.stdout
+        or b"subject=" in outcome.command_result.stdout
+    )
     assert outcome.evidence_run_id
 
 

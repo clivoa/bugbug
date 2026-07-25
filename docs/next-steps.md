@@ -5,7 +5,7 @@ the next phase.
 
 ## Where the project stands
 
-Implemented and verified (751 tests passing, Ruff/format/mypy clean, offline
+Implemented and verified (756 tests passing, Ruff/format/mypy clean, offline
 smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
@@ -20,10 +20,11 @@ smoke pass):
 - **Tool execution substrate** (`src/hackbot/tools/`, `src/hackbot/audit/`) — a
   gate-bound, validated subprocess runner (no shell, sanitized env, timeout,
   output caps) that executes a code-owned argv array **only** after an `ALLOW`,
-  plus a secret-free audit trail. Actions: `net.http-get`/`net.http-head`/
-  `net.http-options` (L0) and `net.http-post` (L2), curl, in-scope only. L2 runs
-  once via `hackbot tool run --approve` after a TTY-typed, single-use approval
-  consumed atomically by `evaluate`; see [`tool-execution.md`](tool-execution.md).
+  plus a secret-free audit trail. Actions: L0 HTTP probes
+  (`net.http-get`/`-head`/`-options`), `dns.lookup` (dig), `tls.cert` (openssl),
+  and `net.http-post` (L2), in-scope only. L2 runs once via
+  `hackbot tool run --approve` after a TTY-typed, single-use approval consumed
+  atomically by `evaluate`; see [`tool-execution.md`](tool-execution.md).
 - **Evidence persistence** (`src/hackbot/evidence/`) — executed runs store their
   output **redacted** and run-linked under `<engagement>/evidence/<run_id>/`
   (audit written first); best-effort redaction, raw output never printed or
@@ -62,11 +63,10 @@ audit), the first actions (`net.http-get` L0, `net.http-post` L2), redacted
 run-linked evidence, L2 execution over the CLI (`tool run --approve`), and typed
 findings + markdown reporting.
 
-1. **More reviewed actions**: the L0 HTTP probes `net.http-get`, `net.http-head`,
-   and `net.http-options` exist. Next: non-curl tools (DNS via `dig`, TLS via
-   `openssl`), each needing its own executable resolution and lab infrastructure
-   (a DNS/TLS lab server). Promote only normalized, reviewed recon-bundle skills
-   into adapters (bundle commands stay data until wrapped).
+1. **More reviewed actions**: the L0 HTTP probes (`net.http-get`/`-head`/
+   `-options`) and the first non-curl tools (`dns.lookup` via dig, `tls.cert` via
+   openssl) exist. Next: promote only normalized, reviewed recon-bundle skills
+   into code-owned adapters (bundle commands stay data until wrapped).
 2. **Platform report templates**: fill `templates/{hackerone,bugcrowd,…}` and
    render a finding into each platform's submission format (the generic markdown
    reporter is the base).
