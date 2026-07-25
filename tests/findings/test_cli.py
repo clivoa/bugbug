@@ -55,3 +55,17 @@ def test_finding_add_rejects_bad_status(tmp_path, capsys):
     )
     code = app(["finding", "add", str(bad), "--engagement", str(tmp_path), "--json"])
     assert code == 2
+
+
+def test_finding_add_accepts_optional_fields(tmp_path, capsys):
+    desc = tmp_path / "f.json"
+    desc.write_text(
+        '{"title":"IDOR on /orders","severity":"high","status":"untested",'
+        '"target":"http://127.0.0.1/orders","action_id":"net.http-get",'
+        '"evidence_run_id":null,"summary":"Sequential ids.",'
+        '"demonstrated_impact":"","plausible_impact":"Read others orders.",'
+        '"vulnerability_type":"idor","reproduction_steps":"GET /orders/1002"}'
+    )
+    code = app(["finding", "add", str(desc), "--engagement", str(tmp_path), "--json"])
+    assert code == 0
+    assert json.loads(capsys.readouterr().out)["finding_id"]

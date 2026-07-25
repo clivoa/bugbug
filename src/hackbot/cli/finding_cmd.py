@@ -13,7 +13,7 @@ EXIT_OK = 0
 EXIT_FAIL = 1
 EXIT_INVALID = 2
 
-_FINDING_KEYS = frozenset(
+_REQUIRED_FINDING_KEYS = frozenset(
     {
         "title",
         "severity",
@@ -26,6 +26,7 @@ _FINDING_KEYS = frozenset(
         "plausible_impact",
     }
 )
+_OPTIONAL_FINDING_KEYS = frozenset({"vulnerability_type", "reproduction_steps"})
 
 
 def _emit(payload: dict[str, object], *, as_json: bool) -> None:
@@ -44,9 +45,9 @@ def cmd_add(engagement: str, descriptor_path: str, *, as_json: bool) -> int:
         raw = Path(descriptor_path).read_bytes()
         value = _strict_parse(raw)
         for key in value:
-            if key not in _FINDING_KEYS:
+            if key not in _REQUIRED_FINDING_KEYS and key not in _OPTIONAL_FINDING_KEYS:
                 raise CliInputError(f"unknown field {key!r}")
-        for key in _FINDING_KEYS:
+        for key in _REQUIRED_FINDING_KEYS:
             if key not in value:
                 raise CliInputError(f"missing field {key!r}")
     except (CliInputError, OSError) as exc:
@@ -66,6 +67,8 @@ def cmd_add(engagement: str, descriptor_path: str, *, as_json: bool) -> int:
             demonstrated_impact=value["demonstrated_impact"],  # type: ignore[arg-type]
             plausible_impact=value["plausible_impact"],  # type: ignore[arg-type]
             created_at=created_at,
+            vulnerability_type=value.get("vulnerability_type", ""),  # type: ignore[arg-type]
+            reproduction_steps=value.get("reproduction_steps", ""),  # type: ignore[arg-type]
         )
     except (ValueError, TypeError) as exc:
         print(f"invalid finding: {exc}", file=sys.stderr)
