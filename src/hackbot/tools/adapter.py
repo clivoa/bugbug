@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from hackbot.audit.tool_runs import AuditSink
+from hackbot.evidence.store import EvidenceStore
 from hackbot.risk.models import (
     ActionDefinition,
     ActionRequest,
@@ -29,6 +30,7 @@ from hackbot.tools.runner import CommandResult, CommandRunner
 class ActionOutcome:
     decision: PolicyDecision
     command_result: CommandResult | None
+    evidence_run_id: str | None = None
 
     @property
     def executed(self) -> bool:
@@ -44,6 +46,7 @@ def run_action(
     now: datetime | None = None,
     runner: CommandRunner,
     audit: AuditSink,
+    evidence: EvidenceStore | None = None,
     approval_store: object | None = None,
 ) -> ActionOutcome:
     from hackbot.risk.policy import RiskEngine
@@ -55,6 +58,7 @@ def run_action(
     result: CommandResult | None = None
     if decision.kind is DecisionKind.ALLOW and definition.uses_external_tool and rendered:
         result = runner.run(rendered)
+    # Audit before evidence, so the trail exists even if evidence capture fails.
     audit.record_run(
         action_id=request.action_id,
         effective_risk=decision.effective_risk,
@@ -65,4 +69,14 @@ def run_action(
         result=result,
         now=decision_at,
     )
-    return ActionOutcome(decision, result)
+    evidence_run_id: str | None = None
+    if result is not None and evidence is not None:
+        evidence_run_id = evidence.record(
+            action_id=request.action_id,
+            request=request,
+            result=result,
+            decision_kind=decision.kind.value,
+            reason_code=decision.reason_code,
+            now=decision_at,
+        )
+    return ActionOutcome(decision, result, evidence_run_id)

@@ -48,6 +48,11 @@ CTFs and security research. Any other use is out of scope and unsupported.
   a secret-free audit line per run. Today the only action is `net.http-get`
   (curl) against in-scope targets. See
   [`docs/tool-execution.md`](docs/tool-execution.md).
+- **Evidence stored redacted.** Executed runs persist their output to
+  `<engagement>/evidence/` **redacted** of known secrets before writing (per the
+  redact-before-storing rule), never raw, `0600`/`0700`, and never printed.
+  Redaction is best-effort (known secret shapes); evidence files are sensitive
+  and live in the git-ignored engagement directory.
 
 ## Prohibited (never automated)
 
