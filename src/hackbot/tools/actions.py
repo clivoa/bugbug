@@ -19,6 +19,16 @@ _CURL_CANDIDATES: tuple[str, ...] = (
     "/opt/homebrew/bin/curl",
     "/usr/local/bin/curl",
 )
+_DIG_CANDIDATES: tuple[str, ...] = (
+    "/usr/bin/dig",
+    "/opt/homebrew/bin/dig",
+    "/usr/local/bin/dig",
+)
+_OPENSSL_CANDIDATES: tuple[str, ...] = (
+    "/usr/bin/openssl",
+    "/opt/homebrew/bin/openssl",
+    "/usr/local/bin/openssl",
+)
 
 
 def resolve_executable(candidates: Sequence[str]) -> str | None:
@@ -30,6 +40,14 @@ def resolve_executable(candidates: Sequence[str]) -> str | None:
 
 def curl_path() -> str | None:
     return resolve_executable(_CURL_CANDIDATES)
+
+
+def dig_path() -> str | None:
+    return resolve_executable(_DIG_CANDIDATES)
+
+
+def openssl_path() -> str | None:
+    return resolve_executable(_OPENSSL_CANDIDATES)
 
 
 def _build_actions() -> ActionRegistry:
@@ -77,9 +95,33 @@ def _build_actions() -> ActionRegistry:
                 argv_template=(curl, "-sS", "-i", "-X", "OPTIONS", "--max-time", "10", "{target}"),
             )
         )
+    dig = dig_path()
+    if dig is not None:
+        definitions.append(
+            ActionDefinition(
+                "dns.lookup",
+                RiskLevel.L0,
+                network_access=True,
+                uses_external_tool=True,
+                executable=dig,
+                argv_template=(dig, "+short", "{target}"),
+            )
+        )
+    openssl = openssl_path()
+    if openssl is not None:
+        definitions.append(
+            ActionDefinition(
+                "tls.cert",
+                RiskLevel.L0,
+                network_access=True,
+                uses_external_tool=True,
+                executable=openssl,
+                argv_template=(openssl, "s_client", "-connect", "{target}"),
+            )
+        )
     return ActionRegistry(definitions)
 
 
 REAL_ACTIONS = _build_actions()
 
-__all__ = ["REAL_ACTIONS", "curl_path", "resolve_executable"]
+__all__ = ["REAL_ACTIONS", "curl_path", "dig_path", "openssl_path", "resolve_executable"]
