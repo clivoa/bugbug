@@ -11,11 +11,16 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 
 ## Status
 
-Early build; **64 automated tests passing** on **Python 3.14** (project minimum
+Early build; **692 automated tests passing** on **Python 3.14** (project minimum
 3.11). Implemented and verified so far:
-- **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `version`) — stdlib-only core,
-  runs offline; installable as a wheel (`scripts/build_wheel.py` +
-  `scripts/smoke_test.sh`, both fully offline).
+- **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `program`, `risk`, `approval`,
+  `version`) — stdlib-only core, runs offline; installable as a wheel
+  (`scripts/build_wheel.py` + `scripts/smoke_test.sh`, both fully offline).
+- **Risk & approval engine** (`src/hackbot/risk/`) — deterministic, fail-closed
+  L0–L3 policy gate and single-use, five-minute L2 approval lifecycle that every
+  future tool adapter must pass. Exposed through the **non-executing** commands
+  `hackbot risk evaluate`, `hackbot approval grant` (interactive TTY only), and
+  `hackbot approval status`. See [`docs/risk-and-approval.md`](docs/risk-and-approval.md).
 - **Diagnostic** available two ways: packaged Python (`hackbot doctor [--json]`,
   cross-platform, flags Python <3.11 as incompatible) and the pre-install shell
   script (`scripts/doctor.sh`).
@@ -79,6 +84,8 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 .venv/bin/hackbot doctor --json
 .venv/bin/hackbot scope explain https://api.example.com/v1 --in example.com
 .venv/bin/hackbot secrets list          # existence only; values never shown
+.venv/bin/hackbot risk evaluate request.json --engagement engagements/sample --json
+.venv/bin/hackbot approval status <challenge-id> --engagement engagements/sample --json
 ```
 
 ## Recon bundle pipeline
@@ -86,7 +93,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 ```bash
 .venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
 .venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/python -m pytest tests -q                 # full safety suite (64 tests)
+.venv/bin/python -m pytest tests -q                 # full safety suite (692 tests)
 ```
 
 ## Documentation

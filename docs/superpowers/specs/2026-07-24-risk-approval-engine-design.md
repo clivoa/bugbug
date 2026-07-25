@@ -256,6 +256,12 @@ Grant consumption atomically renames the exact grant from `granted/` to
 find no usable grant. Expired grants move to `expired/`. Altered artifacts fail
 digest validation and are denied.
 
+The approval store is supported on macOS and Linux only when the runtime
+provides `fcntl` locking and the platform's native atomic no-overwrite rename
+primitive (`renameatx_np` on macOS or `renameat2` on Linux). Missing or
+unsupported primitives fail closed with a controlled approval denial. Windows
+is not a supported approval-store platform.
+
 Application code exposes no API to unconsume, extend, or broaden a grant.
 
 ## Audit

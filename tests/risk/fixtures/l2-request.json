@@ -1,0 +1,16 @@
+{
+  "action_id": "fixture.intrusive",
+  "target": "https://acme-corp.example/app",
+  "argv": [],
+  "hypothesis_id": "hyp-1",
+  "rationale": "Validate one authorized hypothesis with a single low-rate probe.",
+  "rate": 1,
+  "concurrency": 1,
+  "data_touched": "Public response headers only.",
+  "expected_impact": "One low-rate intrusive probe against an in-scope asset.",
+  "stop_condition": "Stop on any rate limit, block, or unexpected scope change.",
+  "cleanup_plan": "No state is created; nothing to clean up.",
+  "program_rule": "Authorized intrusive testing rule.",
+  "required_headers": [],
+  "requested_risk": null
+}
