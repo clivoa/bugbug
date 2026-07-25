@@ -527,14 +527,21 @@ _ECHO = "/bin/echo"
 def test_allow_executes_and_audits(lab_engagement):
     context = load_policy_context(lab_engagement)
     definition = ActionDefinition(
-        "test.echo", RiskLevel.L0, uses_external_tool=True, executable=_ECHO,
+        "test.echo",
+        RiskLevel.L0,
+        uses_external_tool=True,
+        executable=_ECHO,
         argv_template=(_ECHO, "ok"),
     )
     runner = FakeRunner()
     audit = AuditSink(lab_engagement)
     outcome = run_action(
-        definition, _request(context, "test.echo"), context,
-        now=datetime.now(UTC), runner=runner, audit=audit,
+        definition,
+        _request(context, "test.echo"),
+        context,
+        now=datetime.now(UTC),
+        runner=runner,
+        audit=audit,
     )
     assert outcome.decision.kind is DecisionKind.ALLOW
     assert outcome.executed is True
@@ -546,13 +553,20 @@ def test_allow_executes_and_audits(lab_engagement):
 def test_deny_never_executes(lab_engagement):
     context = load_policy_context(lab_engagement)
     definition = ActionDefinition(
-        "test.prohibited", RiskLevel.L3, uses_external_tool=True, executable=_ECHO,
+        "test.prohibited",
+        RiskLevel.L3,
+        uses_external_tool=True,
+        executable=_ECHO,
         argv_template=(_ECHO, "x"),
     )
     runner = FakeRunner()
     outcome = run_action(
-        definition, _request(context, "test.prohibited"), context,
-        now=datetime.now(UTC), runner=runner, audit=AuditSink(lab_engagement),
+        definition,
+        _request(context, "test.prohibited"),
+        context,
+        now=datetime.now(UTC),
+        runner=runner,
+        audit=AuditSink(lab_engagement),
     )
     assert outcome.decision.kind is DecisionKind.DENY
     assert outcome.executed is False
@@ -562,13 +576,21 @@ def test_deny_never_executes(lab_engagement):
 def test_requires_approval_without_grant_never_executes(lab_engagement):
     context = load_policy_context(lab_engagement)
     definition = ActionDefinition(
-        "test.intrusive", RiskLevel.L1, uses_external_tool=True, executable=_ECHO,
-        argv_template=(_ECHO, "x"), high_volume=True,
+        "test.intrusive",
+        RiskLevel.L1,
+        uses_external_tool=True,
+        executable=_ECHO,
+        argv_template=(_ECHO, "x"),
+        high_volume=True,
     )
     runner = FakeRunner()
     outcome = run_action(
-        definition, _request(context, "test.intrusive", active=True), context,
-        now=datetime.now(UTC), runner=runner, audit=AuditSink(lab_engagement),
+        definition,
+        _request(context, "test.intrusive", active=True),
+        context,
+        now=datetime.now(UTC),
+        runner=runner,
+        audit=AuditSink(lab_engagement),
     )
     assert outcome.decision.kind is DecisionKind.REQUIRES_APPROVAL
     assert outcome.executed is False
@@ -846,8 +868,12 @@ def test_http_get_fetches_in_scope_lab_url(lab_engagement, local_server):
     context = load_policy_context(lab_engagement)
     definition = REAL_ACTIONS.require("net.http-get")
     outcome = run_action(
-        definition, _request(context, local_server), context,
-        now=datetime.now(UTC), runner=CommandRunner(), audit=AuditSink(lab_engagement),
+        definition,
+        _request(context, local_server),
+        context,
+        now=datetime.now(UTC),
+        runner=CommandRunner(),
+        audit=AuditSink(lab_engagement),
     )
     assert outcome.decision.kind is DecisionKind.ALLOW
     assert outcome.executed is True
@@ -859,8 +885,12 @@ def test_http_get_out_of_scope_is_denied_without_execution(lab_engagement):
     context = load_policy_context(lab_engagement)
     definition = REAL_ACTIONS.require("net.http-get")
     outcome = run_action(
-        definition, _request(context, "http://10.0.0.5/"), context,
-        now=datetime.now(UTC), runner=CommandRunner(), audit=AuditSink(lab_engagement),
+        definition,
+        _request(context, "http://10.0.0.5/"),
+        context,
+        now=datetime.now(UTC),
+        runner=CommandRunner(),
+        audit=AuditSink(lab_engagement),
     )
     assert outcome.decision.kind is DecisionKind.DENY
     assert outcome.decision.reason_code == "DENY_SCOPE"
@@ -955,8 +985,15 @@ def _write_request(path: Path, target: str, action_id: str) -> Path:
 def test_tool_run_unknown_action_is_invalid(lab_engagement, tmp_path, capsys):
     request = _write_request(tmp_path, "http://127.0.0.1/", "net.nonexistent")
     code = app(
-        ["tool", "run", "net.nonexistent", str(request),
-         "--engagement", str(lab_engagement), "--json"]
+        [
+            "tool",
+            "run",
+            "net.nonexistent",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--json",
+        ]
     )
     assert code == 2
 
@@ -965,8 +1002,7 @@ def test_tool_run_unknown_action_is_invalid(lab_engagement, tmp_path, capsys):
 def test_tool_run_out_of_scope_denies(lab_engagement, tmp_path, capsys):
     request = _write_request(tmp_path, "http://10.0.0.5/", "net.http-get")
     code = app(
-        ["tool", "run", "net.http-get", str(request),
-         "--engagement", str(lab_engagement), "--json"]
+        ["tool", "run", "net.http-get", str(request), "--engagement", str(lab_engagement), "--json"]
     )
     payload = json.loads(capsys.readouterr().out)
     assert code == 1
@@ -978,8 +1014,7 @@ def test_tool_run_out_of_scope_denies(lab_engagement, tmp_path, capsys):
 def test_tool_run_executes_in_scope(lab_engagement, tmp_path, capsys, local_server):
     request = _write_request(tmp_path, local_server, "net.http-get")
     code = app(
-        ["tool", "run", "net.http-get", str(request),
-         "--engagement", str(lab_engagement), "--json"]
+        ["tool", "run", "net.http-get", str(request), "--engagement", str(lab_engagement), "--json"]
     )
     payload = json.loads(capsys.readouterr().out)
     assert code == 0
@@ -1108,9 +1143,7 @@ def _cmd_tool(args: argparse.Namespace) -> int:
     from hackbot.cli import tool_cmd
 
     if args.taction == "run":
-        return tool_cmd.cmd_run(
-            args.engagement, args.action_id, args.request, as_json=args.json
-        )
+        return tool_cmd.cmd_run(args.engagement, args.action_id, args.request, as_json=args.json)
     return 2
 ```
 

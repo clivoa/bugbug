@@ -41,10 +41,12 @@ echo "== run from installed console script (offline, no keyring) =="
 ( cd /tmp && HACKBOT_SECRET_BACKEND=memory "$HACKBOT" scope check https://evil.com --in example.com ) \
   && echo "UNEXPECTED allow" || echo "scope deny ok"
 
-echo "== risk/approval CLI help works stdlib-only (no target/provider I/O) =="
+echo "== risk/approval/tool CLI help works stdlib-only (no target/provider I/O) =="
 ( cd /tmp && "$HACKBOT" risk --help >/dev/null ) && echo "risk help ok"
 ( cd /tmp && "$HACKBOT" risk evaluate --help >/dev/null ) && echo "risk evaluate help ok"
 ( cd /tmp && "$HACKBOT" approval --help >/dev/null ) && echo "approval help ok"
+( cd /tmp && "$HACKBOT" tool --help >/dev/null ) && echo "tool help ok"
+( cd /tmp && "$HACKBOT" tool run --help >/dev/null ) && echo "tool run help ok"
 
 echo "== secrets list degrades gracefully (no keyring, no traceback) =="
 SECOUT="$( cd /tmp && "$HACKBOT" secrets list 2>&1 || true )"
