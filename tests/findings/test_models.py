@@ -63,3 +63,14 @@ def test_severity_and_status_must_be_enums():
         _finding(severity="high")
     with pytest.raises(ValueError):
         _finding(status="demonstrated")
+
+
+def test_optional_fields_default_empty():
+    f = _finding()
+    assert f.vulnerability_type == "" and f.reproduction_steps == ""
+
+
+def test_optional_fields_round_trip_values():
+    f = _finding(vulnerability_type="reflected-xss", reproduction_steps="GET /x?q=<t>")
+    assert f.vulnerability_type == "reflected-xss"
+    assert f.reproduction_steps == "GET /x?q=<t>"

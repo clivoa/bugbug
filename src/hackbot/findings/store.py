@@ -30,6 +30,8 @@ def _to_dict(finding: Finding) -> dict[str, object]:
         "demonstrated_impact": finding.demonstrated_impact,
         "plausible_impact": finding.plausible_impact,
         "created_at": finding.created_at.isoformat(),
+        "vulnerability_type": finding.vulnerability_type,
+        "reproduction_steps": finding.reproduction_steps,
     }
 
 
@@ -49,6 +51,8 @@ def _from_dict(value: object) -> Finding:
             demonstrated_impact=value["demonstrated_impact"],
             plausible_impact=value["plausible_impact"],
             created_at=datetime.fromisoformat(value["created_at"]),
+            vulnerability_type=value.get("vulnerability_type", ""),
+            reproduction_steps=value.get("reproduction_steps", ""),
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise FindingError("MALFORMED", "malformed finding record") from exc
