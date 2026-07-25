@@ -81,3 +81,18 @@ def test_tls_cert_out_of_scope_is_denied(lab_engagement):
     assert outcome.decision.kind is DecisionKind.DENY
     assert outcome.decision.reason_code == "DENY_SCOPE"
     assert outcome.executed is False
+
+
+@pytest.mark.skipif(dig_path() is None, reason="dig not installed")
+@pytest.mark.parametrize(
+    "action_id,record", [("dns.txt", "TXT"), ("dns.mx", "MX"), ("dns.ns", "NS")]
+)
+def test_dns_record_lookup_executes_in_scope(lab_engagement, action_id, record):
+    context = load_policy_context(lab_engagement)
+    definition = REAL_ACTIONS.require(action_id)
+    argv = (dig_path(), "+short", "127.0.0.1", record)
+    outcome = _run(lab_engagement, _request(context, action_id, "127.0.0.1", argv), definition)
+    assert outcome.decision.kind is DecisionKind.ALLOW
+    assert outcome.executed is True
+    assert outcome.command_result.exit_code == 0
+    assert outcome.evidence_run_id
