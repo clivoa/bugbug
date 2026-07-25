@@ -11,7 +11,7 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 
 ## Status
 
-Early build; **715 automated tests passing** on **Python 3.14** (project minimum
+Early build; **726 automated tests passing** on **Python 3.14** (project minimum
 3.11). Implemented and verified so far:
 - **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `program`, `risk`, `approval`,
   `tool`, `version`) — stdlib-only core, runs offline; installable as a wheel
@@ -25,7 +25,9 @@ Early build; **715 automated tests passing** on **Python 3.14** (project minimum
   validated, gate-bound subprocess runner that executes a code-owned argv array
   (no shell, sanitized env, timeout, output caps) **only** after an `ALLOW`, plus
   a secret-free audit trail. First real action: `net.http-get` (curl, in-scope
-  only), via `hackbot tool run`. See [`docs/tool-execution.md`](docs/tool-execution.md).
+  only), via `hackbot tool run`. Executed runs persist **redacted, run-linked
+  evidence** (`src/hackbot/evidence/`) per engagement. See
+  [`docs/tool-execution.md`](docs/tool-execution.md).
 - **Diagnostic** available two ways: packaged Python (`hackbot doctor [--json]`,
   cross-platform, flags Python <3.11 as incompatible) and the pre-install shell
   script (`scripts/doctor.sh`).
@@ -99,7 +101,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 ```bash
 .venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
 .venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/python -m pytest tests -q                 # full safety suite (715 tests)
+.venv/bin/python -m pytest tests -q                 # full safety suite (726 tests)
 ```
 
 ## Documentation
