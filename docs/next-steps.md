@@ -5,7 +5,7 @@ the next phase.
 
 ## Where the project stands
 
-Implemented and verified (771 tests passing, Ruff/format/mypy clean, offline
+Implemented and verified (782 tests passing, Ruff/format/mypy clean, offline
 smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
@@ -20,11 +20,12 @@ smoke pass):
 - **Tool execution substrate** (`src/hackbot/tools/`, `src/hackbot/audit/`) — a
   gate-bound, validated subprocess runner (no shell, sanitized env, timeout,
   output caps) that executes a code-owned argv array **only** after an `ALLOW`,
-  plus a secret-free audit trail. Actions: L0 HTTP probes
-  (`net.http-get`/`-head`/`-options`), `dns.lookup` (dig), `tls.cert` (openssl),
-  and `net.http-post` (L2), in-scope only. L2 runs once via
-  `hackbot tool run --approve` after a TTY-typed, single-use approval consumed
-  atomically by `evaluate`; see [`tool-execution.md`](tool-execution.md).
+  plus a secret-free audit trail. Actions are promoted from reviewed recon-bundle
+  skills (with `@reeshasx` attribution; `hackbot skills list`): HTTP probes, DNS
+  record lookups, TLS cert (L0), and `net.port-scan` (nmap, L2), in-scope only. L2
+  runs once via `hackbot tool run --approve` after a TTY-typed, single-use
+  approval consumed atomically by `evaluate`; see
+  [`tool-execution.md`](tool-execution.md) and [`skill-promotion.md`](skill-promotion.md).
 - **Evidence persistence** (`src/hackbot/evidence/`) — executed runs store their
   output **redacted** and run-linked under `<engagement>/evidence/<run_id>/`
   (audit written first); best-effort redaction, raw output never printed or
@@ -59,13 +60,15 @@ Concretely, a real tool adapter must:
 
 ## Suggested order of work
 
-Done: the gate-bound tool substrate (`CommandRunner`, `run_action`, secret-free
-audit), the first actions (HTTP L0/L2 + non-curl DNS/TLS), redacted run-linked
-evidence, L2 execution over the CLI (`tool run --approve`), typed findings, and
-per-platform markdown reporting.
+Done: the gate-bound tool substrate, actions promoted from reviewed recon-bundle
+skills (HTTP/DNS/TLS L0 + nmap port-scan L2, with attribution + `skills list`),
+redacted run-linked evidence, L2 execution over the CLI (`tool run --approve`),
+typed findings, and per-platform markdown reporting.
 
-1. **More reviewed actions**: promote only normalized, reviewed recon-bundle
-   skills into code-owned adapters (bundle commands stay data until wrapped).
+1. **argv-placeholder extension for fuzzing tools**: DNS/TLS/HTTP probes and an
+   nmap port scan are promoted (see [`skill-promotion.md`](skill-promotion.md));
+   fuzzing/wordlist tools (ffuf/gobuster, `-u {target}/FUZZ -w <wordlist>`) need
+   richer whole-token placeholders in `argv_template` before they can be promoted.
 2. **Operator-customizable report templates**: let operators supply their own
    skeletons under `templates/<platform>/` layered over the code-owned renderers.
 3. **Streaming output caps**: `CommandRunner` currently truncates after
