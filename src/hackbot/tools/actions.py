@@ -29,6 +29,11 @@ _OPENSSL_CANDIDATES: tuple[str, ...] = (
     "/opt/homebrew/bin/openssl",
     "/usr/local/bin/openssl",
 )
+_NMAP_CANDIDATES: tuple[str, ...] = (
+    "/usr/bin/nmap",
+    "/opt/homebrew/bin/nmap",
+    "/usr/local/bin/nmap",
+)
 
 
 def resolve_executable(candidates: Sequence[str]) -> str | None:
@@ -50,7 +55,11 @@ def openssl_path() -> str | None:
     return resolve_executable(_OPENSSL_CANDIDATES)
 
 
-def _build_actions() -> ActionRegistry:
+def nmap_path() -> str | None:
+    return resolve_executable(_NMAP_CANDIDATES)
+
+
+def _build_definitions() -> list[ActionDefinition]:
     definitions: list[ActionDefinition] = []
     curl = curl_path()
     if curl is not None:
@@ -107,6 +116,17 @@ def _build_actions() -> ActionRegistry:
                 argv_template=(dig, "+short", "{target}"),
             )
         )
+        for action_id, record in (("dns.txt", "TXT"), ("dns.mx", "MX"), ("dns.ns", "NS")):
+            definitions.append(
+                ActionDefinition(
+                    action_id,
+                    RiskLevel.L0,
+                    network_access=True,
+                    uses_external_tool=True,
+                    executable=dig,
+                    argv_template=(dig, "+short", "{target}", record),
+                )
+            )
     openssl = openssl_path()
     if openssl is not None:
         definitions.append(
@@ -119,9 +139,32 @@ def _build_actions() -> ActionRegistry:
                 argv_template=(openssl, "s_client", "-connect", "{target}"),
             )
         )
-    return ActionRegistry(definitions)
+    nmap = nmap_path()
+    if nmap is not None:
+        definitions.append(
+            ActionDefinition(
+                "net.port-scan",
+                RiskLevel.L0,
+                network_access=True,
+                uses_external_tool=True,
+                high_volume=True,
+                executable=nmap,
+                argv_template=(nmap, "-Pn", "-T3", "--top-ports", "100", "{target}"),
+            )
+        )
+    return definitions
 
 
-REAL_ACTIONS = _build_actions()
+_DEFINITIONS = _build_definitions()
+REAL_ACTIONS = ActionRegistry(_DEFINITIONS)
+REGISTERED_ACTION_IDS: tuple[str, ...] = tuple(d.action_id for d in _DEFINITIONS)
 
-__all__ = ["REAL_ACTIONS", "curl_path", "dig_path", "openssl_path", "resolve_executable"]
+__all__ = [
+    "REAL_ACTIONS",
+    "REGISTERED_ACTION_IDS",
+    "curl_path",
+    "dig_path",
+    "nmap_path",
+    "openssl_path",
+    "resolve_executable",
+]
