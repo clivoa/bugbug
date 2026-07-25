@@ -1,0 +1,16 @@
+{
+  "action_id": "fixture.passive",
+  "target": "https://acme-corp.example/app",
+  "argv": [],
+  "hypothesis_id": "hyp-0",
+  "rationale": "Observe one in-scope asset passively.",
+  "rate": 1,
+  "concurrency": 1,
+  "data_touched": "Public response headers only.",
+  "expected_impact": "One low-rate passive request.",
+  "stop_condition": "Stop on any rate limit or block.",
+  "cleanup_plan": "No state is created; nothing to clean up.",
+  "program_rule": "Passive baseline observation.",
+  "required_headers": [],
+  "requested_risk": null
+}
