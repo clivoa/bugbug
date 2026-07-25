@@ -73,3 +73,18 @@ def test_tool_run_executes_in_scope(lab_engagement, tmp_path, capsys, local_serv
     assert payload["executed"] is True
     assert payload["exit_code"] == 0
     assert "stdout" not in payload
+
+
+@pytest.mark.skipif(curl_path() is None, reason="curl not installed")
+def test_tool_run_reports_and_writes_evidence(lab_engagement, tmp_path, capsys, local_server):
+    request = _write_request(tmp_path, local_server, "net.http-get")
+    code = app(
+        ["tool", "run", "net.http-get", str(request), "--engagement", str(lab_engagement), "--json"]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    run_id = payload["evidence_run_id"]
+    assert run_id
+    stdout = (lab_engagement / "evidence" / run_id / "stdout").read_bytes()
+    assert b"lab-ok" in stdout
+    assert "stdout" not in payload
