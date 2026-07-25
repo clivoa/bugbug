@@ -1,11 +1,11 @@
 # Next steps
 
-Status snapshot after merging the risk & approval engine (Tasks 1–7) into
-`main`. Use this as the starting point for the next phase.
+Status snapshot after the tool execution substrate (first executing layer). Use
+this as the starting point for the next phase.
 
 ## Where the project stands
 
-Implemented and verified (692 tests passing, Ruff/format/mypy clean, offline
+Implemented and verified (715 tests passing, Ruff/format/mypy clean, offline
 smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
@@ -15,14 +15,17 @@ smoke pass):
 - **Risk & approval engine** (`src/hackbot/risk/`) — deterministic, fail-closed
   L0–L3 policy gate; canonical L2 challenges; atomic, descriptor-owned,
   single-use, five-minute approval store; see
-  [`risk-and-approval.md`](risk-and-approval.md).
-- **Non-executing CLI** — `hackbot risk evaluate`, `hackbot approval grant`
-  (interactive TTY only), `hackbot approval status`, driven by **inert fixture
-  actions** that execute nothing.
+  [`risk-and-approval.md`](risk-and-approval.md). CLI: `hackbot risk evaluate`,
+  `hackbot approval grant` (TTY only), `hackbot approval status`.
+- **Tool execution substrate** (`src/hackbot/tools/`, `src/hackbot/audit/`) — a
+  gate-bound, validated subprocess runner (no shell, sanitized env, timeout,
+  output caps) that executes a code-owned argv array **only** after an `ALLOW`,
+  plus a secret-free audit trail. First real action: `net.http-get` (curl,
+  in-scope only) via `hackbot tool run`; see [`tool-execution.md`](tool-execution.md).
 - **Secrets** (OS keychain), **doctor**, wheel build + offline smoke test.
 
-Nothing in the tree performs a provider call, subprocess, socket, or
-target-network request yet. That boundary is deliberate.
+The only executing path is the gate-bound substrate above; there is still no
+provider call, MCP, or evidence persistence.
 
 ## The gate contract for the next phase
 
@@ -43,22 +46,26 @@ Concretely, a real tool adapter must:
 
 ## Suggested order of work
 
-1. **Tool adapter substrate** (`src/hackbot/tools/`): a validated argv-array
-   runner (no shell), timeouts, output capture as untrusted data, and audit-log
-   integration. Write it test-first; keep it provider/network-free until the
-   adapter itself is reviewed.
-2. **First real action definitions**: start with L0/L1 passive/low-impact HTTP
-   probes against local labs (`labs/**`) so the end-to-end path
-   (context → evaluate → allow → adapter → evidence) is exercised without any
-   external target.
-3. **Evidence + audit** (`src/hackbot/evidence/`, `src/hackbot/audit/`): persist
-   hypotheses and redacted evidence per engagement; append gate decisions to the
-   audit log.
-4. **Reviewed recon skills**: promote only normalized, reviewed skills from the
-   recon bundle into executable adapters (bundle commands stay data until
-   wrapped). Internal-recon stays disabled unless an explicitly-authorized
-   internal profile is confirmed.
-5. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
+Done: the gate-bound tool substrate (`CommandRunner`, `run_action`, secret-free
+audit) and the first real action (`net.http-get`, lab-only).
+
+1. **Evidence persistence** (`src/hackbot/evidence/`): capture the untrusted tool
+   output (bodies, headers) and per-run hypotheses per engagement, redacted, so
+   the full `context → evaluate → allow → run → evidence` path is complete. Today
+   the substrate keeps only digests/sizes in the audit log, not raw output.
+2. **L2 execution over the CLI**: wire `hackbot tool run` to the grant handshake
+   (`hackbot approval grant`) so an intrusive action can be run once after an
+   interactive TTY approval, consuming the grant atomically via `evaluate`.
+3. **More reviewed actions**: add L0/L1 passive/low-impact definitions to
+   `tools/actions.py` (e.g. header/TLS/DNS probes), each with a code-owned argv
+   template and lab coverage. Promote only normalized, reviewed recon-bundle
+   skills into adapters (bundle commands stay data until wrapped).
+4. **Streaming output caps**: `CommandRunner` currently truncates after
+   `communicate()`; move to streamed reads so a tool cannot buffer huge output
+   before the timeout fires.
+5. **Reviewed recon skills / internal-recon** stays disabled unless an
+   explicitly-authorized internal profile is confirmed.
+6. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
 
 ## Guardrails to keep (from CLAUDE.md / SECURITY.md)
 
@@ -71,8 +78,8 @@ Concretely, a real tool adapter must:
 
 ## Housekeeping
 
-- The development worktree `.worktrees/risk-approval-engine` and its
-  `feat/risk-approval-engine` branch were merged into `main` and removed; `main`
-  is now the only branch/worktree.
-- Plan and per-task SDD reports: `docs/superpowers/plans/` and
-  `.superpowers/sdd/` (progress + task-4…task-7 reports tracked).
+- Each phase is developed on a `feat/*` branch and merged into `main` once tests,
+  Ruff/format, mypy, and the offline smoke test pass. Delete the branch after
+  merge.
+- Specs and plans live in `docs/superpowers/specs/` and
+  `docs/superpowers/plans/`; the risk-engine SDD reports are in `.superpowers/sdd/`.

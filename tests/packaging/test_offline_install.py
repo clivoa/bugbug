@@ -132,3 +132,74 @@ def test_risk_evaluate_without_config_extra_fails_cleanly(offline_venv, tmp_path
     assert "Traceback" not in combined
     assert "hackbot[config]" in combined
     assert not (engagement / "approvals").exists()
+
+
+def test_tool_help_offline(offline_venv):
+    r = _run(offline_venv, ["tool", "--help"])
+    assert r.returncode == 0
+    assert "run" in r.stdout
+
+
+def test_tool_run_without_config_extra_fails_cleanly(offline_venv, tmp_path):
+    # `tool run` needs hackbot[config] to read a YAML engagement; without it the
+    # CLI must fail closed (exit 2, guidance, no traceback) and never execute or
+    # create an audit directory.
+    engagement = tmp_path / "local-lab"
+    engagement.mkdir()
+    (engagement / "program.yaml").write_text(
+        "schema_version: 1\nprogram:\n  name: local-lab\n  platform: local-lab\n"
+        "scope:\n  in_scope:\n    cidrs: ['127.0.0.0/8']\n",
+        encoding="utf-8",
+    )
+    (engagement / "scope.yaml").write_text(
+        "schema_version: 1\nin_scope:\n  cidrs: ['127.0.0.0/8']\n", encoding="utf-8"
+    )
+    (engagement / "authorization.json").write_text(
+        json.dumps(
+            {
+                "confirmed": True,
+                "confirmation_timestamp": "2000-01-01T00:00:00Z",
+                "confirmed_by": "lab-operator",
+            }
+        ),
+        encoding="utf-8",
+    )
+    request = tmp_path / "request.json"
+    request.write_text(
+        json.dumps(
+            {
+                "action_id": "net.http-get",
+                "target": "http://127.0.0.1/",
+                "argv": ["/usr/bin/curl", "-sS", "--max-time", "10", "http://127.0.0.1/"],
+                "hypothesis_id": "hyp-1",
+                "rationale": "lab fetch",
+                "rate": 1,
+                "concurrency": 1,
+                "data_touched": "public",
+                "expected_impact": "one GET",
+                "stop_condition": "stop on error",
+                "cleanup_plan": "none",
+                "program_rule": "lab rule",
+                "required_headers": [],
+                "requested_risk": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+    r = _run(
+        offline_venv,
+        [
+            "tool",
+            "run",
+            "net.http-get",
+            str(request),
+            "--engagement",
+            str(engagement),
+            "--json",
+        ],
+    )
+    combined = r.stdout + r.stderr
+    assert r.returncode == 2, combined
+    assert "Traceback" not in combined
+    assert "hackbot[config]" in combined
+    assert not (engagement / "audit").exists()
