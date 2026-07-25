@@ -1,4 +1,5 @@
 """Pytest bootstrap: make `src/` importable and expose shared paths."""
+
 import sys
 from pathlib import Path
 
