@@ -40,6 +40,14 @@ CTFs and security research. Any other use is out of scope and unsupported.
   issue is collected; sensitive fields are redacted before storage or cloud model use.
 - **Append-only audit log** of scope decisions, approvals, tools, targets, and
   egress snapshots — with secrets redacted.
+- **Gate-bound tool execution.** The first executing layer
+  (`src/hackbot/tools/`) runs a subprocess **only** after an `ALLOW` from the
+  risk gate, **only** a code-owned executable with a code-owned argv array (never
+  a shell, never argv from model/target content), with a sanitized environment
+  (no secret env leaks to children), a mandatory timeout, byte-capped output, and
+  a secret-free audit line per run. Today the only action is `net.http-get`
+  (curl) against in-scope targets. See
+  [`docs/tool-execution.md`](docs/tool-execution.md).
 
 ## Prohibited (never automated)
 
