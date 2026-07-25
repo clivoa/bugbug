@@ -5,7 +5,7 @@ the next phase.
 
 ## Where the project stands
 
-Implemented and verified (756 tests passing, Ruff/format/mypy clean, offline
+Implemented and verified (771 tests passing, Ruff/format/mypy clean, offline
 smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
@@ -31,8 +31,9 @@ smoke pass):
   stored un-redacted.
 - **Findings & reporting** (`src/hackbot/findings/`, `src/hackbot/reporting/`) —
   typed findings that separate demonstrated from plausible impact and require
-  reproducible evidence; markdown reports reference redacted evidence
-  (`hackbot finding add/report/list`); see
+  reproducible evidence; per-platform markdown reports
+  (`generic`/`hackerone`/`bugcrowd`/`yeswehack`/`intigriti`/`immunefi`) reference
+  redacted evidence (`hackbot finding add/report/list`); see
   [`findings-and-reporting.md`](findings-and-reporting.md).
 - **Secrets** (OS keychain), **doctor**, wheel build + offline smoke test.
 
@@ -59,17 +60,14 @@ Concretely, a real tool adapter must:
 ## Suggested order of work
 
 Done: the gate-bound tool substrate (`CommandRunner`, `run_action`, secret-free
-audit), the first actions (`net.http-get` L0, `net.http-post` L2), redacted
-run-linked evidence, L2 execution over the CLI (`tool run --approve`), and typed
-findings + markdown reporting.
+audit), the first actions (HTTP L0/L2 + non-curl DNS/TLS), redacted run-linked
+evidence, L2 execution over the CLI (`tool run --approve`), typed findings, and
+per-platform markdown reporting.
 
-1. **More reviewed actions**: the L0 HTTP probes (`net.http-get`/`-head`/
-   `-options`) and the first non-curl tools (`dns.lookup` via dig, `tls.cert` via
-   openssl) exist. Next: promote only normalized, reviewed recon-bundle skills
-   into code-owned adapters (bundle commands stay data until wrapped).
-2. **Platform report templates**: fill `templates/{hackerone,bugcrowd,…}` and
-   render a finding into each platform's submission format (the generic markdown
-   reporter is the base).
+1. **More reviewed actions**: promote only normalized, reviewed recon-bundle
+   skills into code-owned adapters (bundle commands stay data until wrapped).
+2. **Operator-customizable report templates**: let operators supply their own
+   skeletons under `templates/<platform>/` layered over the code-owned renderers.
 3. **Streaming output caps**: `CommandRunner` currently truncates after
    `communicate()`; move to streamed reads so a tool cannot buffer huge output
    before the timeout fires.
