@@ -1,0 +1,11 @@
+{
+  "title": "Missing security headers",
+  "severity": "low",
+  "status": "untested",
+  "target": "http://127.0.0.1/",
+  "action_id": "net.http-get",
+  "evidence_run_id": null,
+  "summary": "No CSP observed.",
+  "demonstrated_impact": "",
+  "plausible_impact": "Weaker defense in depth."
+}

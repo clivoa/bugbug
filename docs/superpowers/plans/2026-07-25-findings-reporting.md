@@ -665,9 +665,11 @@ def test_finding_list(tmp_path, capsys):
 
 def test_finding_add_rejects_bad_status(tmp_path, capsys):
     bad = tmp_path / "bad.json"
-    bad.write_text('{"title":"x","severity":"low","status":"nope","target":"t",'
-                   '"action_id":"a","evidence_run_id":null,"summary":"s",'
-                   '"demonstrated_impact":"","plausible_impact":""}')
+    bad.write_text(
+        '{"title":"x","severity":"low","status":"nope","target":"t",'
+        '"action_id":"a","evidence_run_id":null,"summary":"s",'
+        '"demonstrated_impact":"","plausible_impact":""}'
+    )
     code = app(["finding", "add", str(bad), "--engagement", str(tmp_path), "--json"])
     assert code == 2
 ```

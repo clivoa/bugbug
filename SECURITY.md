@@ -55,6 +55,12 @@ CTFs and security research. Any other use is out of scope and unsupported.
   redact-before-storing rule), never raw, `0600`/`0700`, and never printed.
   Redaction is best-effort (known secret shapes); evidence files are sensitive
   and live in the git-ignored engagement directory.
+- **Findings never exaggerate impact.** A finding separates demonstrated impact
+  from plausible, untested impact in distinct fields, and a `demonstrated`
+  finding cannot be stored without existing, reproducible evidence (CLAUDE.md
+  rule 10). Findings are secret-scanned; markdown reports reference redacted
+  evidence and never embed raw output. See
+  [`docs/findings-and-reporting.md`](docs/findings-and-reporting.md).
 
 ## Prohibited (never automated)
 
