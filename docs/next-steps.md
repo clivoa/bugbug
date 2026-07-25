@@ -71,9 +71,8 @@ Concretely, a real tool adapter must:
 
 ## Housekeeping
 
-- The development worktree `.worktrees/risk-approval-engine` is now merged into
-  `main`. Remove it when convenient:
-  `git worktree remove .worktrees/risk-approval-engine`
-  (then `git branch -d feat/risk-approval-engine`).
+- The development worktree `.worktrees/risk-approval-engine` and its
+  `feat/risk-approval-engine` branch were merged into `main` and removed; `main`
+  is now the only branch/worktree.
 - Plan and per-task SDD reports: `docs/superpowers/plans/` and
   `.superpowers/sdd/` (progress + task-4…task-7 reports tracked).
