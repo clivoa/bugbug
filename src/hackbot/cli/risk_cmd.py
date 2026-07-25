@@ -244,12 +244,16 @@ def _persist_pending(
     except ApprovalError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_INVALID
+    approval_status = "pending"
     try:
         try:
             store.create_pending(definition, request, context, now=now, nonce=challenge.nonce)
         except ApprovalError as exc:
             if exc.code == "APPROVAL_EXISTS":
-                pass  # An identical pending challenge already exists; report it.
+                # A record for this exact digest already exists (only reachable on
+                # a digest collision, since the digest binds created_at + a random
+                # nonce). Report its true stored state rather than assuming pending.
+                approval_status = store.status(challenge.challenge_digest)
             else:
                 print(f"error: could not persist approval request: {exc}", file=sys.stderr)
                 return EXIT_DENY
@@ -261,7 +265,7 @@ def _persist_pending(
             "reason_code": decision.reason_code,  # type: ignore[attr-defined]
             "effective_risk": decision.effective_risk.name,  # type: ignore[attr-defined]
             "challenge_id": challenge.challenge_digest,
-            "approval_status": "pending",
+            "approval_status": approval_status,
         },
         as_json=as_json,
     )
