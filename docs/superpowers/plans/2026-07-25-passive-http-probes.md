@@ -53,15 +53,16 @@ def test_http_head_and_options_are_registered_l0():
 Add `do_HEAD` / `do_OPTIONS` to `_Handler` in `tests/tools/conftest.py`:
 
 ```python
-    def do_HEAD(self):
-        self.send_response(200)
-        self.send_header("X-Lab", "head-ok")
-        self.end_headers()
+def do_HEAD(self):
+    self.send_response(200)
+    self.send_header("X-Lab", "head-ok")
+    self.end_headers()
 
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self.send_header("Allow", "GET,HEAD,OPTIONS,POST")
-        self.end_headers()
+
+def do_OPTIONS(self):
+    self.send_response(204)
+    self.send_header("Allow", "GET,HEAD,OPTIONS,POST")
+    self.end_headers()
 ```
 
 Add to `tests/tools/test_http_get_e2e.py` (reuse its `_request` by generalizing it
@@ -109,8 +110,12 @@ def test_passive_probe_executes_in_scope(lab_engagement, local_server, action_id
         requested_risk=None,
     )
     outcome = run_action(
-        definition, request, context, now=datetime.now(UTC),
-        runner=CommandRunner(), audit=AuditSink(lab_engagement),
+        definition,
+        request,
+        context,
+        now=datetime.now(UTC),
+        runner=CommandRunner(),
+        audit=AuditSink(lab_engagement),
         evidence=EvidenceStore(lab_engagement),
     )
     assert outcome.decision.kind is DecisionKind.ALLOW

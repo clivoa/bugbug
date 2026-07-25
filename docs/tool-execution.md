@@ -50,6 +50,11 @@ or mutate an action):
 - `argv_template = (curl, "-sS", "--max-time", "10", "{target}")`. Only
   `{target}` is substituted (with the scope-validated request target).
 
+Two more L0 passive probes share the same shape (curl, in-scope only):
+`net.http-head` (`curl -I`, response headers only) and `net.http-options`
+(`curl -i -X OPTIONS`, allowed methods). OPTIONS is safe/idempotent, so it stays
+L0 (not `state_changing`).
+
 ## Audit log
 
 `hackbot.audit.tool_runs.AuditSink` appends to
