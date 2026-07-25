@@ -1,0 +1,16 @@
+{
+  "action_id": "fixture.prohibited",
+  "target": "https://acme-corp.example/app",
+  "argv": [],
+  "hypothesis_id": "",
+  "rationale": "",
+  "rate": null,
+  "concurrency": null,
+  "data_touched": "",
+  "expected_impact": "",
+  "stop_condition": "",
+  "cleanup_plan": "",
+  "program_rule": "Prohibited action must always be denied.",
+  "required_headers": [],
+  "requested_risk": null
+}

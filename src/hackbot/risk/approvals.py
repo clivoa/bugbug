@@ -34,6 +34,7 @@ from hackbot.risk.models import (
     PolicyContext,
     RiskLevel,
 )
+from hackbot.risk.registry import ActionRegistry, RegistryError
 
 _DIGEST_RE = re.compile(r"^[0-9a-f]{64}$", re.ASCII)
 _NONCE_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$", re.ASCII)
@@ -1963,6 +1964,154 @@ class ApprovalStore:
         except ApprovalError as error:
             self._audit_artifact_rejection(artifact, error, now=checked_now)
             raise
+
+    def _request_from_binding(
+        self, block: Mapping[str, object], context: PolicyContext
+    ) -> ActionRequest:
+        """Strictly reconstruct the reviewed request from the persisted binding."""
+        from hackbot.risk.models import RiskLevel
+
+        try:
+            requested = block["requested_risk"]
+            if requested is None:
+                requested_risk = None
+            elif isinstance(requested, bool) or not isinstance(requested, int):
+                raise ApprovalError("APPROVAL_MALFORMED", "malformed approval request")
+            else:
+                requested_risk = RiskLevel(requested)
+            argv = block["argv"]
+            headers = block["required_headers"]
+            if not isinstance(argv, (list, tuple)) or not isinstance(headers, (list, tuple)):
+                raise ApprovalError("APPROVAL_MALFORMED", "malformed approval request")
+            return ActionRequest(
+                engagement_id=context.engagement_id,
+                engagement_path=context.engagement_path,
+                action_id=block["action_id"],  # type: ignore[arg-type]
+                target=block["target"],  # type: ignore[arg-type]
+                argv=tuple(argv),
+                hypothesis_id=block["hypothesis_id"],  # type: ignore[arg-type]
+                rationale=block["rationale"],  # type: ignore[arg-type]
+                rate=block["rate"],  # type: ignore[arg-type]
+                concurrency=block["concurrency"],  # type: ignore[arg-type]
+                data_touched=block["data_touched"],  # type: ignore[arg-type]
+                expected_impact=block["expected_impact"],  # type: ignore[arg-type]
+                stop_condition=block["stop_condition"],  # type: ignore[arg-type]
+                cleanup_plan=block["cleanup_plan"],  # type: ignore[arg-type]
+                program_rule=block["program_rule"],  # type: ignore[arg-type]
+                required_headers=tuple(headers),
+                requested_risk=requested_risk,
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ApprovalError("APPROVAL_MALFORMED", "malformed approval request") from exc
+
+    def challenge_for_pending(
+        self,
+        challenge_digest: str,
+        registry: ActionRegistry,
+        context: PolicyContext,
+        *,
+        now: datetime,
+    ) -> ApprovalChallenge:
+        """Rebuild a pending challenge from its 64-hex digest and code-owned inputs.
+
+        The caller supplies only a canonical digest; no artifact path is ever
+        accepted or opened by name. The reviewed request is reconstructed
+        strictly from the descriptor-owned pending binding, the action
+        definition is resolved only from the code-owned ``registry``, and the
+        rebuilt challenge must reproduce the persisted digest, engagement, and
+        current policy before it is returned. Pure preflight is re-run against
+        the current injected clock so a newly forbidden action fails closed.
+        """
+        checked_now = _utc(now, name="now")
+        if not isinstance(registry, ActionRegistry) or not isinstance(context, PolicyContext):
+            raise ApprovalError("APPROVAL_INVALID_CONTEXT", "invalid approval inputs")
+        digest = self._name(challenge_digest).removesuffix(".json")
+        with self._layout() as layout:
+            with self._digest_lock(layout, digest):
+                self._recover_locked(layout, digest)
+                current = self._state_locked(layout, digest)
+                if current is None:
+                    raise ApprovalError("APPROVAL_MISSING", "approval is unavailable")
+                state, record = current
+                if state != "pending":
+                    code = {
+                        "granted": "APPROVAL_ALREADY_GRANTED",
+                        "consumed": "APPROVAL_CONSUMED",
+                        "expired": "APPROVAL_EXPIRED",
+                    }.get(state, "APPROVAL_MISSING")
+                    raise ApprovalError(code, "approval is not pending")
+                artifact = record.value
+                if (
+                    artifact.get("engagement_id") != self.engagement_id
+                    or artifact.get("engagement_path") != self.engagement_path
+                ):
+                    raise ApprovalError(
+                        "APPROVAL_ENGAGEMENT_MISMATCH",
+                        "approval engagement does not match",
+                    )
+                created_at = _parse_timestamp(artifact.get("created_at"), name="created_at")
+                nonce = artifact.get("nonce")
+                binding = artifact.get("challenge")
+                if not isinstance(nonce, str) or not isinstance(binding, dict):
+                    raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
+                request_block = binding.get("request")
+                if not isinstance(request_block, dict):
+                    raise ApprovalError("APPROVAL_MALFORMED", "malformed approval artifact")
+
+        try:
+            if (
+                context.engagement_id != self.engagement_id
+                or context.engagement_path != self.engagement_path
+            ):
+                raise ApprovalError(
+                    "APPROVAL_ENGAGEMENT_MISMATCH",
+                    "approval engagement does not match",
+                )
+            if binding.get("policy_digest") != context.policy_digest:
+                raise ApprovalError("APPROVAL_POLICY_MISMATCH", "approval policy does not match")
+            request = self._request_from_binding(request_block, context)
+            try:
+                definition = registry.require(request.action_id)
+            except RegistryError as exc:
+                raise ApprovalError("APPROVAL_UNKNOWN_ACTION", "action is not code-owned") from exc
+            self._preflight_current(definition, request, context, checked_now)
+            challenge = build_challenge(
+                definition,
+                request,
+                context,
+                now=created_at,
+                nonce=nonce,
+            )
+            self._assert_local(challenge)
+            if challenge.challenge_digest != digest:
+                raise ApprovalError("APPROVAL_MISMATCH", "approval challenge does not match")
+            if not self._matches(challenge, artifact):
+                if artifact.get("policy_digest") != challenge.policy_digest:
+                    raise ApprovalError(
+                        "APPROVAL_POLICY_MISMATCH", "approval policy does not match"
+                    )
+                raise ApprovalError("APPROVAL_MISMATCH", "approval challenge does not match")
+            return challenge
+        except ApprovalError as error:
+            self._audit_artifact_rejection(artifact, error, now=checked_now)
+            raise
+
+    @staticmethod
+    def _preflight_current(
+        definition: ActionDefinition,
+        request: ActionRequest,
+        context: PolicyContext,
+        now: datetime,
+    ) -> None:
+        """Deny if the action is no longer approval-eligible under the current clock."""
+        from hackbot.risk.policy import RiskEngine
+        from hackbot.risk.registry import ActionRegistry as _Registry
+
+        decision = RiskEngine(_Registry([definition]))._evaluate_without_approval(
+            request, context, now=now
+        )
+        if decision.kind.value != "requires-approval":
+            raise ApprovalError("APPROVAL_NOT_AUTHORIZED", "action is not currently authorized")
 
     def consume(
         self, grant: ApprovalGrant, challenge: ApprovalChallenge, *, now: datetime
