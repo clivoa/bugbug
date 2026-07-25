@@ -36,11 +36,12 @@ skips here).
 ```python
 @dataclass(frozen=True, slots=True)
 class SkillProvenance:
-    skill_id: str          # e.g. "recon/dns-recon"
-    source_note: str       # e.g. "note-consulta-dns"
+    skill_id: str  # e.g. "recon/dns-recon"
+    source_note: str  # e.g. "note-consulta-dns"
     bundle_risk_level: str  # "0".."2"
-    approval_level: str    # "none" | "auto-if-in-scope" | "explicit"
-    attribution: str       # "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    approval_level: str  # "none" | "auto-if-in-scope" | "explicit"
+    attribution: str  # "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+
 
 PROMOTED_ACTIONS: dict[str, SkillProvenance]  # action_id -> provenance
 ```
