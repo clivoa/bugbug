@@ -307,6 +307,14 @@ def _cmd_approval(args: argparse.Namespace) -> int:
     return 2
 
 
+def _cmd_tool(args: argparse.Namespace) -> int:
+    from hackbot.cli import tool_cmd
+
+    if args.taction == "run":
+        return tool_cmd.cmd_run(args.engagement, args.action_id, args.request, as_json=args.json)
+    return 2
+
+
 def _cmd_version(_args: argparse.Namespace) -> int:
     print(f"hackbot {VERSION}")
     return 0
@@ -390,6 +398,15 @@ def build_parser() -> argparse.ArgumentParser:
     ap_status.add_argument("--engagement", required=True, help="engagement directory")
     ap_status.add_argument("--json", action="store_true")
     ap.set_defaults(func=_cmd_approval)
+
+    tl = sub.add_parser("tool", help="run a code-owned action through the risk gate")
+    tl_sub = tl.add_subparsers(dest="taction", required=True)
+    tl_run = tl_sub.add_parser("run", help="evaluate then run an action (only if allowed)")
+    tl_run.add_argument("action_id", help="code-owned action id (e.g. net.http-get)")
+    tl_run.add_argument("request", help="local request JSON file")
+    tl_run.add_argument("--engagement", required=True, help="engagement directory")
+    tl_run.add_argument("--json", action="store_true")
+    tl.set_defaults(func=_cmd_tool)
 
     v = sub.add_parser("version", help="print version")
     v.set_defaults(func=_cmd_version)
