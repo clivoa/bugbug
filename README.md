@@ -98,6 +98,8 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 
 ## Documentation
 
+- [`docs/risk-and-approval.md`](docs/risk-and-approval.md) — L0–L3 gate + L2 approval lifecycle
+- [`docs/next-steps.md`](docs/next-steps.md) — current status and the roadmap for the next phase
 - [`docs/reference-review.md`](docs/reference-review.md) — upstream project analysis
 - [`docs/licenses-and-attribution.md`](docs/licenses-and-attribution.md) — license ledger
 - [`docs/recon-bundle-review.md`](docs/recon-bundle-review.md) — bundle inventory + classification
