@@ -317,6 +317,14 @@ def _cmd_tool(args: argparse.Namespace) -> int:
     return 2
 
 
+def _cmd_skills(args: argparse.Namespace) -> int:
+    from hackbot.cli import skills_cmd
+
+    if args.saction == "list":
+        return skills_cmd.cmd_list(as_json=args.json)
+    return 2
+
+
 def _cmd_finding(args: argparse.Namespace) -> int:
     from hackbot.cli import finding_cmd
 
@@ -444,6 +452,12 @@ def build_parser() -> argparse.ArgumentParser:
     fd_list.add_argument("--engagement", required=True, help="engagement directory")
     fd_list.add_argument("--json", action="store_true")
     fd.set_defaults(func=_cmd_finding)
+
+    sk = sub.add_parser("skills", help="list code-owned actions and recon-bundle provenance")
+    sk_sub = sk.add_subparsers(dest="saction", required=True)
+    sk_list = sk_sub.add_parser("list", help="list actions, availability, and attribution")
+    sk_list.add_argument("--json", action="store_true")
+    sk.set_defaults(func=_cmd_skills)
 
     v = sub.add_parser("version", help="print version")
     v.set_defaults(func=_cmd_version)
