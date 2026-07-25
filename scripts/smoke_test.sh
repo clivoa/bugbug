@@ -47,6 +47,7 @@ echo "== risk/approval/tool CLI help works stdlib-only (no target/provider I/O) 
 ( cd /tmp && "$HACKBOT" approval --help >/dev/null ) && echo "approval help ok"
 ( cd /tmp && "$HACKBOT" tool --help >/dev/null ) && echo "tool help ok"
 ( cd /tmp && "$HACKBOT" tool run --help >/dev/null ) && echo "tool run help ok"
+( cd /tmp && "$HACKBOT" tool run --help | grep -q -- --approve ) && echo "tool run --approve present"
 
 echo "== secrets list degrades gracefully (no keyring, no traceback) =="
 SECOUT="$( cd /tmp && "$HACKBOT" secrets list 2>&1 || true )"

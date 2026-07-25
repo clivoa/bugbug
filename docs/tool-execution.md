@@ -114,12 +114,33 @@ disk under `<engagement>/evidence/<run_id>/`).
 
 | Code | Meaning |
 |------|---------|
-| `0` | executed; tool exit `0` |
-| `1` | policy deny, or tool exited non-zero / timed out |
+| `0` | executed; tool exit `0` (incl. an approved L2 run) |
+| `1` | policy deny, tool non-zero / timed out, or approval drift / grant failure |
 | `2` | invalid input/context/action id, or tool unavailable / missing `config` extra |
-| `4` | L2 requires-approval (not executed) |
+| `3` | L2 `--approve` but TTY unavailable / confirmation mismatch (pending unconsumed) |
+| `4` | L2 without `--approve` (pending written, not executed) |
 
-L2 execution over the CLI (the grant handshake) is intentionally not wired yet.
+### Running an L2 action (`--approve`)
+
+The first L2 action is **`net.http-post`** (`curl -X POST`, `state_changing=True`
+→ L2 floor, in-scope only). L2 actions require an interactive approval
+immediately before execution:
+
+- `hackbot tool run net.http-post REQUEST.json --engagement DIR` (no `--approve`)
+  → evaluates to `requires-approval`, writes a pending challenge, reports
+  `challenge_id`, exit `4`. It does **not** execute.
+- `hackbot tool run net.http-post REQUEST.json --engagement DIR --approve`
+  → writes the pending, prompts at the **TTY** (`APPROVE-<12 hex>`), grants, then
+  executes once via `run_action(grant=…)`, which **consumes the grant atomically**
+  and returns `ALLOW`. Exit `0` on tool success; audit + redacted evidence are
+  captured. Without a TTY (or a wrong code) → exit `3`, the pending stays
+  unconsumed and nothing runs.
+
+Each `tool run --approve` is a distinct single-use approval (one grant → one
+execution); running again prompts again. Single-use protects against reusing the
+**same** grant, not against separately approved executions. `--approve` on an
+L0/L1 action is inert. `risk evaluate` remains the way to write a pending
+challenge without executing.
 
 ## Example (local lab)
 
@@ -135,6 +156,13 @@ hackbot tool run net.http-get request.json --engagement engagements/local-lab --
 
 An in-scope target runs curl once and reports `executed: true, exit_code: 0`; an
 out-of-scope target reports `DENY_SCOPE` with `executed: false` and never runs.
+
+An L2 POST against the same lab, approved at the TTY and run once:
+
+```bash
+# request.json: action_id net.http-post, argv [<curl>, -sS, -X, POST, --max-time, 10, <url>], ...
+hackbot tool run net.http-post request.json --engagement engagements/local-lab --approve --json
+```
 
 ## Boundary
 

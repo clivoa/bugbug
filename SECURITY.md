@@ -45,8 +45,10 @@ CTFs and security research. Any other use is out of scope and unsupported.
   risk gate, **only** a code-owned executable with a code-owned argv array (never
   a shell, never argv from model/target content), with a sanitized environment
   (no secret env leaks to children), a mandatory timeout, byte-capped output, and
-  a secret-free audit line per run. Today the only action is `net.http-get`
-  (curl) against in-scope targets. See
+  a secret-free audit line per run. Actions are `net.http-get` (L0) and
+  `net.http-post` (L2) against in-scope targets. An **L2 action runs only after a
+  fresh, TTY-typed, single-use approval** consumed atomically immediately before
+  execution (`hackbot tool run --approve`); no TTY → it does not run. See
   [`docs/tool-execution.md`](docs/tool-execution.md).
 - **Evidence stored redacted.** Executed runs persist their output to
   `<engagement>/evidence/` **redacted** of known secrets before writing (per the
