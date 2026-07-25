@@ -311,7 +311,9 @@ def _cmd_tool(args: argparse.Namespace) -> int:
     from hackbot.cli import tool_cmd
 
     if args.taction == "run":
-        return tool_cmd.cmd_run(args.engagement, args.action_id, args.request, as_json=args.json)
+        return tool_cmd.cmd_run(
+            args.engagement, args.action_id, args.request, as_json=args.json, approve=args.approve
+        )
     return 2
 
 
@@ -405,6 +407,11 @@ def build_parser() -> argparse.ArgumentParser:
     tl_run.add_argument("action_id", help="code-owned action id (e.g. net.http-get)")
     tl_run.add_argument("request", help="local request JSON file")
     tl_run.add_argument("--engagement", required=True, help="engagement directory")
+    tl_run.add_argument(
+        "--approve",
+        action="store_true",
+        help="approve an L2 action at the TTY and run it once",
+    )
     tl_run.add_argument("--json", action="store_true")
     tl.set_defaults(func=_cmd_tool)
 
