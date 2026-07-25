@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 from hackbot.audit.tool_runs import AuditSink
+from hackbot.evidence.store import EvidenceStore
 from hackbot.risk.context import load_policy_context
 from hackbot.risk.models import ActionDefinition, ActionRequest, DecisionKind, RiskLevel
 from hackbot.tools.adapter import run_action
@@ -113,3 +114,49 @@ def test_requires_approval_without_grant_never_executes(lab_engagement):
     assert outcome.decision.kind is DecisionKind.REQUIRES_APPROVAL
     assert outcome.executed is False
     assert runner.calls == []
+
+
+def test_allow_captures_evidence(lab_engagement):
+    context = load_policy_context(lab_engagement)
+    definition = ActionDefinition(
+        "test.echo",
+        RiskLevel.L0,
+        uses_external_tool=True,
+        executable=_ECHO,
+        argv_template=(_ECHO, "ok"),
+    )
+    outcome = run_action(
+        definition,
+        _request(context, "test.echo"),
+        context,
+        now=datetime.now(UTC),
+        runner=FakeRunner(),
+        audit=AuditSink(lab_engagement),
+        evidence=EvidenceStore(lab_engagement),
+    )
+    assert outcome.evidence_run_id is not None
+    run_dir = lab_engagement / "evidence" / outcome.evidence_run_id
+    assert (run_dir / "stdout").exists()
+    assert (run_dir / "meta.json").exists()
+
+
+def test_deny_captures_no_evidence(lab_engagement):
+    context = load_policy_context(lab_engagement)
+    definition = ActionDefinition(
+        "test.prohibited",
+        RiskLevel.L3,
+        uses_external_tool=True,
+        executable=_ECHO,
+        argv_template=(_ECHO, "x"),
+    )
+    outcome = run_action(
+        definition,
+        _request(context, "test.prohibited"),
+        context,
+        now=datetime.now(UTC),
+        runner=FakeRunner(),
+        audit=AuditSink(lab_engagement),
+        evidence=EvidenceStore(lab_engagement),
+    )
+    assert outcome.evidence_run_id is None
+    assert not (lab_engagement / "evidence").exists()
