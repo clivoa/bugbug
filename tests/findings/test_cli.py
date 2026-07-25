@@ -69,3 +69,17 @@ def test_finding_add_accepts_optional_fields(tmp_path, capsys):
     code = app(["finding", "add", str(desc), "--engagement", str(tmp_path), "--json"])
     assert code == 0
     assert json.loads(capsys.readouterr().out)["finding_id"]
+
+
+def test_finding_report_platform_selects_renderer(tmp_path, capsys):
+    app(["finding", "add", str(FIX / "untested.json"), "--engagement", str(tmp_path), "--json"])
+    capsys.readouterr()
+    code = app(["finding", "report", "--engagement", str(tmp_path), "--platform", "hackerone"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "HackerOne" in out and "Steps To Reproduce" in out
+
+
+def test_finding_report_unknown_platform_is_invalid(tmp_path, capsys):
+    code = app(["finding", "report", "--engagement", str(tmp_path), "--platform", "nope"])
+    assert code == 2

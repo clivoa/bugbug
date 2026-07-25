@@ -323,7 +323,7 @@ def _cmd_finding(args: argparse.Namespace) -> int:
     if args.faction == "add":
         return finding_cmd.cmd_add(args.engagement, args.descriptor, as_json=args.json)
     if args.faction == "report":
-        return finding_cmd.cmd_report(args.engagement)
+        return finding_cmd.cmd_report(args.engagement, platform=args.platform)
     if args.faction == "list":
         return finding_cmd.cmd_list(args.engagement, as_json=args.json)
     return 2
@@ -435,6 +435,11 @@ def build_parser() -> argparse.ArgumentParser:
     fd_add.add_argument("--json", action="store_true")
     fd_report = fd_sub.add_parser("report", help="render all findings to markdown")
     fd_report.add_argument("--engagement", required=True, help="engagement directory")
+    fd_report.add_argument(
+        "--platform",
+        default="generic",
+        help="report format: generic|hackerone|bugcrowd|yeswehack|intigriti|immunefi",
+    )
     fd_list = fd_sub.add_parser("list", help="list findings")
     fd_list.add_argument("--engagement", required=True, help="engagement directory")
     fd_list.add_argument("--json", action="store_true")
