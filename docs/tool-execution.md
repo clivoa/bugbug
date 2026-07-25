@@ -55,6 +55,16 @@ Two more L0 passive probes share the same shape (curl, in-scope only):
 (`curl -i -X OPTIONS`, allowed methods). OPTIONS is safe/idempotent, so it stays
 L0 (not `state_changing`).
 
+Two **non-curl** L0 actions show the substrate generalizes across tools (each
+registered only when its tool resolves, in-scope only):
+
+- **`dns.lookup`** — `dig +short {target}` (a resolver lookup; `target` is a
+  hostname, scope-matched by domain, or an in-scope IP).
+- **`tls.cert`** — `openssl s_client -connect {target}` (`target` is `host:port`,
+  scope-matched by CIDR). `s_client` exits non-zero when it cannot verify a
+  self-signed certificate — expected for a probe; the certificate is still
+  captured in the (redacted) evidence.
+
 ## Audit log
 
 `hackbot.audit.tool_runs.AuditSink` appends to
