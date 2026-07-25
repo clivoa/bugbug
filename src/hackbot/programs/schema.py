@@ -18,6 +18,9 @@ from __future__ import annotations
 import ipaddress
 import re
 from dataclasses import dataclass, field
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from hackbot.risk.models import TestingPolicy
 
 SCHEMA_VERSION = 1
 SUPPORTED_VERSIONS = {1}
@@ -63,6 +66,10 @@ _DOMAIN_RE = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!
 _MOBILE_RE = re.compile(r"^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*){2,}$")
 _REPO_RE = re.compile(r"^github\.com/[^/\s]+/[^/\s]+$", re.I)
 _CONTRACT_RE = re.compile(r"^([a-z0-9]+:)?0x[0-9a-fA-F]{40}$")
+_RESTRICTED_HOURS_WINDOW_RE = re.compile(
+    r"^(?P<start_hour>[01]\d|2[0-3]):(?P<start_minute>[0-5]\d)-"
+    r"(?P<end_hour>[01]\d|2[0-3]):(?P<end_minute>[0-5]\d)$"
+)
 
 
 class ValidationError(Exception):
@@ -88,6 +95,9 @@ def _err(errors: list[str], msg: str) -> None:
 def _validate_entry(kind: str, value: object, errors: list[str], where: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         _err(errors, f"{where}: entry must be a non-empty string, got {value!r}")
+        return None
+    if any(0xD800 <= ord(character) <= 0xDFFF for character in value):
+        _err(errors, f"{where}: contains invalid Unicode")
         return None
     v = value.strip()
     low = v.lower()
@@ -198,11 +208,142 @@ def validate_scope(doc: object, *, require_version: bool = True) -> ScopeDoc:
 def _check_version(v: object, errors: list[str], label: str) -> None:
     if v is None:
         _err(errors, f"{label}: missing required schema_version")
-    elif v not in SUPPORTED_VERSIONS:
+    elif isinstance(v, bool) or not isinstance(v, int) or v not in SUPPORTED_VERSIONS:
         _err(
             errors,
             f"{label}: unsupported schema_version {v!r} (supported: {sorted(SUPPORTED_VERSIONS)})",
         )
+
+
+def _bounded_int(value: object, *, name: str, low: int, high: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+        raise ValidationError([f"{name}: expected integer {low}..{high}"])
+    return value
+
+
+def _strict_bool(value: object, *, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValidationError([f"{name}: expected boolean"])
+    return value
+
+
+def _normalized_unique_strings(value: object, *, name: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValidationError([f"{name}: must be a list"])
+    if any(not isinstance(item, str) for item in value):
+        raise ValidationError([f"{name}: values must be strings"])
+    normalized = tuple(item.strip().lower() for item in value)
+    if any(not item for item in normalized) or len(set(normalized)) != len(normalized):
+        raise ValidationError([f"{name}: values must be non-empty and unique"])
+    return normalized
+
+
+def _restricted_hours(value: object) -> tuple[tuple[str, ...], str | None]:
+    if value is None:
+        return (), None
+    if not isinstance(value, dict):
+        raise ValidationError(["restricted_hours: must be a mapping"])
+    allowed = {"timezone", "windows"}
+    unknown = [key for key in value if key not in allowed]
+    missing = [key for key in allowed if key not in value]
+    if unknown or missing:
+        raise ValidationError(["restricted_hours: requires only timezone and windows"])
+    timezone = value["timezone"]
+    if not isinstance(timezone, str) or not timezone.strip():
+        raise ValidationError(["restricted_hours.timezone: must be a non-empty IANA name"])
+    if any(0xD800 <= ord(character) <= 0xDFFF for character in timezone):
+        raise ValidationError(["restricted_hours.timezone: invalid IANA name"])
+    timezone = timezone.strip()
+    try:
+        ZoneInfo(timezone)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValidationError(["restricted_hours.timezone: invalid IANA name"]) from exc
+    windows = _normalized_unique_strings(value["windows"], name="restricted_hours.windows")
+    if not windows:
+        raise ValidationError(["restricted_hours.windows: must not be empty"])
+    for window in windows:
+        match = _RESTRICTED_HOURS_WINDOW_RE.fullmatch(window)
+        if match is None:
+            raise ValidationError(["restricted_hours.windows: must use HH:MM-HH:MM"])
+        start = int(match["start_hour"]) * 60 + int(match["start_minute"])
+        end = int(match["end_hour"]) * 60 + int(match["end_minute"])
+        if start >= end:
+            raise ValidationError(
+                ["restricted_hours.windows: window must have an unambiguous duration"]
+            )
+    return windows, timezone
+
+
+def validate_testing_policy(value: object) -> TestingPolicy:
+    """Strictly validate testing rules and return a conservative frozen policy."""
+    if not isinstance(value, dict):
+        raise ValidationError(["testing_rules: must be a mapping"])
+    unknown = [key for key in value if key not in _TESTING_KEYS]
+    if unknown:
+        raise ValidationError([f"testing_rules: unknown field {key!r}" for key in unknown])
+
+    restricted_hours, restricted_hours_timezone = _restricted_hours(value.get("restricted_hours"))
+    try:
+        return TestingPolicy(
+            max_requests_per_second=_bounded_int(
+                value.get("max_requests_per_second", 1),
+                name="max_requests_per_second",
+                low=1,
+                high=1_000,
+            ),
+            concurrency=_bounded_int(
+                value.get("concurrency", 1), name="concurrency", low=1, high=100
+            ),
+            automated_scanning_allowed=_strict_bool(
+                value.get("automated_scanning_allowed", False),
+                name="automated_scanning_allowed",
+            ),
+            authenticated_testing_allowed=_strict_bool(
+                value.get("authenticated_testing_allowed", False),
+                name="authenticated_testing_allowed",
+            ),
+            account_creation_allowed=_strict_bool(
+                value.get("account_creation_allowed", False), name="account_creation_allowed"
+            ),
+            multiple_accounts_allowed=_strict_bool(
+                value.get("multiple_accounts_allowed", False),
+                name="multiple_accounts_allowed",
+            ),
+            social_engineering_allowed=_strict_bool(
+                value.get("social_engineering_allowed", False),
+                name="social_engineering_allowed",
+            ),
+            denial_of_service_allowed=_strict_bool(
+                value.get("denial_of_service_allowed", False),
+                name="denial_of_service_allowed",
+            ),
+            out_of_band_testing_allowed=_strict_bool(
+                value.get("out_of_band_testing_allowed", False),
+                name="out_of_band_testing_allowed",
+            ),
+            source_ip_requirements=_normalized_unique_strings(
+                value.get("source_ip_requirements"), name="source_ip_requirements"
+            ),
+            required_headers=_normalized_unique_strings(
+                value.get("required_headers"), name="required_headers"
+            ),
+            restricted_hours=restricted_hours,
+            restricted_hours_timezone=restricted_hours_timezone,
+            prohibited_tools=_normalized_unique_strings(
+                value.get("prohibited_tools"), name="prohibited_tools"
+            ),
+            prohibited_vulnerability_types=_normalized_unique_strings(
+                value.get("prohibited_vulnerability_types"),
+                name="prohibited_vulnerability_types",
+            ),
+            excluded_impacts=_normalized_unique_strings(
+                value.get("excluded_impacts"), name="excluded_impacts"
+            ),
+        )
+    except ValueError as exc:
+        raise ValidationError([f"testing_rules: {exc}"]) from exc
 
 
 def validate_program(doc: object) -> ScopeDoc:
@@ -228,14 +369,18 @@ def validate_program(doc: object) -> ScopeDoc:
                 if k not in _AUTH_KEYS:
                     _err(errors, f"authorization: unknown field {k!r}")
     # testing_rules: strict keys
-    tr = doc.get("testing_rules")
-    if tr is not None:
+    if "testing_rules" in doc:
+        tr = doc["testing_rules"]
         if not isinstance(tr, dict):
             _err(errors, "testing_rules: must be a mapping")
         else:
             for k in tr:
                 if k not in _TESTING_KEYS:
                     _err(errors, f"testing_rules: unknown field {k!r}")
+            try:
+                validate_testing_policy(tr)
+            except ValidationError as exc:
+                errors.extend(exc.errors)
     # scope (nested, no its own version required)
     scope_section = doc.get("scope")
     if scope_section is None:

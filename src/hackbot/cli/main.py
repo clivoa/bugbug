@@ -231,6 +231,82 @@ def _cmd_program(args: argparse.Namespace) -> int:
     return 0
 
 
+_APPROVAL_FIELDS = (
+    ("action_id", "action"),
+    ("target", "target"),
+    ("effective_risk", "risk"),
+    ("argv", "argv"),
+    ("rate", "rate"),
+    ("concurrency", "concurrency"),
+    ("hypothesis_id", "hypothesis"),
+    ("rationale", "rationale"),
+    ("expected_impact", "expected impact"),
+    ("data_touched", "data touched"),
+    ("stop_condition", "stop condition"),
+    ("program_rule", "authorizing rule"),
+    ("cleanup_plan", "cleanup plan"),
+    ("created_at", "created"),
+    ("expires_at", "expires"),
+)
+
+
+def _render_challenge(challenge: object) -> str:
+    """Render the operator-review fields only; never the internal binding."""
+    lines = ["", "L2 approval required — review every field before confirming:"]
+    for attr, label in _APPROVAL_FIELDS:
+        value = getattr(challenge, attr, "")
+        if attr == "effective_risk":
+            value = getattr(value, "name", value)
+        lines.append(f"  {label:>16}: {value}")
+    lines.append(f"  {'challenge':>16}: {getattr(challenge, 'challenge_digest', '')}")
+    return "\n".join(lines) + "\n"
+
+
+def _read_approval_from_tty(challenge: object) -> None:
+    """Confirm an L2 grant interactively through /dev/tty only.
+
+    Raises ``OSError`` when no interactive TTY is available or when the operator
+    does not type the exact short code derived from the challenge digest. There
+    is no argv, environment, stdin, or piped fallback: a wrong or absent
+    confirmation leaves the challenge pending.
+    """
+    digest = getattr(challenge, "challenge_digest", "")
+    expected = f"APPROVE-{digest[:12]}"
+    try:
+        tty = open("/dev/tty", "r+", encoding="utf-8")  # noqa: SIM115 - closed in finally
+    except OSError as exc:
+        raise OSError("interactive TTY required to grant an approval") from exc
+    try:
+        if not tty.isatty():
+            raise OSError("interactive TTY required to grant an approval")
+        tty.write(_render_challenge(challenge))
+        tty.write(f"\nType '{expected}' to approve (anything else cancels): ")
+        tty.flush()
+        typed = tty.readline()
+    finally:
+        tty.close()
+    if typed.strip() != expected:
+        raise OSError("approval confirmation did not match; approval cancelled")
+
+
+def _cmd_risk(args: argparse.Namespace) -> int:
+    from hackbot.cli import risk_cmd
+
+    if args.raction == "evaluate":
+        return risk_cmd.cmd_evaluate(args.engagement, args.request, as_json=args.json)
+    return 2
+
+
+def _cmd_approval(args: argparse.Namespace) -> int:
+    from hackbot.cli import risk_cmd
+
+    if args.aaction == "status":
+        return risk_cmd.cmd_status(args.engagement, args.challenge_id, as_json=args.json)
+    if args.aaction == "grant":
+        return risk_cmd.cmd_grant(args.engagement, args.challenge_id, as_json=args.json)
+    return 2
+
+
 def _cmd_version(_args: argparse.Namespace) -> int:
     print(f"hackbot {VERSION}")
     return 0
@@ -292,6 +368,28 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--rules", help="optional rules.md file to store with the engagement")
     pr.add_argument("--engagements-dir", default="engagements")
     pr.set_defaults(func=_cmd_program)
+
+    rk = sub.add_parser("risk", help="evaluate a local action request against the policy gate")
+    rk_sub = rk.add_subparsers(dest="raction", required=True)
+    rk_eval = rk_sub.add_parser(
+        "evaluate", help="evaluate REQUEST.json (never executes the action)"
+    )
+    rk_eval.add_argument("request", help="local request JSON file")
+    rk_eval.add_argument("--engagement", required=True, help="engagement directory")
+    rk_eval.add_argument("--json", action="store_true")
+    rk.set_defaults(func=_cmd_risk)
+
+    ap = sub.add_parser("approval", help="inspect or grant a pending L2 approval (TTY-only)")
+    ap_sub = ap.add_subparsers(dest="aaction", required=True)
+    ap_grant = ap_sub.add_parser("grant", help="interactively grant a pending challenge (TTY only)")
+    ap_grant.add_argument("challenge_id", help="64-hex challenge id")
+    ap_grant.add_argument("--engagement", required=True, help="engagement directory")
+    ap_grant.add_argument("--json", action="store_true")
+    ap_status = ap_sub.add_parser("status", help="report the stored state of a challenge id")
+    ap_status.add_argument("challenge_id", help="64-hex challenge id")
+    ap_status.add_argument("--engagement", required=True, help="engagement directory")
+    ap_status.add_argument("--json", action="store_true")
+    ap.set_defaults(func=_cmd_approval)
 
     v = sub.add_parser("version", help="print version")
     v.set_defaults(func=_cmd_version)

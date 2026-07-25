@@ -1,5 +1,6 @@
 """Loader wiring to the scope engine + atomic/no-overwrite engagement tests."""
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -35,6 +36,150 @@ def test_program_load_returns_scope():
     doc, scope = loader.load_program_file(FIX / "valid_program.yaml")
     assert scope.check("https://acme-corp.example/app").allowed
     assert not scope.check("https://blog.acme-corp.example/").allowed
+
+
+def test_loader_rejects_duplicate_yaml_keys_in_program_at_every_depth(tmp_path):
+    program = tmp_path / "program.yaml"
+    program.write_text(
+        """schema_version: 1
+program:
+  name: first-name
+  name: second-name
+scope:
+  in_scope:
+    domains: [example.com]
+    domains: [expanded.example]
+testing_rules:
+  max_requests_per_second: 1
+  max_requests_per_second: 1000
+  automated_scanning_allowed: false
+  automated_scanning_allowed: true
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(loader.ProgramError, match="duplicate YAML key"):
+        loader.load_program_file(program)
+
+
+def test_loader_rejects_duplicate_yaml_keys_in_standalone_scope(tmp_path):
+    scope = tmp_path / "scope.yaml"
+    scope.write_text(
+        """schema_version: 1
+in_scope:
+  domains: [example.com]
+  domains: [expanded.example]
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(loader.ProgramError, match="duplicate YAML key"):
+        loader.load_scope_file(scope)
+
+
+def test_loader_rejects_duplicate_json_keys_in_program_at_every_depth(tmp_path):
+    program = tmp_path / "program.json"
+    program.write_text(
+        '{"schema_version": 1, "program": {"name": "first", "name": "last"}, '
+        '"scope": {"in_scope": {"domains": ["example.com"], '
+        '"domains": ["expanded.example"]}}, "testing_rules": '
+        '{"max_requests_per_second": 1, "max_requests_per_second": 1000}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(loader.ProgramError, match="duplicate JSON key"):
+        loader.load_program_file(program)
+
+
+def test_loader_rejects_duplicate_json_keys_in_standalone_scope(tmp_path):
+    scope = tmp_path / "scope.json"
+    scope.write_text(
+        '{"schema_version": 1, "in_scope": {"domains": ["example.com"], '
+        '"domains": ["expanded.example"]}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(loader.ProgramError, match="duplicate JSON key"):
+        loader.load_scope_file(scope)
+
+
+@pytest.mark.parametrize(
+    "mapping_key",
+    ["1: one", "? [sequence, key]\n: value"],
+)
+def test_loader_rejects_non_string_or_unhashable_yaml_mapping_keys(tmp_path, mapping_key):
+    scope = tmp_path / "scope.yaml"
+    scope.write_text(f"schema_version: 1\n{mapping_key}\n", encoding="utf-8")
+    with pytest.raises(loader.ProgramError, match="mapping key must be a string"):
+        loader.load_scope_file(scope)
+
+
+def test_loader_schema_version_unhashable_value_raises_validation_error(tmp_path):
+    scope = tmp_path / "scope.yaml"
+    scope.write_text("schema_version: []\nin_scope:\n  domains: [example.com]\n", encoding="utf-8")
+    with pytest.raises(ValidationError, match="unsupported schema_version"):
+        loader.load_scope_file(scope)
+
+
+def test_loader_rejects_invalid_restricted_hours_zoneinfo_name(tmp_path):
+    program = tmp_path / "program.yaml"
+    program.write_text(
+        """schema_version: 1
+scope:
+  in_scope:
+    domains: [example.com]
+testing_rules:
+  restricted_hours:
+    timezone: /etc/passwd
+    windows: ["09:00-10:00"]
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError, match="restricted_hours.timezone"):
+        loader.load_program_file(program)
+
+
+@pytest.mark.parametrize("filename", ["program.yaml", "scope.json"])
+def test_loader_invalid_utf8_raises_program_error(tmp_path, filename):
+    path = tmp_path / filename
+    path.write_bytes(b"\xff\xfe")
+    with pytest.raises(loader.ProgramError, match=str(path)):
+        if filename == "program.yaml":
+            loader.load_program_file(path)
+        else:
+            loader.load_scope_file(path)
+
+
+def _over_limit_json_integer() -> str:
+    limit = sys.get_int_max_str_digits()
+    return "9" * (limit + 1 if limit else 10_000)
+
+
+def test_loader_json_parser_value_error_raises_program_error(tmp_path):
+    program = tmp_path / "program.json"
+    program.write_text('{"schema_version": ' + _over_limit_json_integer() + "}", encoding="utf-8")
+    with pytest.raises(loader.ProgramError, match=str(program)):
+        loader.load_program_file(program)
+
+
+def test_loader_json_recursion_error_raises_program_error(tmp_path, monkeypatch):
+    scope = tmp_path / "scope.json"
+    scope.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        loader,
+        "strict_json_loads",
+        lambda _text: (_ for _ in ()).throw(RecursionError()),
+    )
+    with pytest.raises(loader.ProgramError, match=str(scope)):
+        loader.load_scope_file(scope)
+
+
+def test_loader_yaml_recursion_error_raises_program_error(tmp_path, monkeypatch):
+    scope = tmp_path / "scope.yaml"
+    scope.write_text("schema_version: 1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        loader,
+        "_strict_yaml_load",
+        lambda _text, _yaml: (_ for _ in ()).throw(RecursionError()),
+    )
+    with pytest.raises(loader.ProgramError, match=str(scope)):
+        loader.load_scope_file(scope)
 
 
 # --- engagement creation ---------------------------------------------------

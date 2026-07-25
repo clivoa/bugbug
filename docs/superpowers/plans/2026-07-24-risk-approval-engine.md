@@ -398,7 +398,10 @@ Implement this order without filesystem access:
 
 ```python
 def evaluate(self, request, context, grant=None, now=None):
-    if request.engagement_id != context.engagement_id:
+    if (
+        request.engagement_id != context.engagement_id
+        or request.engagement_path != context.engagement_path
+    ):
         return deny("DENY_ENGAGEMENT_MISMATCH")
     try:
         definition = self.registry.require(request.action_id)

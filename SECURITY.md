@@ -18,7 +18,14 @@ CTFs and security research. Any other use is out of scope and unsupported.
 - **Four-level risk model.** L0 passive (auto), L1 low-impact active (gated auto),
   L2 intrusive/state-changing (explicit approval each run), L3 prohibited (never
   implemented). No "disable all safeguards" switch. `--dangerously-skip-permissions`
-  is never used.
+  is never used. The deterministic, fail-closed policy gate and single-use,
+  five-minute L2 approval lifecycle are **implemented and enforced in code**
+  (`src/hackbot/risk/`); see [`docs/risk-and-approval.md`](docs/risk-and-approval.md).
+  Today these are exercised only against inert, non-executing fixture actions via
+  `hackbot risk`/`hackbot approval` — no tool adapter runs anything yet. Real tool
+  execution arrives in a later, separately reviewed phase and must pass this same
+  gate before any action runs; an approval grant authorizes exactly one action and
+  is consumed atomically once.
 - **Discovery ≠ authorization.** ASN/CIDR/cert/favicon/PTR/SPF/DNS-history/Shodan/
   GitHub results are hypotheses only; they never auto-expand scope. Shared CDN/cloud
   ranges are rejected unless explicitly in scope.
