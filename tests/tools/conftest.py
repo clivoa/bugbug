@@ -55,6 +55,16 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header("X-Lab", "head-ok")
+        self.end_headers()
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Allow", "GET,HEAD,OPTIONS,POST")
+        self.end_headers()
+
     def log_message(self, *_args):
         pass
 

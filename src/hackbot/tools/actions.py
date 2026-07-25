@@ -57,6 +57,26 @@ def _build_actions() -> ActionRegistry:
                 argv_template=(curl, "-sS", "-X", "POST", "--max-time", "10", "{target}"),
             )
         )
+        definitions.append(
+            ActionDefinition(
+                "net.http-head",
+                RiskLevel.L0,
+                network_access=True,
+                uses_external_tool=True,
+                executable=curl,
+                argv_template=(curl, "-sS", "-I", "--max-time", "10", "{target}"),
+            )
+        )
+        definitions.append(
+            ActionDefinition(
+                "net.http-options",
+                RiskLevel.L0,
+                network_access=True,
+                uses_external_tool=True,
+                executable=curl,
+                argv_template=(curl, "-sS", "-i", "-X", "OPTIONS", "--max-time", "10", "{target}"),
+            )
+        )
     return ActionRegistry(definitions)
 
 
