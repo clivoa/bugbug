@@ -25,3 +25,16 @@ def test_http_get_is_registered_and_curl_backed():
     assert definition.shell_execution is False
     assert os.path.isabs(definition.executable)
     assert definition.argv_template[-1] == "{target}"
+
+
+@pytest.mark.skipif(curl_path() is None, reason="curl not installed")
+def test_http_post_is_registered_l2_and_state_changing():
+    from hackbot.risk.models import RiskLevel
+
+    definition = REAL_ACTIONS.require("net.http-post")
+    assert definition.state_changing is True
+    assert definition.effective_floor is RiskLevel.L2
+    assert definition.network_access is True
+    assert definition.uses_external_tool is True
+    assert definition.shell_execution is False
+    assert definition.argv_template[-1] == "{target}"
