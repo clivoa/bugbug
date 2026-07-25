@@ -1,0 +1,11 @@
+{
+  "title": "Reflected value on /echo",
+  "severity": "medium",
+  "status": "demonstrated",
+  "target": "http://127.0.0.1/echo",
+  "action_id": "net.http-get",
+  "evidence_run_id": "20260725T120000Z-0123456789ab",
+  "summary": "The q parameter is reflected unescaped.",
+  "demonstrated_impact": "The response echoes attacker-controlled text.",
+  "plausible_impact": "Script execution if a sink is reachable."
+}
