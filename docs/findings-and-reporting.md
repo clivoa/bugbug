@@ -21,6 +21,10 @@ evidence before claiming a vulnerability*:
   non-empty `demonstrated_impact`. `plausible` / `untested` may omit both.
 - `evidence_run_id` is format-validated (`<UTC-timestamp>-<12 hex>`); it cannot
   contain a path.
+- Optional `vulnerability_type` (the weakness class, e.g. `reflected-xss`,
+  `sqli`, `ssrf`, `idor`, `auth-bypass`, `rce`) and `reproduction_steps` name the
+  vulnerability scenario for the report; both default to empty and may be omitted
+  from the descriptor.
 
 ## Storage
 
@@ -36,26 +40,33 @@ evidence before claiming a vulnerability*:
 
 ## Report
 
-`hackbot.reporting.render.render_markdown(findings, *, engagement_id)` produces a
+`hackbot.reporting.render.render(findings, *, engagement_id, platform)` produces a
 markdown report grouped by severity (critical → info). Each finding shows its
-title, severity, status, target, action, the `evidence_run_id` **pointer**, the
-summary, and two **separate** sections — *Demonstrated impact* and *Plausible
-additional impact (untested)*. The report **never embeds raw output**; the
-redacted proof lives under `evidence/<run_id>/`. Reports stay local under the
-git-ignored engagement directory.
+title, severity, status, weakness/type, target, action, the `evidence_run_id`
+**pointer**, the summary, steps to reproduce, and two **separate** sections —
+*Demonstrated impact* and *Plausible additional impact (untested)*. The report
+**never embeds raw output**; the redacted proof lives under `evidence/<run_id>/`.
+Reports stay local under the git-ignored engagement directory.
+
+Code-owned per-platform renderers format the same finding into each platform's
+conventional section layout: `generic`, `hackerone`, `bugcrowd`, `yeswehack`,
+`intigriti`, `immunefi`. There is no template engine — the renderers are typed and
+tested, with no injection surface. Every platform keeps demonstrated and plausible
+impact separate and references redacted evidence by `run_id`.
 
 ## CLI
 
 ```text
 hackbot finding add FINDING.json --engagement DIR [--json]
-hackbot finding report --engagement DIR
+hackbot finding report --engagement DIR [--platform NAME]
 hackbot finding list --engagement DIR [--json]
 ```
 
 `add` strict-parses the descriptor (≤ 64 KiB, UTF-8, no duplicate keys /
 non-finite constants, known keys only; `finding_id`/`created_at` are set by the
 CLI, not the file), builds the `Finding`, and stores it. `report` renders all
-findings to markdown on stdout. `list` prints a compact
+findings to markdown on stdout in the chosen `--platform` format (default
+`generic`; an unknown platform → exit `2`). `list` prints a compact
 `finding_id / severity / status / title` summary.
 
 ### Exit codes
