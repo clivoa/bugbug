@@ -1,11 +1,11 @@
 # Next steps
 
-Status snapshot after L2 execution over the CLI. Use this as the starting point
-for the next phase.
+Status snapshot after findings & reporting. Use this as the starting point for
+the next phase.
 
 ## Where the project stands
 
-Implemented and verified (730 tests passing, Ruff/format/mypy clean, offline
+Implemented and verified (748 tests passing, Ruff/format/mypy clean, offline
 smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
@@ -28,6 +28,11 @@ smoke pass):
   output **redacted** and run-linked under `<engagement>/evidence/<run_id>/`
   (audit written first); best-effort redaction, raw output never printed or
   stored un-redacted.
+- **Findings & reporting** (`src/hackbot/findings/`, `src/hackbot/reporting/`) —
+  typed findings that separate demonstrated from plausible impact and require
+  reproducible evidence; markdown reports reference redacted evidence
+  (`hackbot finding add/report/list`); see
+  [`findings-and-reporting.md`](findings-and-reporting.md).
 - **Secrets** (OS keychain), **doctor**, wheel build + offline smoke test.
 
 The only executing path is the gate-bound substrate above; there is still no
@@ -54,14 +59,16 @@ Concretely, a real tool adapter must:
 
 Done: the gate-bound tool substrate (`CommandRunner`, `run_action`, secret-free
 audit), the first actions (`net.http-get` L0, `net.http-post` L2), redacted
-run-linked evidence, and L2 execution over the CLI (`tool run --approve`).
+run-linked evidence, L2 execution over the CLI (`tool run --approve`), and typed
+findings + markdown reporting.
 
 1. **More reviewed actions**: add L0/L1 passive/low-impact definitions to
    `tools/actions.py` (e.g. header/TLS/DNS probes), each with a code-owned argv
    template and lab coverage. Promote only normalized, reviewed recon-bundle
    skills into adapters (bundle commands stay data until wrapped).
-2. **Findings / reporting** (`src/hackbot/findings/`, `src/hackbot/reporting/`):
-   turn run-linked evidence into reproducible findings and platform reports.
+2. **Platform report templates**: fill `templates/{hackerone,bugcrowd,…}` and
+   render a finding into each platform's submission format (the generic markdown
+   reporter is the base).
 3. **Streaming output caps**: `CommandRunner` currently truncates after
    `communicate()`; move to streamed reads so a tool cannot buffer huge output
    before the timeout fires.

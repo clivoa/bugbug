@@ -11,10 +11,10 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 
 ## Status
 
-Early build; **730 automated tests passing** on **Python 3.14** (project minimum
+Early build; **748 automated tests passing** on **Python 3.14** (project minimum
 3.11). Implemented and verified so far:
 - **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `program`, `risk`, `approval`,
-  `tool`, `version`) — stdlib-only core, runs offline; installable as a wheel
+  `tool`, `finding`, `version`) — stdlib-only core, runs offline; installable as a wheel
   (`scripts/build_wheel.py` + `scripts/smoke_test.sh`, both fully offline).
 - **Risk & approval engine** (`src/hackbot/risk/`) — deterministic, fail-closed
   L0–L3 policy gate and single-use, five-minute L2 approval lifecycle that every
@@ -29,6 +29,11 @@ Early build; **730 automated tests passing** on **Python 3.14** (project minimum
   only. Executed runs persist **redacted, run-linked evidence**
   (`src/hackbot/evidence/`) per engagement. See
   [`docs/tool-execution.md`](docs/tool-execution.md).
+- **Findings & reporting** (`src/hackbot/findings/`, `src/hackbot/reporting/`) —
+  typed findings that separate demonstrated from plausible impact and require
+  reproducible evidence (`hackbot finding add/report/list`); markdown reports
+  reference redacted evidence, never raw output. See
+  [`docs/findings-and-reporting.md`](docs/findings-and-reporting.md).
 - **Diagnostic** available two ways: packaged Python (`hackbot doctor [--json]`,
   cross-platform, flags Python <3.11 as incompatible) and the pre-install shell
   script (`scripts/doctor.sh`).
@@ -102,13 +107,14 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 ```bash
 .venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
 .venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/python -m pytest tests -q                 # full safety suite (730 tests)
+.venv/bin/python -m pytest tests -q                 # full safety suite (748 tests)
 ```
 
 ## Documentation
 
 - [`docs/risk-and-approval.md`](docs/risk-and-approval.md) — L0–L3 gate + L2 approval lifecycle
 - [`docs/tool-execution.md`](docs/tool-execution.md) — gate-bound subprocess substrate + `net.http-get`
+- [`docs/findings-and-reporting.md`](docs/findings-and-reporting.md) — typed findings + markdown reports
 - [`docs/next-steps.md`](docs/next-steps.md) — current status and the roadmap for the next phase
 - [`docs/reference-review.md`](docs/reference-review.md) — upstream project analysis
 - [`docs/licenses-and-attribution.md`](docs/licenses-and-attribution.md) — license ledger
