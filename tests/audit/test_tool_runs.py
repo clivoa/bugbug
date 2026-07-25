@@ -17,7 +17,9 @@ def _result() -> CommandResult:
     return CommandResult(0, b"body", b"", 12, False, False)
 
 
-def _record(sink: AuditSink, *, argv=("/usr/bin/curl", "http://127.0.0.1/"), result=_result()):
+def _record(sink: AuditSink, *, argv=("/usr/bin/curl", "http://127.0.0.1/"), result=...):
+    if result is ...:
+        result = _result()
     sink.record_run(
         action_id="net.http-get",
         effective_risk=RiskLevel.L0,
