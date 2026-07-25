@@ -51,6 +51,7 @@ impact, evidence reference.
 ```python
 PLATFORMS = ("generic", "hackerone", "bugcrowd", "yeswehack", "intigriti", "immunefi")
 
+
 def render(findings, *, engagement_id: str, platform: str = "generic") -> str: ...
 ```
 

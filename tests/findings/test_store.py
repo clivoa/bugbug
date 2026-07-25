@@ -62,3 +62,12 @@ def test_duplicate_finding_id_is_rejected(tmp_path):
     store.add(finding)
     with pytest.raises(FindingError):
         store.add(finding)
+
+
+def test_store_round_trips_optional_fields(tmp_path):
+    store = FindingStore(tmp_path)
+    finding = _finding(tmp_path, vulnerability_type="sqli", reproduction_steps="' OR 1=1 -- ")
+    store.add(finding)
+    loaded = store.load_all()[0]
+    assert loaded.vulnerability_type == "sqli"
+    assert loaded.reproduction_steps == "' OR 1=1 -- "

@@ -111,8 +111,8 @@ In `src/hackbot/findings/store.py`, add to `_to_dict`:
 and in `_from_dict`'s `Finding(...)` call:
 
 ```python
-            vulnerability_type=value.get("vulnerability_type", ""),
-            reproduction_steps=value.get("reproduction_steps", ""),
+vulnerability_type = (value.get("vulnerability_type", ""),)
+reproduction_steps = (value.get("reproduction_steps", ""),)
 ```
 
 - [ ] **Step 5: Accept them (optionally) in the CLI descriptor**
@@ -150,8 +150,8 @@ Replace the key checks in `cmd_add`:
 and pass the optional fields to `Finding(...)`:
 
 ```python
-            vulnerability_type=value.get("vulnerability_type", ""),  # type: ignore[arg-type]
-            reproduction_steps=value.get("reproduction_steps", ""),  # type: ignore[arg-type]
+vulnerability_type = (value.get("vulnerability_type", ""),)  # type: ignore[arg-type]
+reproduction_steps = (value.get("reproduction_steps", ""),)  # type: ignore[arg-type]
 ```
 
 - [ ] **Step 6: Run and verify GREEN**
@@ -268,28 +268,52 @@ class _PlatformSpec:
 
 _SPECS: dict[str, _PlatformSpec] = {
     "generic": _PlatformSpec(
-        "Generic", "Vulnerability type", "", "**Steps to reproduce**",
-        "**Demonstrated impact**", "**Plausible additional impact (untested)**",
+        "Generic",
+        "Vulnerability type",
+        "",
+        "**Steps to reproduce**",
+        "**Demonstrated impact**",
+        "**Plausible additional impact (untested)**",
     ),
     "hackerone": _PlatformSpec(
-        "HackerOne", "Weakness", "### Summary", "### Steps To Reproduce",
-        "### Impact", "### Additional impact (plausible, untested)",
+        "HackerOne",
+        "Weakness",
+        "### Summary",
+        "### Steps To Reproduce",
+        "### Impact",
+        "### Additional impact (plausible, untested)",
     ),
     "bugcrowd": _PlatformSpec(
-        "Bugcrowd", "Bug type", "### Description", "### Steps to reproduce",
-        "### Impact", "### Additional context (plausible, untested)",
+        "Bugcrowd",
+        "Bug type",
+        "### Description",
+        "### Steps to reproduce",
+        "### Impact",
+        "### Additional context (plausible, untested)",
     ),
     "yeswehack": _PlatformSpec(
-        "YesWeHack", "Bug type", "### Description", "### Steps to reproduce",
-        "### Impact", "### Additional impact (plausible, untested)",
+        "YesWeHack",
+        "Bug type",
+        "### Description",
+        "### Steps to reproduce",
+        "### Impact",
+        "### Additional impact (plausible, untested)",
     ),
     "intigriti": _PlatformSpec(
-        "Intigriti", "Vulnerability type", "### Description", "### Proof of concept",
-        "### Impact", "### Additional impact (plausible, untested)",
+        "Intigriti",
+        "Vulnerability type",
+        "### Description",
+        "### Proof of concept",
+        "### Impact",
+        "### Additional impact (plausible, untested)",
     ),
     "immunefi": _PlatformSpec(
-        "Immunefi", "Vulnerability type", "### Summary", "### Proof of Concept",
-        "### Impact", "### Additional impact (plausible, untested)",
+        "Immunefi",
+        "Vulnerability type",
+        "### Summary",
+        "### Proof of Concept",
+        "### Impact",
+        "### Additional impact (plausible, untested)",
     ),
 }
 
@@ -298,7 +322,7 @@ PLATFORMS = tuple(_SPECS)
 
 def _section(heading: str, body: str) -> list[str]:
     body = body.strip() or "_Not provided._"
-    return ([heading, "", body, ""] if heading else [body, ""])
+    return [heading, "", body, ""] if heading else [body, ""]
 
 
 def _steps_body(finding: Finding) -> str:

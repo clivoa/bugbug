@@ -11,7 +11,7 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 
 ## Status
 
-Early build; **756 automated tests passing** on **Python 3.14** (project minimum
+Early build; **771 automated tests passing** on **Python 3.14** (project minimum
 3.11). Implemented and verified so far:
 - **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `program`, `risk`, `approval`,
   `tool`, `finding`, `version`) — stdlib-only core, runs offline; installable as a wheel
@@ -32,7 +32,8 @@ Early build; **756 automated tests passing** on **Python 3.14** (project minimum
   [`docs/tool-execution.md`](docs/tool-execution.md).
 - **Findings & reporting** (`src/hackbot/findings/`, `src/hackbot/reporting/`) —
   typed findings that separate demonstrated from plausible impact and require
-  reproducible evidence (`hackbot finding add/report/list`); markdown reports
+  reproducible evidence (`hackbot finding add/report/list`); per-platform markdown
+  reports (`--platform generic|hackerone|bugcrowd|yeswehack|intigriti|immunefi`)
   reference redacted evidence, never raw output. See
   [`docs/findings-and-reporting.md`](docs/findings-and-reporting.md).
 - **Diagnostic** available two ways: packaged Python (`hackbot doctor [--json]`,
@@ -108,7 +109,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 ```bash
 .venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
 .venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/python -m pytest tests -q                 # full safety suite (756 tests)
+.venv/bin/python -m pytest tests -q                 # full safety suite (771 tests)
 ```
 
 ## Documentation

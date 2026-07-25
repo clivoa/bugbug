@@ -56,6 +56,8 @@ class Finding:
     demonstrated_impact: str
     plausible_impact: str
     created_at: datetime
+    vulnerability_type: str = ""
+    reproduction_steps: str = ""
 
     def __post_init__(self) -> None:
         _text(self.title, name="title", limit=512)
@@ -64,6 +66,8 @@ class Finding:
         _text(self.summary, name="summary", limit=8_192)
         _text(self.demonstrated_impact, name="demonstrated_impact", limit=8_192, allow_empty=True)
         _text(self.plausible_impact, name="plausible_impact", limit=8_192, allow_empty=True)
+        _text(self.vulnerability_type, name="vulnerability_type", limit=128, allow_empty=True)
+        _text(self.reproduction_steps, name="reproduction_steps", limit=8_192, allow_empty=True)
         if type(self.severity) is not Severity:
             raise ValueError("severity must be a Severity member")
         if type(self.status) is not FindingStatus:
