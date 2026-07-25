@@ -292,7 +292,15 @@ def _write_post_request(path: Path, target: str) -> Path:
 def test_tool_run_l2_without_approve_writes_pending(lab_engagement, tmp_path, capsys):
     request = _write_post_request(tmp_path, "http://127.0.0.1/")
     code = app(
-        ["tool", "run", "net.http-post", str(request), "--engagement", str(lab_engagement), "--json"]
+        [
+            "tool",
+            "run",
+            "net.http-post",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--json",
+        ]
     )
     payload = json.loads(capsys.readouterr().out)
     assert code == 4
@@ -414,8 +422,14 @@ def cmd_run(
     try:
         try:
             outcome = run_action(
-                definition, request, context, now=now,
-                runner=runner, audit=audit, evidence=evidence, approval_store=store,
+                definition,
+                request,
+                context,
+                now=now,
+                runner=runner,
+                audit=audit,
+                evidence=evidence,
+                approval_store=store,
             )
         except (RunnerError, AuditError, EvidenceError) as exc:
             print(f"error: {exc}", file=sys.stderr)
@@ -425,9 +439,7 @@ def cmd_run(
         if outcome.decision.kind is DecisionKind.REQUIRES_APPROVAL:
             challenge = outcome.decision.challenge
             try:
-                store.create_pending(
-                    definition, request, context, now=now, nonce=challenge.nonce
-                )
+                store.create_pending(definition, request, context, now=now, nonce=challenge.nonce)
             except ApprovalError as exc:
                 if exc.code != "APPROVAL_EXISTS":
                     print(f"error: could not persist approval request: {exc}", file=sys.stderr)
@@ -456,8 +468,15 @@ def cmd_run(
                 return exc.exit_code
             try:
                 outcome = run_action(
-                    definition, request, fresh_context, grant=grant, now=datetime.now(UTC),
-                    runner=runner, audit=audit, evidence=evidence, approval_store=store,
+                    definition,
+                    request,
+                    fresh_context,
+                    grant=grant,
+                    now=datetime.now(UTC),
+                    runner=runner,
+                    audit=audit,
+                    evidence=evidence,
+                    approval_store=store,
                 )
             except (RunnerError, AuditError, EvidenceError) as exc:
                 print(f"error: {exc}", file=sys.stderr)
@@ -497,7 +516,9 @@ so the rebuilt challenge digest matches (no `ActionOutcome` change needed).
 In `build_parser`, add to the `tool run` subparser:
 
 ```python
-    tl_run.add_argument("--approve", action="store_true", help="approve an L2 action at the TTY and run it once")
+tl_run.add_argument(
+    "--approve", action="store_true", help="approve an L2 action at the TTY and run it once"
+)
 ```
 
 and in `_cmd_tool`:
