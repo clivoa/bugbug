@@ -2,11 +2,15 @@
 
 import http.server
 import json
+import ssl
+import subprocess
 import threading
 from pathlib import Path
 
 import pytest
 import yaml
+
+from hackbot.tools.actions import openssl_path
 
 _PROGRAM = {
     "schema_version": 1,
@@ -76,5 +80,44 @@ def local_server():
     thread.start()
     try:
         yield f"http://127.0.0.1:{server.server_address[1]}/"
+    finally:
+        server.shutdown()
+
+
+@pytest.fixture
+def tls_server(tmp_path):
+    openssl = openssl_path()
+    if openssl is None:
+        pytest.skip("openssl not installed")
+    key = tmp_path / "key.pem"
+    cert = tmp_path / "cert.pem"
+    subprocess.run(
+        [
+            openssl,
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-keyout",
+            str(key),
+            "-out",
+            str(cert),
+            "-days",
+            "1",
+            "-nodes",
+            "-subj",
+            "/CN=localhost",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(str(cert), str(key))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    server.socket = context.wrap_socket(server.socket, server_side=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"127.0.0.1:{server.server_address[1]}"
     finally:
         server.shutdown()
