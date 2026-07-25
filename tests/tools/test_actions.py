@@ -6,8 +6,10 @@ import pytest
 
 from hackbot.tools.actions import (
     REAL_ACTIONS,
+    REGISTERED_ACTION_IDS,
     curl_path,
     dig_path,
+    nmap_path,
     openssl_path,
     resolve_executable,
 )
@@ -82,3 +84,33 @@ def test_tls_cert_is_registered_l0():
     assert d.network_access is True and d.uses_external_tool is True
     assert d.state_changing is False
     assert d.argv_template[-1] == "{target}" and "s_client" in d.argv_template
+
+
+@pytest.mark.skipif(dig_path() is None, reason="dig not installed")
+@pytest.mark.parametrize(
+    "action_id,record", [("dns.txt", "TXT"), ("dns.mx", "MX"), ("dns.ns", "NS")]
+)
+def test_dns_record_actions_are_registered_l0(action_id, record):
+    from hackbot.risk.models import RiskLevel
+
+    d = REAL_ACTIONS.require(action_id)
+    assert d.effective_floor is RiskLevel.L0
+    assert d.network_access is True and d.uses_external_tool is True
+    assert d.argv_template[-1] == record and "{target}" in d.argv_template
+
+
+@pytest.mark.skipif(nmap_path() is None, reason="nmap not installed")
+def test_port_scan_is_registered_l2_high_volume():
+    from hackbot.risk.models import RiskLevel
+
+    d = REAL_ACTIONS.require("net.port-scan")
+    assert d.effective_floor is RiskLevel.L2
+    assert d.high_volume is True
+    assert d.network_access is True and d.uses_external_tool is True
+    assert d.argv_template[-1] == "{target}"
+
+
+def test_registered_action_ids_lists_only_available_actions():
+    assert "dns.txt" in REGISTERED_ACTION_IDS
+    if nmap_path() is None:
+        assert "net.port-scan" not in REGISTERED_ACTION_IDS
