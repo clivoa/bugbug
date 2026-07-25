@@ -82,16 +82,21 @@ def cmd_add(engagement: str, descriptor_path: str, *, as_json: bool) -> int:
     return EXIT_OK
 
 
-def cmd_report(engagement: str) -> int:
+def cmd_report(engagement: str, *, platform: str = "generic") -> int:
     from hackbot.findings.store import FindingError, FindingStore
-    from hackbot.reporting.render import render_markdown
+    from hackbot.reporting.render import render
 
     try:
         findings = FindingStore(engagement).load_all()
     except FindingError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_INVALID
-    print(render_markdown(findings, engagement_id=Path(engagement).name))
+    try:
+        report = render(findings, engagement_id=Path(engagement).name, platform=platform)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_INVALID
+    print(report)
     return EXIT_OK
 
 
