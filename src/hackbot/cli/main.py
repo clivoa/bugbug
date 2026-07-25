@@ -317,6 +317,18 @@ def _cmd_tool(args: argparse.Namespace) -> int:
     return 2
 
 
+def _cmd_finding(args: argparse.Namespace) -> int:
+    from hackbot.cli import finding_cmd
+
+    if args.faction == "add":
+        return finding_cmd.cmd_add(args.engagement, args.descriptor, as_json=args.json)
+    if args.faction == "report":
+        return finding_cmd.cmd_report(args.engagement)
+    if args.faction == "list":
+        return finding_cmd.cmd_list(args.engagement, as_json=args.json)
+    return 2
+
+
 def _cmd_version(_args: argparse.Namespace) -> int:
     print(f"hackbot {VERSION}")
     return 0
@@ -414,6 +426,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     tl_run.add_argument("--json", action="store_true")
     tl.set_defaults(func=_cmd_tool)
+
+    fd = sub.add_parser("finding", help="record and report reproducible findings")
+    fd_sub = fd.add_subparsers(dest="faction", required=True)
+    fd_add = fd_sub.add_parser("add", help="add a finding from a local descriptor")
+    fd_add.add_argument("descriptor", help="local finding JSON file")
+    fd_add.add_argument("--engagement", required=True, help="engagement directory")
+    fd_add.add_argument("--json", action="store_true")
+    fd_report = fd_sub.add_parser("report", help="render all findings to markdown")
+    fd_report.add_argument("--engagement", required=True, help="engagement directory")
+    fd_list = fd_sub.add_parser("list", help="list findings")
+    fd_list.add_argument("--engagement", required=True, help="engagement directory")
+    fd_list.add_argument("--json", action="store_true")
+    fd.set_defaults(func=_cmd_finding)
 
     v = sub.add_parser("version", help="print version")
     v.set_defaults(func=_cmd_version)
