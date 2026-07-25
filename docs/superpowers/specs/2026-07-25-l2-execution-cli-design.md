@@ -43,6 +43,7 @@ Extract the reconstruct → TTY → reload → reconstruct → grant dance from
 class GrantAborted(Exception):
     def __init__(self, exit_code: int, message: str) -> None: ...
 
+
 def interactive_grant(
     engagement: str,
     store: ApprovalStore,

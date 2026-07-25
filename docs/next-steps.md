@@ -1,11 +1,11 @@
 # Next steps
 
-Status snapshot after evidence persistence. Use this as the starting point for
-the next phase.
+Status snapshot after L2 execution over the CLI. Use this as the starting point
+for the next phase.
 
 ## Where the project stands
 
-Implemented and verified (726 tests passing, Ruff/format/mypy clean, offline
+Implemented and verified (730 tests passing, Ruff/format/mypy clean, offline
 smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
@@ -20,8 +20,10 @@ smoke pass):
 - **Tool execution substrate** (`src/hackbot/tools/`, `src/hackbot/audit/`) — a
   gate-bound, validated subprocess runner (no shell, sanitized env, timeout,
   output caps) that executes a code-owned argv array **only** after an `ALLOW`,
-  plus a secret-free audit trail. First real action: `net.http-get` (curl,
-  in-scope only) via `hackbot tool run`; see [`tool-execution.md`](tool-execution.md).
+  plus a secret-free audit trail. Actions: `net.http-get` (L0) and `net.http-post`
+  (L2), curl, in-scope only. L2 runs once via `hackbot tool run --approve` after a
+  TTY-typed, single-use approval consumed atomically by `evaluate`; see
+  [`tool-execution.md`](tool-execution.md).
 - **Evidence persistence** (`src/hackbot/evidence/`) — executed runs store their
   output **redacted** and run-linked under `<engagement>/evidence/<run_id>/`
   (audit written first); best-effort redaction, raw output never printed or
@@ -51,24 +53,21 @@ Concretely, a real tool adapter must:
 ## Suggested order of work
 
 Done: the gate-bound tool substrate (`CommandRunner`, `run_action`, secret-free
-audit), the first real action (`net.http-get`, lab-only), and redacted
-run-linked evidence persistence.
+audit), the first actions (`net.http-get` L0, `net.http-post` L2), redacted
+run-linked evidence, and L2 execution over the CLI (`tool run --approve`).
 
-1. **L2 execution over the CLI**: wire `hackbot tool run` to the grant handshake
-   (`hackbot approval grant`) so an intrusive action can be run once after an
-   interactive TTY approval, consuming the grant atomically via `evaluate`.
-2. **More reviewed actions**: add L0/L1 passive/low-impact definitions to
+1. **More reviewed actions**: add L0/L1 passive/low-impact definitions to
    `tools/actions.py` (e.g. header/TLS/DNS probes), each with a code-owned argv
    template and lab coverage. Promote only normalized, reviewed recon-bundle
    skills into adapters (bundle commands stay data until wrapped).
-3. **Findings / reporting** (`src/hackbot/findings/`, `src/hackbot/reporting/`):
+2. **Findings / reporting** (`src/hackbot/findings/`, `src/hackbot/reporting/`):
    turn run-linked evidence into reproducible findings and platform reports.
-4. **Streaming output caps**: `CommandRunner` currently truncates after
+3. **Streaming output caps**: `CommandRunner` currently truncates after
    `communicate()`; move to streamed reads so a tool cannot buffer huge output
    before the timeout fires.
-5. **Reviewed recon skills / internal-recon** stays disabled unless an
+4. **Reviewed recon skills / internal-recon** stays disabled unless an
    explicitly-authorized internal profile is confirmed.
-6. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
+5. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
 
 ## Guardrails to keep (from CLAUDE.md / SECURITY.md)
 

@@ -88,3 +88,113 @@ def test_tool_run_reports_and_writes_evidence(lab_engagement, tmp_path, capsys, 
     stdout = (lab_engagement / "evidence" / run_id / "stdout").read_bytes()
     assert b"lab-ok" in stdout
     assert "stdout" not in payload
+
+
+def _write_post_request(path: Path, target: str) -> Path:
+    request = path / "request.json"
+    request.write_text(
+        json.dumps(
+            {
+                "action_id": "net.http-post",
+                "target": target,
+                "argv": [
+                    curl_path() or "/usr/bin/curl",
+                    "-sS",
+                    "-X",
+                    "POST",
+                    "--max-time",
+                    "10",
+                    target,
+                ],
+                "hypothesis_id": "hyp-1",
+                "rationale": "Send one authorized POST to a lab endpoint.",
+                "rate": 1,
+                "concurrency": 1,
+                "data_touched": "Lab request/response.",
+                "expected_impact": "One low-rate state-changing POST.",
+                "stop_condition": "Stop on any error.",
+                "cleanup_plan": "Lab state reset out of band.",
+                "program_rule": "Authorized intrusive lab testing.",
+                "required_headers": [],
+                "requested_risk": None,
+            }
+        )
+    )
+    return request
+
+
+@pytest.mark.skipif(curl_path() is None, reason="curl not installed")
+def test_tool_run_l2_without_approve_writes_pending(lab_engagement, tmp_path, capsys):
+    request = _write_post_request(tmp_path, "http://127.0.0.1/")
+    code = app(
+        [
+            "tool",
+            "run",
+            "net.http-post",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 4
+    assert payload["approval_status"] == "pending"
+    assert payload["executed"] is False
+    challenge_id = payload["challenge_id"]
+    assert (lab_engagement / "approvals" / "pending" / f"{challenge_id}.json").exists()
+
+
+@pytest.mark.skipif(curl_path() is None, reason="curl not installed")
+def test_tool_run_l2_approve_executes_and_consumes(
+    lab_engagement, tmp_path, capsys, monkeypatch, local_server
+):
+    monkeypatch.setattr("hackbot.cli.main._read_approval_from_tty", lambda _c: None)
+    request = _write_post_request(tmp_path, local_server)
+    code = app(
+        [
+            "tool",
+            "run",
+            "net.http-post",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--approve",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["executed"] is True
+    assert payload["exit_code"] == 0
+    assert payload["evidence_run_id"]
+    challenge_id = payload["challenge_id"]
+    from hackbot.risk.approvals import ApprovalStore
+
+    with ApprovalStore(lab_engagement) as store:
+        assert store.status(challenge_id) == "consumed"
+
+
+@pytest.mark.skipif(curl_path() is None, reason="curl not installed")
+def test_tool_run_l2_approve_without_tty_does_not_execute(
+    lab_engagement, tmp_path, capsys, monkeypatch
+):
+    def _no_tty(_challenge):
+        raise OSError("interactive TTY required")
+
+    monkeypatch.setattr("hackbot.cli.main._read_approval_from_tty", _no_tty)
+    request = _write_post_request(tmp_path, "http://127.0.0.1/")
+    code = app(
+        [
+            "tool",
+            "run",
+            "net.http-post",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--approve",
+        ]
+    )
+    assert code == 3
+    assert "interactive TTY required" in capsys.readouterr().err
+    assert not (lab_engagement / "evidence").exists()

@@ -46,6 +46,17 @@ def _build_actions() -> ActionRegistry:
                 argv_template=(curl, "-sS", "--max-time", "10", "{target}"),
             )
         )
+        definitions.append(
+            ActionDefinition(
+                "net.http-post",
+                RiskLevel.L0,
+                network_access=True,
+                uses_external_tool=True,
+                state_changing=True,
+                executable=curl,
+                argv_template=(curl, "-sS", "-X", "POST", "--max-time", "10", "{target}"),
+            )
+        )
     return ActionRegistry(definitions)
 
 

@@ -35,11 +35,15 @@ def _emit(payload: dict[str, object], *, as_json: bool) -> None:
             print(f"{key}: {item}")
 
 
-def cmd_run(engagement: str, action_id: str, request_path: str, *, as_json: bool) -> int:
+def cmd_run(
+    engagement: str, action_id: str, request_path: str, *, as_json: bool, approve: bool = False
+) -> int:
     from hackbot.audit.tool_runs import AuditError, AuditSink
+    from hackbot.cli.risk_cmd import GrantAborted, interactive_grant
     from hackbot.evidence.store import EvidenceError, EvidenceStore
+    from hackbot.risk.approvals import ApprovalError, ApprovalStore
     from hackbot.risk.models import DecisionKind
-    from hackbot.risk.registry import RegistryError
+    from hackbot.risk.registry import ActionRegistry, RegistryError
     from hackbot.tools.actions import REAL_ACTIONS
     from hackbot.tools.adapter import run_action
     from hackbot.tools.runner import CommandRunner, RunnerError
@@ -65,25 +69,85 @@ def cmd_run(engagement: str, action_id: str, request_path: str, *, as_json: bool
     if request.action_id != action_id:
         print("error: request action_id does not match the command", file=sys.stderr)
         return EXIT_INVALID
+
+    runner = CommandRunner()
+    audit = AuditSink(engagement)
+    evidence = EvidenceStore(engagement)
     try:
-        outcome = run_action(
-            definition,
-            request,
-            context,
-            now=datetime.now(UTC),
-            runner=CommandRunner(),
-            audit=AuditSink(engagement),
-            evidence=EvidenceStore(engagement),
-        )
-    except (RunnerError, AuditError) as exc:
+        store = ApprovalStore(engagement)
+    except ApprovalError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_INVALID
-    except EvidenceError as exc:
-        print(
-            f"error: run executed and audited, but evidence capture failed: {exc}",
-            file=sys.stderr,
-        )
-        return EXIT_INVALID
+
+    challenge_id: str | None = None
+    now = datetime.now(UTC)
+    try:
+        try:
+            outcome = run_action(
+                definition,
+                request,
+                context,
+                now=now,
+                runner=runner,
+                audit=audit,
+                evidence=evidence,
+                approval_store=store,
+            )
+        except (RunnerError, AuditError, EvidenceError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+
+        if outcome.decision.kind is DecisionKind.REQUIRES_APPROVAL:
+            challenge = outcome.decision.challenge
+            if challenge is None:
+                print("error: approval challenge could not be built", file=sys.stderr)
+                return EXIT_DENY
+            try:
+                store.create_pending(definition, request, context, now=now, nonce=challenge.nonce)
+            except ApprovalError as exc:
+                if exc.code != "APPROVAL_EXISTS":
+                    print(f"error: could not persist approval request: {exc}", file=sys.stderr)
+                    return EXIT_DENY
+            challenge_id = challenge.challenge_digest
+            if not approve:
+                _emit(
+                    {
+                        "action_id": action_id,
+                        "decision": "requires-approval",
+                        "reason_code": outcome.decision.reason_code,
+                        "executed": False,
+                        "challenge_id": challenge_id,
+                        "approval_status": "pending",
+                        "evidence_run_id": None,
+                    },
+                    as_json=as_json,
+                )
+                return EXIT_REQUIRES_APPROVAL
+            try:
+                grant, fresh_context = interactive_grant(
+                    engagement, store, ActionRegistry([definition]), challenge_id, context=context
+                )
+            except GrantAborted as exc:
+                print(exc.message, file=sys.stderr)
+                return exc.exit_code
+            try:
+                outcome = run_action(
+                    definition,
+                    request,
+                    fresh_context,
+                    grant=grant,
+                    now=datetime.now(UTC),
+                    runner=runner,
+                    audit=audit,
+                    evidence=evidence,
+                    approval_store=store,
+                )
+            except (RunnerError, AuditError, EvidenceError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return EXIT_INVALID
+    finally:
+        store.close()
+
     result = outcome.command_result
     _emit(
         {
@@ -97,11 +161,10 @@ def cmd_run(engagement: str, action_id: str, request_path: str, *, as_json: bool
             "stdout_sha256": hashlib.sha256(result.stdout).hexdigest() if result else None,
             "stdout_bytes": len(result.stdout) if result else None,
             "evidence_run_id": outcome.evidence_run_id,
+            "challenge_id": challenge_id,
         },
         as_json=as_json,
     )
-    if outcome.decision.kind is DecisionKind.REQUIRES_APPROVAL:
-        return EXIT_REQUIRES_APPROVAL
     if outcome.decision.kind is DecisionKind.DENY:
         return EXIT_DENY
     if result is None or result.exit_code != 0 or result.timed_out:
