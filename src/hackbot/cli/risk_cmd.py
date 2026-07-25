@@ -272,6 +272,62 @@ def _persist_pending(
     return EXIT_REQUIRES_APPROVAL
 
 
+class GrantAborted(Exception):
+    """Raised inside the interactive grant flow with a stable CLI exit code."""
+
+    def __init__(self, exit_code: int, message: str) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
+        self.message = message
+
+
+def interactive_grant(engagement, store, registry, challenge_id, *, context):
+    """Reconstruct the pending challenge, confirm at the TTY, and grant it once.
+
+    Returns ``(grant, fresh_context)`` — the grant and the reloaded context it was
+    created under, so the caller executes against the same context. Raises
+    :class:`GrantAborted` with a stable CLI exit code on any failure.
+    """
+    from hackbot.cli import main as cli_main
+    from hackbot.risk.approvals import ApprovalError
+
+    try:
+        challenge = store.challenge_for_pending(
+            challenge_id, registry, context, now=datetime.now(UTC)
+        )
+    except ApprovalError as exc:
+        raise GrantAborted(EXIT_DENY, f"error: {exc}") from exc
+
+    # Interactive confirmation authority lives only at the TTY.
+    try:
+        cli_main._read_approval_from_tty(challenge)
+    except OSError as exc:
+        raise GrantAborted(EXIT_APPROVAL_UNAVAILABLE, str(exc)) from exc
+
+    # Reload and reconstruct after the prompt: deny if anything changed.
+    try:
+        fresh_context = _load_context(engagement)
+    except CliInputError as exc:
+        raise GrantAborted(EXIT_INVALID, f"error: {exc}") from exc
+    granted_at = datetime.now(UTC)
+    try:
+        confirmed = store.challenge_for_pending(
+            challenge_id, registry, fresh_context, now=granted_at
+        )
+    except ApprovalError as exc:
+        raise GrantAborted(EXIT_DENY, f"error: {exc}") from exc
+    if confirmed.challenge_digest != challenge.challenge_digest:
+        raise GrantAborted(EXIT_DENY, "error: approval changed during confirmation")
+    approved_by = fresh_context.authorization.confirmed_by
+    if not approved_by:
+        raise GrantAborted(EXIT_DENY, "error: engagement authorization actor is missing")
+    try:
+        grant = store.grant(confirmed, approved_by=approved_by, now=granted_at)
+    except ApprovalError as exc:
+        raise GrantAborted(EXIT_DENY, f"error: could not grant approval: {exc}") from exc
+    return grant, fresh_context
+
+
 def cmd_grant(engagement: str, challenge_id: str, *, as_json: bool) -> int:
     if _DIGEST_RE.fullmatch(challenge_id) is None:
         print("error: challenge id must be a 64-character hex digest", file=sys.stderr)
@@ -282,7 +338,6 @@ def cmd_grant(engagement: str, challenge_id: str, *, as_json: bool) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_INVALID
 
-    from hackbot.cli import main as cli_main
     from hackbot.risk.approvals import ApprovalError, ApprovalStore
     from hackbot.risk.fixtures import FIXTURE_ACTIONS
 
@@ -293,46 +348,12 @@ def cmd_grant(engagement: str, challenge_id: str, *, as_json: bool) -> int:
         return EXIT_INVALID
     try:
         try:
-            challenge = store.challenge_for_pending(
-                challenge_id, FIXTURE_ACTIONS, context, now=datetime.now(UTC)
+            grant, _fresh = interactive_grant(
+                engagement, store, FIXTURE_ACTIONS, challenge_id, context=context
             )
-        except ApprovalError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return EXIT_DENY
-
-        # Interactive confirmation authority lives only at the TTY.
-        try:
-            cli_main._read_approval_from_tty(challenge)
-        except OSError as exc:
-            print(str(exc), file=sys.stderr)
-            return EXIT_APPROVAL_UNAVAILABLE
-
-        # Reload and reconstruct after the prompt: deny if anything changed.
-        try:
-            fresh_context = _load_context(engagement)
-        except CliInputError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return EXIT_INVALID
-        granted_at = datetime.now(UTC)
-        try:
-            confirmed = store.challenge_for_pending(
-                challenge_id, FIXTURE_ACTIONS, fresh_context, now=granted_at
-            )
-        except ApprovalError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return EXIT_DENY
-        if confirmed.challenge_digest != challenge.challenge_digest:
-            print("error: approval changed during confirmation", file=sys.stderr)
-            return EXIT_DENY
-        approved_by = fresh_context.authorization.confirmed_by
-        if not approved_by:
-            print("error: engagement authorization actor is missing", file=sys.stderr)
-            return EXIT_DENY
-        try:
-            grant = store.grant(confirmed, approved_by=approved_by, now=granted_at)
-        except ApprovalError as exc:
-            print(f"error: could not grant approval: {exc}", file=sys.stderr)
-            return EXIT_DENY
+        except GrantAborted as exc:
+            print(exc.message, file=sys.stderr)
+            return exc.exit_code
     finally:
         store.close()
     _emit(
