@@ -38,3 +38,19 @@ def test_http_post_is_registered_l2_and_state_changing():
     assert definition.uses_external_tool is True
     assert definition.shell_execution is False
     assert definition.argv_template[-1] == "{target}"
+
+
+@pytest.mark.skipif(curl_path() is None, reason="curl not installed")
+def test_http_head_and_options_are_registered_l0():
+    from hackbot.risk.models import RiskLevel
+
+    for action_id, extra in (("net.http-head", ()), ("net.http-options", ("-X", "OPTIONS"))):
+        definition = REAL_ACTIONS.require(action_id)
+        assert definition.minimum_risk is RiskLevel.L0
+        assert definition.effective_floor is RiskLevel.L0
+        assert definition.network_access is True
+        assert definition.uses_external_tool is True
+        assert definition.state_changing is False
+        assert definition.argv_template[-1] == "{target}"
+        for token in extra:
+            assert token in definition.argv_template
