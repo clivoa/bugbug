@@ -37,6 +37,7 @@ def _emit(payload: dict[str, object], *, as_json: bool) -> None:
 
 def cmd_run(engagement: str, action_id: str, request_path: str, *, as_json: bool) -> int:
     from hackbot.audit.tool_runs import AuditError, AuditSink
+    from hackbot.evidence.store import EvidenceError, EvidenceStore
     from hackbot.risk.models import DecisionKind
     from hackbot.risk.registry import RegistryError
     from hackbot.tools.actions import REAL_ACTIONS
@@ -72,9 +73,16 @@ def cmd_run(engagement: str, action_id: str, request_path: str, *, as_json: bool
             now=datetime.now(UTC),
             runner=CommandRunner(),
             audit=AuditSink(engagement),
+            evidence=EvidenceStore(engagement),
         )
     except (RunnerError, AuditError) as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return EXIT_INVALID
+    except EvidenceError as exc:
+        print(
+            f"error: run executed and audited, but evidence capture failed: {exc}",
+            file=sys.stderr,
+        )
         return EXIT_INVALID
     result = outcome.command_result
     _emit(
@@ -88,6 +96,7 @@ def cmd_run(engagement: str, action_id: str, request_path: str, *, as_json: bool
             "truncated": result.truncated if result else None,
             "stdout_sha256": hashlib.sha256(result.stdout).hexdigest() if result else None,
             "stdout_bytes": len(result.stdout) if result else None,
+            "evidence_run_id": outcome.evidence_run_id,
         },
         as_json=as_json,
     )

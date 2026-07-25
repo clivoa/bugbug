@@ -65,6 +65,37 @@ Raw stdout/stderr are **never** written to the audit log (that belongs to a
 later `evidence/` phase). If a record would carry a secret, the write is refused
 (`AuditError`) and nothing is persisted.
 
+## Evidence
+
+Every **executed** run (post-`ALLOW`) captures its output as evidence, so the
+`context → evaluate → allow → run → evidence` path is complete. `run_action`
+writes the audit line **first**, then evidence, so the audit trail exists even if
+evidence capture fails.
+
+`hackbot.evidence.store.EvidenceStore` writes under
+`<engagement>/evidence/<run_id>/` (dir `0700`, files `0600`):
+
+- `stdout`, `stderr` — the tool output **redacted** of known secrets
+  (`hackbot.evidence.redact.redact_bytes`).
+- `meta.json` — `run_id`, timestamp, `action_id`, `target`, `argv`,
+  `hypothesis_id` / `rationale` / `expected_impact` (linking evidence to the
+  recorded hypothesis), decision, `exit_code`, `timed_out`, `truncated`,
+  `stdout_sha256` (of the redacted content), and sizes. `meta.json` is
+  secret-scanned before any file is written; a secret-bearing field (e.g. an
+  operator `rationale` containing a token) raises `EvidenceError` and nothing is
+  persisted.
+
+`run_id = <UTC timestamp>-<12 hex of the redacted-stdout sha256>`.
+
+**Redaction is best-effort, not a guarantee.** `redact_bytes` replaces known
+secret shapes (private-key blocks, `Authorization`/`Cookie`-style headers, JWTs,
+`AKIA…`/`sk_…` tokens, secret-name assignments) with `[REDACTED]`, but cannot
+catch every secret or PII. It is a layer on top of two other properties: raw
+output is **never printed**, and evidence lives only in the git-ignored
+engagement directory. Treat evidence files as sensitive. Only executed runs
+produce evidence; denied and requires-approval decisions produce none. Raw output
+is never stored un-redacted.
+
 ## CLI
 
 ```text
@@ -76,7 +107,8 @@ Loads the context, strictly parses the request (the same parser as
 bool-as-int; engagement identity comes from the context, never the request
 file), resolves `ACTION_ID` only from `REAL_ACTIONS`, and calls `run_action`.
 **Raw tool output is never printed by default** — only the decision, exit status,
-sizes, and a `stdout_sha256`.
+sizes, a `stdout_sha256`, and the `evidence_run_id` (the redacted output is on
+disk under `<engagement>/evidence/<run_id>/`).
 
 ### Exit codes
 

@@ -55,7 +55,7 @@ def record(
     decision_kind: str,
     reason_code: str,
     now: datetime,
-) -> str: ...   # returns run_id
+) -> str: ...  # returns run_id
 ```
 
 Writes under `<engagement>/evidence/<run_id>/` (dir `0700`, files `0600`):
