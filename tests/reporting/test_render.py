@@ -2,8 +2,10 @@
 
 from datetime import UTC, datetime
 
+import pytest
+
 from hackbot.findings.models import Finding, FindingStatus, Severity, make_finding_id
-from hackbot.reporting.render import render_markdown
+from hackbot.reporting.render import PLATFORMS, render, render_markdown
 
 _NOW = datetime(2026, 7, 25, 12, 0, 0, tzinfo=UTC)
 
@@ -50,3 +52,50 @@ def test_render_orders_by_severity():
 def test_render_handles_no_findings():
     out = render_markdown([], engagement_id="local-lab")
     assert "No findings recorded." in out
+
+
+def _vuln(**over):
+    base = dict(
+        vulnerability_type="reflected-xss",
+        reproduction_steps="GET /search?q=<script>",
+        demonstrated_impact="Script executes in the victim session.",
+        plausible_impact="Session theft with a missing HttpOnly flag.",
+    )
+    base.update(over)
+    return _finding(**base)
+
+
+def test_all_platforms_are_supported():
+    assert set(PLATFORMS) == {
+        "generic",
+        "hackerone",
+        "bugcrowd",
+        "yeswehack",
+        "intigriti",
+        "immunefi",
+    }
+
+
+@pytest.mark.parametrize("platform", PLATFORMS)
+def test_each_platform_keeps_impact_separate_and_names_the_scenario(platform):
+    out = render([_vuln()], engagement_id="local-lab", platform=platform)
+    assert "reflected-xss" in out
+    assert "GET /search?q=<script>" in out
+    assert "Script executes in the victim session." in out
+    assert "Session theft with a missing HttpOnly flag." in out
+    lower = out.lower()
+    assert "demonstrated" in lower and "plausible" in lower
+    assert "20260725T120000Z-0123456789ab" in out
+    assert "stdout" not in lower
+
+
+def test_platform_specific_headings():
+    h1 = render([_vuln()], engagement_id="e", platform="hackerone")
+    assert "Steps To Reproduce" in h1 and "Weakness" in h1
+    bc = render([_vuln()], engagement_id="e", platform="bugcrowd")
+    assert "Description" in bc and "Bug type" in bc
+
+
+def test_unknown_platform_raises():
+    with pytest.raises(ValueError):
+        render([_vuln()], engagement_id="e", platform="nope")
