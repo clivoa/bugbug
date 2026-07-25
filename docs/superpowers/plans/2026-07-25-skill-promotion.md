@@ -48,7 +48,9 @@ from hackbot.tools.actions import REGISTERED_ACTION_IDS, nmap_path
 
 
 @pytest.mark.skipif(dig_path() is None, reason="dig not installed")
-@pytest.mark.parametrize("action_id,record", [("dns.txt", "TXT"), ("dns.mx", "MX"), ("dns.ns", "NS")])
+@pytest.mark.parametrize(
+    "action_id,record", [("dns.txt", "TXT"), ("dns.mx", "MX"), ("dns.ns", "NS")]
+)
 def test_dns_record_actions_are_registered_l0(action_id, record):
     from hackbot.risk.models import RiskLevel
 
@@ -79,7 +81,9 @@ Add to `tests/tools/test_non_curl_e2e.py`:
 
 ```python
 @pytest.mark.skipif(dig_path() is None, reason="dig not installed")
-@pytest.mark.parametrize("action_id,record", [("dns.txt", "TXT"), ("dns.mx", "MX"), ("dns.ns", "NS")])
+@pytest.mark.parametrize(
+    "action_id,record", [("dns.txt", "TXT"), ("dns.mx", "MX"), ("dns.ns", "NS")]
+)
 def test_dns_record_lookup_executes_in_scope(lab_engagement, action_id, record):
     context = load_policy_context(lab_engagement)
     definition = REAL_ACTIONS.require(action_id)
@@ -101,7 +105,11 @@ Expected: `ImportError` for `nmap_path`/`REGISTERED_ACTION_IDS`, then `RegistryE
 In `src/hackbot/tools/actions.py`, add candidates + resolver beside the others:
 
 ```python
-_NMAP_CANDIDATES: tuple[str, ...] = ("/usr/bin/nmap", "/opt/homebrew/bin/nmap", "/usr/local/bin/nmap")
+_NMAP_CANDIDATES: tuple[str, ...] = (
+    "/usr/bin/nmap",
+    "/opt/homebrew/bin/nmap",
+    "/usr/local/bin/nmap",
+)
 
 
 def nmap_path() -> str | None:
