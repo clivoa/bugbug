@@ -56,9 +56,13 @@ An action whose executable is a **bare tool name** (e.g. `gobuster`) registers
 unconditionally and runs **only** via `--runner remote` — the local runner
 refuses a non-absolute executable. Example:
 
-- `web.dir-enum-gobuster` — `gobuster dir -u {target} -w
-  /usr/share/wordlists/dirb/common.txt -q` (L2, `high_volume`; the wordlist path
-  is on the remote host). Provenance: `recon/parameter-discovery` (@reeshasx).
+- `web.dir-enum-gobuster` — `gobuster dir -u {target} -w {wordlist} -q` (L2,
+  `high_volume`). The `{wordlist}` is an **operator-supplied absolute path on the
+  remote host** — e.g. a [SecLists](https://github.com/danielmiessler/SecLists)
+  list such as `/usr/share/seclists/Discovery/Web-Content/common.txt`. It is
+  lexically validated (absolute, no control characters) and never opened by the
+  engine; an empty `{wordlist}` is denied (`DENY_ARGV_TEMPLATE_MISMATCH`).
+  Provenance: `recon/parameter-discovery` (@reeshasx).
 
 Local-tool actions (curl/dig/ffuf) also run remotely — their basename resolves on
 the remote `PATH`.
@@ -79,7 +83,9 @@ that gobuster/nmap are present on the remote before running them.
 
 ```bash
 # request.json: action_id web.dir-enum-gobuster, target http://<in-scope>/,
-#   argv [gobuster, dir, -u, http://<in-scope>/, -w, /usr/share/wordlists/dirb/common.txt, -q],
+#   wordlist /usr/share/seclists/Discovery/Web-Content/common.txt,
+#   argv [gobuster, dir, -u, http://<in-scope>/, -w,
+#         /usr/share/seclists/Discovery/Web-Content/common.txt, -q],
 #   rate 1, concurrency 1, ...
 hackbot tool run web.dir-enum-gobuster request.json \
   --engagement engagements/<name> --runner remote --approve --json
@@ -94,5 +100,6 @@ against the in-scope target; redacted evidence is captured under
 Execution is remote; the gate is local and unchanged. The remote host is an
 operator-controlled, authorized machine. SSH argv is code-owned and per-token
 quoted; the key is a local file; output is untrusted and evidence redacted.
-Remote tool/wordlist *discovery* (which tools/wordlists a host has) and custom
-wordlists are later increments.
+The `{wordlist}` is the one operator-supplied argv token, lexically validated and
+never dereferenced locally. Remote tool/wordlist *discovery* (enumerating which
+lists a host actually has) is a later increment.

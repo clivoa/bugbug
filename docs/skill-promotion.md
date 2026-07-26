@@ -50,8 +50,17 @@ wordlist>`, where the operator's `{target}` is the full URL with the `FUZZ`
 keyword (e.g. `http://host/FUZZ`). It is `high_volume` → **L2** → requires TTY
 approval, runs only in-scope, and uses a small **code-owned bundled** wordlist
 (`src/hackbot/tools/wordlists/web-content.txt`, packaged in the wheel). Install
-ffuf to use it. Custom operator wordlists (a `{wordlist}` placeholder) are a later
-increment.
+ffuf to use it.
+
+`web.dir-enum-gobuster` is the remote-only sibling (see
+[`remote-runner.md`](remote-runner.md)): `gobuster dir -u {target} -w {wordlist}
+-q` (L2, `high_volume`). Unlike `web.dir-enum`'s bundled list, its `{wordlist}`
+is an **operator-supplied absolute path** on the run host — e.g. a
+[SecLists](https://github.com/danielmiessler/SecLists) list like
+`/usr/share/seclists/Discovery/Web-Content/common.txt`. The path is lexically
+validated (absolute, no control characters) and never dereferenced by the engine;
+`render_argv` denies the request (`DENY_ARGV_TEMPLATE_MISMATCH`) if the
+`{wordlist}` token is left empty.
 
 `net.http-post` is a generic POST, not a bundle skill, so it carries no
 provenance.
@@ -70,5 +79,6 @@ approval level, and attribution.
 
 Promoted skills are recon-only, code-owned single-tool argv subsets of reviewed
 bundle skills, gated (scope + risk + approval), and attributed. `internal-recon`
-and any L3/exploitation capability are excluded. Fuzzing/wordlist tools
-(ffuf/gobuster) need an argv-placeholder extension and are a later increment.
+and any L3/exploitation capability are excluded. Fuzzing tools (ffuf locally,
+gobuster remote-only) run through the same gate; the operator-supplied
+`{wordlist}` path is lexically validated but never opened by the engine.
