@@ -31,6 +31,7 @@ _WORDLIST_ROOTS: tuple[str, ...] = (
 _MAX_WORDLIST_LINES: int = 2000
 _WORDLIST_PATH_RE = re.compile(r"[A-Za-z0-9._/-]+")
 _DIGITS_RE = re.compile(r"[0-9]+")
+_MAX_SIZE_DIGITS = 19  # a real byte-count never exceeds 19 digits (2**63 ~ 9.2e18)
 
 
 class RemoteError(RunnerError):
@@ -193,7 +194,11 @@ class RemoteRunner:
         seen: dict[str, int] = {}
         for line in result.stdout.decode("latin-1").splitlines():
             size_str, tab, path = line.partition("\t")
-            if not tab or _DIGITS_RE.fullmatch(size_str) is None:
+            if (
+                not tab
+                or _DIGITS_RE.fullmatch(size_str) is None
+                or len(size_str) > _MAX_SIZE_DIGITS
+            ):
                 continue
             if _WORDLIST_PATH_RE.fullmatch(path) is None:
                 continue
