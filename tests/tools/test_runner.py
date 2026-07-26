@@ -124,6 +124,81 @@ def test_capture_fd_records_os_error_and_signals_failure():
     assert state.done.is_set() is True
 
 
+def test_capture_fd_extends_partial_prefix_from_original_chunk_view(monkeypatch):
+    payload = b"abcdef"
+    observed: list[object] = []
+
+    class RecordingBuffer:
+        def __len__(self):
+            return 0
+
+        def extend(self, value):
+            observed.append(value)
+            assert isinstance(value, memoryview)
+            assert value.obj is payload
+            assert bytes(value) == b"ab"
+
+    reads = iter((payload, b""))
+    monkeypatch.setattr(os, "read", lambda fd, size: next(reads))
+    read_fd, write_fd = os.pipe()
+    read_pipe = os.fdopen(read_fd, "rb", buffering=0)
+    state = _CaptureState()
+    state.data = RecordingBuffer()
+    try:
+        _capture_fd(
+            read_pipe.fileno(),
+            pipe=read_pipe,
+            cap=2,
+            stop=threading.Event(),
+            failed=threading.Event(),
+            state=state,
+        )
+    finally:
+        read_pipe.close()
+        os.close(write_fd)
+
+    assert len(observed) == 1
+
+
+def test_capture_fd_releases_previous_chunk_before_next_read(monkeypatch):
+    released: list[int] = []
+    read_number = 0
+
+    class TrackedPayload(bytes):
+        def __new__(cls, value, generation):
+            instance = super().__new__(cls, value)
+            instance.generation = generation
+            return instance
+
+        def __del__(self):
+            released.append(self.generation)
+
+    def read_generation(fd, size):
+        nonlocal read_number
+        read_number += 1
+        if read_number == 1:
+            return TrackedPayload(b"abcd", 1)
+        gc.collect()
+        assert released == [1]
+        return b""
+
+    monkeypatch.setattr(os, "read", read_generation)
+    read_fd, write_fd = os.pipe()
+    read_pipe = os.fdopen(read_fd, "rb", buffering=0)
+    try:
+        _capture_fd(
+            read_pipe.fileno(),
+            pipe=read_pipe,
+            cap=2,
+            stop=threading.Event(),
+            failed=threading.Event(),
+            state=_CaptureState(),
+        )
+    finally:
+        read_pipe.close()
+        os.close(write_fd)
+
+
 def test_captures_stdout_and_zero_exit():
     result = CommandRunner().run(("/bin/echo", "hello"))
     assert isinstance(result, CommandResult)
