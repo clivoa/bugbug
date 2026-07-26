@@ -53,7 +53,7 @@ _SHELL_EXECUTABLE_BASENAMES = frozenset(
         "tcsh.exe",
     }
 )
-_ARGV_PLACEHOLDERS = frozenset({"{target}", "{rate}", "{concurrency}"})
+_ARGV_PLACEHOLDERS = frozenset({"{target}", "{rate}", "{concurrency}", "{wordlist}"})
 _SHELL_COMMAND_MODES = frozenset({"-c", "--command"})
 
 
@@ -349,10 +349,13 @@ class ActionDefinition:
             or not isinstance(request.concurrency, int)
         ):
             return None
+        if "{wordlist}" in self.argv_template and not request.wordlist:
+            return None
         values = {
             "{target}": request.target,
             "{rate}": str(request.rate),
             "{concurrency}": str(request.concurrency),
+            "{wordlist}": request.wordlist,
         }
         return tuple(values.get(token, token) for token in self.argv_template)
 
@@ -375,6 +378,7 @@ class ActionRequest:
     program_rule: str
     required_headers: tuple[str, ...] = ()
     requested_risk: RiskLevel | None = None
+    wordlist: str = ""
 
     def __post_init__(self) -> None:
         _text(self.engagement_id, name="engagement_id", limit=_IDENTIFIER_LIMIT)
@@ -445,6 +449,14 @@ class ActionRequest:
         )
         if self.requested_risk is not None and not isinstance(self.requested_risk, RiskLevel):
             raise ValueError("requested_risk must be a RiskLevel or None")
+        # An operator-supplied wordlist path (optional). Lexical validation only —
+        # a remote path need not exist locally, so the frozen model stays pure.
+        _text(self.wordlist, name="wordlist", limit=_TARGET_AND_RULE_LIMIT, allow_empty=True)
+        if self.wordlist:
+            if not self.wordlist.startswith("/"):
+                raise ValueError("wordlist must be an absolute path")
+            if any(ord(character) < 0x20 or ord(character) == 0x7F for character in self.wordlist):
+                raise ValueError("wordlist must not contain control characters")
 
     def effective_risk(self, definition: ActionDefinition) -> RiskLevel:
         return max(definition.effective_floor, self.requested_risk or RiskLevel.L0)
