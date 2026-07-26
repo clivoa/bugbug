@@ -167,6 +167,7 @@ def test_completion_observed_after_deadline_is_timeout(monkeypatch):
     readers_done = threading.Event()
     done_lock = threading.Lock()
     done_count = 0
+    started_readers: list[threading.Thread] = []
     clock_lock = threading.Lock()
     deadline_crossed = False
     expired_ticks = 0
@@ -188,12 +189,21 @@ def test_completion_observed_after_deadline_is_timeout(monkeypatch):
             return 1.0 + expired_ticks / 10
 
     original_poll = subprocess.Popen.poll
+    original_start = threading.Thread.start
+
+    def record_reader_start(thread):
+        started_readers.append(thread)
+        original_start(thread)
 
     def poll_crossing_deadline(proc):
         nonlocal deadline_crossed
         result = original_poll(proc)
         if result is not None:
             assert readers_done.wait(timeout=1)
+            assert len(started_readers) == 2
+            for thread in started_readers:
+                thread.join(timeout=1)
+                assert thread.is_alive() is False
             with clock_lock:
                 deadline_crossed = True
         return result
@@ -203,6 +213,7 @@ def test_completion_observed_after_deadline_is_timeout(monkeypatch):
         "hackbot.tools.runner.time.monotonic",
         controlled_monotonic,
     )
+    monkeypatch.setattr(threading.Thread, "start", record_reader_start)
     monkeypatch.setattr(subprocess.Popen, "poll", poll_crossing_deadline)
 
     result = CommandRunner(timeout_seconds=0.5).run(("/usr/bin/true",))
@@ -314,6 +325,7 @@ def test_reader_failure_after_last_failed_check_fails_closed(monkeypatch):
     readers_done = threading.Event()
     done_lock = threading.Lock()
     done_count = 0
+    started_readers: list[threading.Thread] = []
 
     def fail_late(*, fd, pipe, cap, stop, failed, state):
         nonlocal done_count
@@ -327,15 +339,25 @@ def test_reader_failure_after_last_failed_check_fails_closed(monkeypatch):
                 readers_done.set()
 
     original_poll = subprocess.Popen.poll
+    original_start = threading.Thread.start
+
+    def record_reader_start(thread):
+        started_readers.append(thread)
+        original_start(thread)
 
     def poll_after_readers_fail(proc):
         result = original_poll(proc)
         if result is not None:
             release_readers.set()
             assert readers_done.wait(timeout=1)
+            assert len(started_readers) == 2
+            for thread in started_readers:
+                thread.join(timeout=1)
+                assert thread.is_alive() is False
         return result
 
     monkeypatch.setattr("hackbot.tools.runner._capture_fd", fail_late)
+    monkeypatch.setattr(threading.Thread, "start", record_reader_start)
     monkeypatch.setattr(subprocess.Popen, "poll", poll_after_readers_fail)
 
     with pytest.raises(RunnerError, match="capture"):
