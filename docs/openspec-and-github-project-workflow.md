@@ -33,8 +33,11 @@ only authority for behavior.
 - Delivery Project: <https://github.com/users/clivoa/projects/2>
 
 The repository is linked to the Project. Its code/default branch remains
-unpublished while the local Recon-bundle publication guard requires a separate
-explicit acknowledgement for the unlicensed tracked reference material.
+private. The initial `main` publication was explicitly authorized on
+2026-07-26 for the Recon-bundle and its derived artifacts; the local
+publication guard recorded that one push through its documented override.
+Future pushes containing protected material still require the same deliberate
+operator acknowledgement.
 
 ## Change lifecycle
 
