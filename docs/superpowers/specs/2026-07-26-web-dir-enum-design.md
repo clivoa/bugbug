@@ -41,7 +41,7 @@ ActionDefinition(
     RiskLevel.L0,
     network_access=True,
     uses_external_tool=True,
-    high_volume=True,          # -> effective floor L2
+    high_volume=True,  # -> effective floor L2
     executable=ffuf,
     argv_template=(ffuf, "-s", "-u", "{target}", "-w", "<wordlist path>"),
 )
