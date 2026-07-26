@@ -38,6 +38,8 @@ smoke test.
   view and payload reference before the next `os.read`.
 - Do not poll/reap the group leader while either reader is alive. Deadline or
   reader failure must kill the captured process group before any reap.
+- Once readers stop, observe child exit with `waitid(..., WNOWAIT)`; record the
+  deadline decision before allowing `Popen.poll()` to reap.
 - Never call `Popen.communicate()`.
 - Any reader/setup failure after spawn must kill the captured process group,
   perform bounded cleanup, remove the ephemeral HOME, and raise `RunnerError`.
@@ -605,9 +607,12 @@ def run(self, argv: Sequence[str]) -> CommandResult:
                 )
                 if capture_error is not None:
                     break
-                if proc.poll() is not None:
+                child_exited = _child_exited_without_reap(proc.pid)
+                if child_exited:
                     if deadline - time.monotonic() <= 0:
                         timed_out = True
+                    else:
+                        proc.poll()
                     break
             failed.wait(min(_READ_POLL_SECONDS, remaining))
 
