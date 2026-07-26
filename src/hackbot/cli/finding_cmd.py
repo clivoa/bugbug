@@ -82,9 +82,14 @@ def cmd_add(engagement: str, descriptor_path: str, *, as_json: bool) -> int:
     return EXIT_OK
 
 
-def cmd_report(engagement: str, *, platform: str = "generic") -> int:
+def cmd_report(
+    engagement: str,
+    *,
+    platform: str = "generic",
+    templates_dir: str | None = None,
+) -> int:
     from hackbot.findings.store import FindingError, FindingStore
-    from hackbot.reporting.render import render
+    from hackbot.reporting.render import render, render_custom
 
     try:
         findings = FindingStore(engagement).load_all()
@@ -92,7 +97,19 @@ def cmd_report(engagement: str, *, platform: str = "generic") -> int:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_INVALID
     try:
-        report = render(findings, engagement_id=Path(engagement).name, platform=platform)
+        if templates_dir is None:
+            report = render(
+                findings,
+                engagement_id=Path(engagement).name,
+                platform=platform,
+            )
+        else:
+            report = render_custom(
+                findings,
+                engagement_id=Path(engagement).name,
+                platform=platform,
+                templates_dir=templates_dir,
+            )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_INVALID
