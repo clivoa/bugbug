@@ -33,6 +33,7 @@ class RemoteConfig:
     key_path: str
     connect_timeout: int = 10
 
+
 def load_remote_config(path: str | Path) -> RemoteConfig: ...
 ```
 
@@ -45,8 +46,13 @@ names any host.
 
 ```python
 class RemoteRunner:
-    def __init__(self, config: RemoteConfig, *, runner: CommandRunner | None = None,
-                 ssh_path: str | None = None) -> None: ...
+    def __init__(
+        self,
+        config: RemoteConfig,
+        *,
+        runner: CommandRunner | None = None,
+        ssh_path: str | None = None,
+    ) -> None: ...
     def run(self, argv: Sequence[str]) -> CommandResult: ...
 ```
 

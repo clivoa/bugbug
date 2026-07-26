@@ -11,7 +11,7 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 
 ## Status
 
-Early build; **788 automated tests passing** on **Python 3.14** (project minimum
+Early build; **796 automated tests passing** on **Python 3.14** (project minimum
 3.11). Implemented and verified so far:
 - **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `program`, `risk`, `approval`,
   `tool`, `finding`, `skills`, `version`) — stdlib-only core, runs offline; installable as a wheel
@@ -28,8 +28,10 @@ Early build; **788 automated tests passing** on **Python 3.14** (project minimum
   (with attribution): HTTP probes, DNS record lookups, TLS cert (L0),
   `net.port-scan` (nmap) and `web.dir-enum` (ffuf directory fuzzing) (L2,
   approval-gated). L2 needs `tool run --approve` (TTY, single-use); all in-scope
-  only. Executed runs persist **redacted, run-linked evidence**
-  (`src/hackbot/evidence/`) per engagement. See
+  only. Actions can run **locally or on a remote SSH host** (`--runner remote`,
+  e.g. a Kali box with the full arsenal; the gate stays local — see
+  [`docs/remote-runner.md`](docs/remote-runner.md)). Executed runs persist
+  **redacted, run-linked evidence** (`src/hackbot/evidence/`) per engagement. See
   [`docs/tool-execution.md`](docs/tool-execution.md) and
   [`docs/skill-promotion.md`](docs/skill-promotion.md).
 - **Findings & reporting** (`src/hackbot/findings/`, `src/hackbot/reporting/`) —
@@ -111,7 +113,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 ```bash
 .venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
 .venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/python -m pytest tests -q                 # full safety suite (788 tests)
+.venv/bin/python -m pytest tests -q                 # full safety suite (796 tests)
 ```
 
 ## Documentation
@@ -119,6 +121,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 - [`docs/risk-and-approval.md`](docs/risk-and-approval.md) — L0–L3 gate + L2 approval lifecycle
 - [`docs/tool-execution.md`](docs/tool-execution.md) — gate-bound subprocess substrate + actions
 - [`docs/skill-promotion.md`](docs/skill-promotion.md) — recon-bundle provenance + promoted skills
+- [`docs/remote-runner.md`](docs/remote-runner.md) — run gated actions on a remote SSH host
 - [`docs/findings-and-reporting.md`](docs/findings-and-reporting.md) — typed findings + markdown reports
 - [`docs/next-steps.md`](docs/next-steps.md) — current status and the roadmap for the next phase
 - [`docs/reference-review.md`](docs/reference-review.md) — upstream project analysis
