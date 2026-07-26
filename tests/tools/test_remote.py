@@ -70,3 +70,23 @@ def test_remote_runner_builds_safe_ssh_argv(tmp_path):
 def test_remote_runner_rejects_empty_argv(tmp_path):
     with pytest.raises(RemoteError):
         RemoteRunner(_cfg(tmp_path), runner=_Fake(), ssh_path="/usr/bin/ssh").run(())
+
+
+def test_probe_builds_command_v_script_and_parses(tmp_path):
+    class _P:
+        def run(self, argv):
+            self.argv = tuple(argv)
+            return CommandResult(0, b"curl\ngobuster\n", b"", 4, False, False)
+
+    fake = _P()
+    runner = RemoteRunner(_cfg(tmp_path), runner=fake, ssh_path="/usr/bin/ssh")
+    found = runner.probe(["curl", "gobuster", "nmap"])
+    assert found == {"curl", "gobuster"}
+    remote_cmd = fake.argv[-1]
+    assert "command -v curl" in remote_cmd and "command -v gobuster" in remote_cmd
+
+
+def test_probe_rejects_unsafe_tool_name(tmp_path):
+    runner = RemoteRunner(_cfg(tmp_path), runner=_Fake(), ssh_path="/usr/bin/ssh")
+    with pytest.raises(RemoteError):
+        runner.probe(["curl; rm -rf /"])
