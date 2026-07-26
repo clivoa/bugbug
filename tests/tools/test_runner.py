@@ -456,6 +456,63 @@ def test_nonblocking_setup_failure_fails_closed(monkeypatch):
     assert time.monotonic() - started < 2
 
 
+def test_second_reader_start_failure_cleans_first_reader_and_process(monkeypatch):
+    spawned: list[subprocess.Popen] = []
+    first_reader: list[threading.Thread] = []
+    start_calls = 0
+    original_popen = subprocess.Popen
+    original_start = threading.Thread.start
+
+    def record_popen(*args, **kwargs):
+        proc = original_popen(*args, **kwargs)
+        spawned.append(proc)
+        return proc
+
+    def fail_second_start(thread):
+        nonlocal start_calls
+        start_calls += 1
+        if start_calls == 2:
+            raise RuntimeError("synthetic second reader start failure")
+        first_reader.append(thread)
+        original_start(thread)
+
+    monkeypatch.setattr(subprocess, "Popen", record_popen)
+    monkeypatch.setattr(threading.Thread, "start", fail_second_start)
+
+    started = time.monotonic()
+    observed: dict[str, object] = {}
+    try:
+        with pytest.raises(RunnerError, match="capture"):
+            CommandRunner(timeout_seconds=5).run(("/bin/sleep", "5"))
+        observed["elapsed"] = time.monotonic() - started
+        observed["first_reader_stopped"] = len(first_reader) == 1 and not first_reader[0].is_alive()
+        observed["child_reaped"] = len(spawned) == 1 and spawned[0].poll() is not None
+        observed["stdout_closed"] = (
+            len(spawned) == 1 and spawned[0].stdout is not None and spawned[0].stdout.closed
+        )
+        observed["stderr_closed"] = (
+            len(spawned) == 1 and spawned[0].stderr is not None and spawned[0].stderr.closed
+        )
+    finally:
+        for proc in spawned:
+            if proc.poll() is None:
+                runner_module._kill_process_group(proc.pid)
+                proc.wait(timeout=1)
+            if proc.stdout is not None and not proc.stdout.closed:
+                proc.stdout.close()
+            if proc.stderr is not None and not proc.stderr.closed:
+                proc.stderr.close()
+        for thread in first_reader:
+            thread.join(timeout=1)
+
+    assert observed["elapsed"] < 2
+    assert start_calls == 2
+    assert observed["first_reader_stopped"] is True
+    assert observed["child_reaped"] is True
+    assert observed["stdout_closed"] is True
+    assert observed["stderr_closed"] is True
+
+
 def test_reader_failure_kills_child_and_fails_closed(monkeypatch):
     def fail_capture(*, fd, pipe, cap, stop, failed, state):
         state.error = OSError("synthetic reader failure")
