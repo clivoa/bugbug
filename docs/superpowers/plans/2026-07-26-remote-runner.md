@@ -147,8 +147,10 @@ class RemoteConfig:
 
 
 def _clean(value: object, *, name: str) -> str:
-    if not isinstance(value, str) or not value.strip() or any(
-        c.isspace() or ord(c) < 0x20 for c in value
+    if (
+        not isinstance(value, str)
+        or not value.strip()
+        or any(c.isspace() or ord(c) < 0x20 for c in value)
     ):
         raise RemoteError(f"{name}: expected a non-empty token with no whitespace/control chars")
     return value
@@ -170,9 +172,15 @@ def load_remote_config(path: str | Path) -> RemoteConfig:
     if not isinstance(key_path, str) or not os.path.isabs(key_path) or not os.path.isfile(key_path):
         raise RemoteError("key_path: expected an absolute path to an existing key file")
     connect_timeout = value.get("connect_timeout", 10)
-    if isinstance(connect_timeout, bool) or not isinstance(connect_timeout, int) or not 1 <= connect_timeout <= 120:
+    if (
+        isinstance(connect_timeout, bool)
+        or not isinstance(connect_timeout, int)
+        or not 1 <= connect_timeout <= 120
+    ):
         raise RemoteError("connect_timeout: expected an integer 1..120")
-    return RemoteConfig(host=host, user=user, port=port, key_path=key_path, connect_timeout=connect_timeout)
+    return RemoteConfig(
+        host=host, user=user, port=port, key_path=key_path, connect_timeout=connect_timeout
+    )
 
 
 def _resolve_ssh(explicit: str | None) -> str:
@@ -283,20 +291,25 @@ In `src/hackbot/tools/actions.py`, in `_build_definitions` after the ffuf block
 (no tool resolution — it is remote-only):
 
 ```python
-    definitions.append(
-        ActionDefinition(
-            "web.dir-enum-gobuster",
-            RiskLevel.L0,
-            network_access=True,
-            uses_external_tool=True,
-            high_volume=True,
-            executable="gobuster",
-            argv_template=(
-                "gobuster", "dir", "-u", "{target}", "-w",
-                "/usr/share/wordlists/dirb/common.txt", "-q",
-            ),
-        )
+definitions.append(
+    ActionDefinition(
+        "web.dir-enum-gobuster",
+        RiskLevel.L0,
+        network_access=True,
+        uses_external_tool=True,
+        high_volume=True,
+        executable="gobuster",
+        argv_template=(
+            "gobuster",
+            "dir",
+            "-u",
+            "{target}",
+            "-w",
+            "/usr/share/wordlists/dirb/common.txt",
+            "-q",
+        ),
     )
+)
 ```
 
 In `src/hackbot/skills/promotion.py`, add to `PROMOTED_ACTIONS`:
@@ -333,8 +346,17 @@ git commit -m "feat: add remote-only web.dir-enum-gobuster arsenal action"
 def test_tool_run_remote_missing_config_is_invalid(lab_engagement, tmp_path, capsys):
     request = _write_request(tmp_path, "http://127.0.0.1/", "net.http-get")
     code = app(
-        ["tool", "run", "net.http-get", str(request), "--engagement", str(lab_engagement),
-         "--runner", "remote", "--json"]
+        [
+            "tool",
+            "run",
+            "net.http-get",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--runner",
+            "remote",
+            "--json",
+        ]
     )
     assert code == 2
     assert "runner" in capsys.readouterr().err.lower()
@@ -363,8 +385,17 @@ def test_tool_run_remote_uses_remote_runner(lab_engagement, tmp_path, capsys, mo
     monkeypatch.setattr("hackbot.tools.remote.RemoteRunner", _FakeRemote)
     request = _write_request(tmp_path, "http://127.0.0.1/", "net.http-get")
     code = app(
-        ["tool", "run", "net.http-get", str(request), "--engagement", str(lab_engagement),
-         "--runner", "remote", "--json"]
+        [
+            "tool",
+            "run",
+            "net.http-get",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--runner",
+            "remote",
+            "--json",
+        ]
     )
     payload = json.loads(capsys.readouterr().out)
     assert code == 0 and payload["executed"] is True
