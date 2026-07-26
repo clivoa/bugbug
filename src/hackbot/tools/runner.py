@@ -270,14 +270,23 @@ class CommandRunner:
                         OSError("subprocess output capture failed"),
                     )
                     break
-                child_reaped = proc.poll() is not None
                 readers_stopped = all(not thread.is_alive() for thread in threads)
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     timed_out = True
                     break
-                if child_reaped and readers_stopped:
-                    break
+                if readers_stopped:
+                    capture_error = next(
+                        (state.error for state in states if state.error is not None),
+                        None,
+                    )
+                    if capture_error is not None:
+                        break
+                    if proc.poll() is not None:
+                        if deadline - time.monotonic() <= 0:
+                            timed_out = True
+                            break
+                        break
                 failed.wait(min(_READ_POLL_SECONDS, remaining))
 
             if capture_error is not None or timed_out:

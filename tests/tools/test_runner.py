@@ -2,6 +2,7 @@
 
 import gc
 import os
+import signal
 import subprocess
 import sys
 import threading
@@ -9,6 +10,7 @@ import time
 
 import pytest
 
+import hackbot.tools.runner as runner_module
 from hackbot.tools.runner import (
     CommandResult,
     CommandRunner,
@@ -379,6 +381,67 @@ def test_descendant_holding_pipes_cannot_bypass_deadline():
     assert elapsed < 2
 
 
+def test_detached_descendant_pipes_preserve_leader_until_group_kill(
+    monkeypatch,
+    tmp_path,
+):
+    descendant_pid_path = tmp_path / "detached.pid"
+    code = (
+        "import pathlib, subprocess, sys; "
+        "child = subprocess.Popen(['/bin/sleep', '5'], start_new_session=True); "
+        "pathlib.Path(sys.argv[1]).write_text(str(child.pid)); "
+        "raise SystemExit(0)"
+    )
+    group_kill_started = threading.Event()
+    early_polls: list[int] = []
+    original_poll = subprocess.Popen.poll
+    original_kill = runner_module._kill_process_group
+
+    def record_poll(proc):
+        if not group_kill_started.is_set():
+            early_polls.append(proc.pid)
+        return original_poll(proc)
+
+    def record_group_kill(pgid):
+        group_kill_started.set()
+        original_kill(pgid)
+
+    monkeypatch.setattr(subprocess.Popen, "poll", record_poll)
+    monkeypatch.setattr(
+        "hackbot.tools.runner._kill_process_group",
+        record_group_kill,
+    )
+
+    try:
+        result = CommandRunner(timeout_seconds=0.1).run(
+            (sys.executable, "-c", code, str(descendant_pid_path))
+        )
+    finally:
+        cleanup_deadline = time.monotonic() + 1
+        while not descendant_pid_path.exists() and time.monotonic() < cleanup_deadline:
+            time.sleep(0.01)
+        if descendant_pid_path.exists():
+            descendant_pid = int(descendant_pid_path.read_text())
+            try:
+                os.kill(descendant_pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            reap_deadline = time.monotonic() + 1
+            while time.monotonic() < reap_deadline:
+                try:
+                    os.kill(descendant_pid, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(0.01)
+            else:
+                pytest.fail("detached descendant survived test cleanup")
+
+    assert result.timed_out is True
+    assert result.exit_code is None
+    assert group_kill_started.is_set() is True
+    assert early_polls == []
+
+
 def test_nonblocking_setup_failure_fails_closed(monkeypatch):
     def fail_set_nonblocking(pipe):
         raise OSError("synthetic set_blocking failure")
@@ -424,27 +487,33 @@ def test_reader_failure_after_last_failed_check_fails_closed(monkeypatch):
             if done_count == 2:
                 readers_done.set()
 
-    original_poll = subprocess.Popen.poll
     original_start = threading.Thread.start
+    original_is_alive = threading.Thread.is_alive
+    readers_released = False
 
     def record_reader_start(thread):
         started_readers.append(thread)
         original_start(thread)
 
-    def poll_after_readers_fail(proc):
-        result = original_poll(proc)
-        if result is not None:
+    def release_failure_on_liveness_check(thread):
+        nonlocal readers_released
+        if not readers_released:
+            readers_released = True
             release_readers.set()
             assert readers_done.wait(timeout=1)
             assert len(started_readers) == 2
-            for thread in started_readers:
-                thread.join(timeout=1)
-                assert thread.is_alive() is False
-        return result
+            for started_reader in started_readers:
+                started_reader.join(timeout=1)
+                assert original_is_alive(started_reader) is False
+        return original_is_alive(thread)
 
     monkeypatch.setattr("hackbot.tools.runner._capture_fd", fail_late)
     monkeypatch.setattr(threading.Thread, "start", record_reader_start)
-    monkeypatch.setattr(subprocess.Popen, "poll", poll_after_readers_fail)
+    monkeypatch.setattr(
+        threading.Thread,
+        "is_alive",
+        release_failure_on_liveness_check,
+    )
 
     with pytest.raises(RunnerError, match="capture"):
         CommandRunner(timeout_seconds=2).run(("/usr/bin/true",))
