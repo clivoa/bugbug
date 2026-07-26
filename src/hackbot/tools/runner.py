@@ -99,6 +99,17 @@ def _join_readers(
     return all(not thread.is_alive() for thread in threads)
 
 
+def _child_exited_without_reap(pid: int) -> bool:
+    return (
+        os.waitid(  # type: ignore[attr-defined]
+            os.P_PID,
+            pid,
+            os.WEXITED | os.WNOHANG | os.WNOWAIT,
+        )
+        is not None
+    )
+
+
 def _set_nonblocking(pipe: BinaryIO) -> int:
     fd = pipe.fileno()
     os.set_blocking(fd, False)
@@ -282,10 +293,16 @@ class CommandRunner:
                     )
                     if capture_error is not None:
                         break
-                    if proc.poll() is not None:
+                    try:
+                        child_exited = _child_exited_without_reap(proc.pid)
+                    except OSError as exc:
+                        capture_error = exc
+                        break
+                    if child_exited:
                         if deadline - time.monotonic() <= 0:
                             timed_out = True
                             break
+                        proc.poll()
                         break
                 failed.wait(min(_READ_POLL_SECONDS, remaining))
 

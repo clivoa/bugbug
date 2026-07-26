@@ -259,6 +259,7 @@ def test_completion_observed_after_deadline_is_timeout(monkeypatch):
     clock_lock = threading.Lock()
     deadline_crossed = False
     expired_ticks = 0
+    lifecycle_events: list[str] = []
 
     def finish_capture(*, fd, pipe, cap, stop, failed, state):
         nonlocal done_count
@@ -278,6 +279,8 @@ def test_completion_observed_after_deadline_is_timeout(monkeypatch):
 
     original_poll = subprocess.Popen.poll
     original_start = threading.Thread.start
+    original_waitid = os.waitid
+    original_kill = runner_module._kill_process_group
 
     def record_reader_start(thread):
         started_readers.append(thread)
@@ -287,6 +290,7 @@ def test_completion_observed_after_deadline_is_timeout(monkeypatch):
         nonlocal deadline_crossed
         result = original_poll(proc)
         if result is not None:
+            lifecycle_events.append("poll")
             assert readers_done.wait(timeout=1)
             assert len(started_readers) == 2
             for thread in started_readers:
@@ -296,18 +300,37 @@ def test_completion_observed_after_deadline_is_timeout(monkeypatch):
                 deadline_crossed = True
         return result
 
+    def observe_crossing_deadline(idtype, pid, options):
+        nonlocal deadline_crossed
+        result = original_waitid(idtype, pid, options)
+        if result is not None:
+            lifecycle_events.append("observe")
+            with clock_lock:
+                deadline_crossed = True
+        return result
+
+    def record_group_kill(pgid):
+        lifecycle_events.append("kill")
+        original_kill(pgid)
+
     monkeypatch.setattr("hackbot.tools.runner._capture_fd", finish_capture)
     monkeypatch.setattr(
         "hackbot.tools.runner.time.monotonic",
         controlled_monotonic,
     )
     monkeypatch.setattr(threading.Thread, "start", record_reader_start)
+    monkeypatch.setattr(os, "waitid", observe_crossing_deadline)
     monkeypatch.setattr(subprocess.Popen, "poll", poll_crossing_deadline)
+    monkeypatch.setattr(
+        "hackbot.tools.runner._kill_process_group",
+        record_group_kill,
+    )
 
     result = CommandRunner(timeout_seconds=0.5).run(("/usr/bin/true",))
 
     assert result.timed_out is True
     assert result.exit_code is None
+    assert lifecycle_events.index("kill") < lifecycle_events.index("poll")
 
 
 def test_output_is_capped_and_marked_truncated():
