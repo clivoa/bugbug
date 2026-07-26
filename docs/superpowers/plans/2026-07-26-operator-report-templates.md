@@ -855,8 +855,11 @@ Immediately after the existing `finding report --platform present` assertion in
 `scripts/smoke_test.sh`, add:
 
 ```bash
-( cd /tmp && "$HACKBOT" finding report --help | grep -q -- --templates-dir ) \
-  && echo "finding report --templates-dir present"
+if ! ( cd /tmp && "$HACKBOT" finding report --help | grep -q -- --templates-dir ); then
+  echo "FAIL: finding report --templates-dir missing" >&2
+  exit 1
+fi
+echo "finding report --templates-dir present"
 ```
 
 - [ ] **Step 2: Update README usage and status**

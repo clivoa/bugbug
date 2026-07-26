@@ -85,7 +85,7 @@ Templates are strict UTF-8 regular files, not symlinks, and are limited to
 access, malformed braces, missing files, and missing/repeated mandatory fields
 fail with exit `2` before report output. Literal braces use `{{` and `}}`.
 There are no loops, conditionals, includes, execution, implicit discovery, or
-fallback after explicit opt-in.
+fallback after explicit opt-in. Stdout remains empty on any template error.
 
 `report.md`:
 
