@@ -326,7 +326,9 @@ def _cmd_skills(args: argparse.Namespace) -> int:
     from hackbot.cli import skills_cmd
 
     if args.saction == "list":
-        return skills_cmd.cmd_list(as_json=args.json)
+        return skills_cmd.cmd_list(
+            as_json=args.json, engagement=args.engagement, runner=args.runner
+        )
     return 2
 
 
@@ -466,6 +468,10 @@ def build_parser() -> argparse.ArgumentParser:
     sk = sub.add_parser("skills", help="list code-owned actions and recon-bundle provenance")
     sk_sub = sk.add_subparsers(dest="saction", required=True)
     sk_list = sk_sub.add_parser("list", help="list actions, availability, and attribution")
+    sk_list.add_argument("--engagement", help="engagement dir (for --runner remote)")
+    sk_list.add_argument(
+        "--runner", default="local", help="availability to show: local | remote (probes the host)"
+    )
     sk_list.add_argument("--json", action="store_true")
     sk.set_defaults(func=_cmd_skills)
 
