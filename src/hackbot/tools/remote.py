@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from hackbot.tools.runner import CommandResult, CommandRunner, RunnerError
 
 _SSH_CANDIDATES: tuple[str, ...] = ("/usr/bin/ssh", "/opt/homebrew/bin/ssh", "/usr/local/bin/ssh")
 _CONFIG_KEYS = frozenset({"host", "user", "port", "key_path", "connect_timeout"})
+_TOOL_RE = re.compile(r"[A-Za-z0-9._-]+")
 
 
 class RemoteError(RunnerError):
@@ -97,14 +99,9 @@ class RemoteRunner:
         self._ssh = _resolve_ssh(ssh_path)
         self._runner = runner if runner is not None else CommandRunner()
 
-    def run(self, argv: Sequence[str]) -> CommandResult:
-        items = tuple(argv)
-        if not items:
-            raise RemoteError("argv must be non-empty")
-        tool = os.path.basename(items[0])
-        remote_cmd = " ".join(shlex.quote(t) for t in (tool, *items[1:]))
+    def _ssh_argv(self, remote_cmd: str) -> tuple[str, ...]:
         cfg = self._config
-        ssh_argv = (
+        return (
             self._ssh,
             "-F",
             "/dev/null",
@@ -125,7 +122,37 @@ class RemoteRunner:
             f"{cfg.user}@{cfg.host}",
             remote_cmd,
         )
+
+    def run(self, argv: Sequence[str]) -> CommandResult:
+        items = tuple(argv)
+        if not items:
+            raise RemoteError("argv must be non-empty")
+        tool = os.path.basename(items[0])
+        remote_cmd = " ".join(shlex.quote(t) for t in (tool, *items[1:]))
         try:
-            return self._runner.run(ssh_argv)  # type: ignore[attr-defined]
+            return self._runner.run(self._ssh_argv(remote_cmd))  # type: ignore[attr-defined]
         except RunnerError as exc:
             raise RemoteError(str(exc)) from exc
+
+    def probe(self, tools: Iterable[str]) -> set[str]:
+        """Report which of the given tool basenames exist on the remote host.
+
+        Infra introspection of the operator's own host, not a gated action. The
+        command is code-owned (fixed ``command -v`` checks); each token is quoted.
+        """
+        names = list(tools)
+        for name in names:
+            if _TOOL_RE.fullmatch(name) is None:
+                raise RemoteError(f"unsafe tool name: {name!r}")
+        if not names:
+            return set()
+        script = "; ".join(
+            f"command -v {shlex.quote(name)} >/dev/null 2>&1 && printf '%s\\n' {shlex.quote(name)}"
+            for name in names
+        )
+        try:
+            result = self._runner.run(self._ssh_argv(script))  # type: ignore[attr-defined]
+        except RunnerError as exc:
+            raise RemoteError(str(exc)) from exc
+        reported = result.stdout.decode("latin-1").split()
+        return {name for name in reported if name in set(names)}
