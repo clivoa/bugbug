@@ -332,6 +332,16 @@ def _cmd_skills(args: argparse.Namespace) -> int:
     return 2
 
 
+def _cmd_wordlists(args: argparse.Namespace) -> int:
+    from hackbot.cli import wordlists_cmd
+
+    if args.wlaction == "list":
+        return wordlists_cmd.cmd_list(
+            engagement=args.engagement, runner=args.runner, as_json=args.json
+        )
+    return 2
+
+
 def _cmd_finding(args: argparse.Namespace) -> int:
     from hackbot.cli import finding_cmd
 
@@ -474,6 +484,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sk_list.add_argument("--json", action="store_true")
     sk.set_defaults(func=_cmd_skills)
+
+    wl = sub.add_parser("wordlists", help="enumerate wordlist files on a remote host")
+    wl_sub = wl.add_subparsers(dest="wlaction", required=True)
+    wl_list = wl_sub.add_parser("list", help="list wordlist paths under known roots (remote)")
+    wl_list.add_argument("--engagement", help="engagement dir (reads runner.json)")
+    wl_list.add_argument("--runner", default="remote", help="remote-only (reads the host)")
+    wl_list.add_argument("--json", action="store_true")
+    wl.set_defaults(func=_cmd_wordlists)
 
     v = sub.add_parser("version", help="print version")
     v.set_defaults(func=_cmd_version)
