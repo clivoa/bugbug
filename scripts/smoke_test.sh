@@ -51,8 +51,11 @@ echo "== risk/approval/tool CLI help works stdlib-only (no target/provider I/O) 
 ( cd /tmp && "$HACKBOT" tool run --help | grep -q -- --runner ) && echo "tool run --runner present"
 ( cd /tmp && "$HACKBOT" finding --help >/dev/null ) && echo "finding help ok"
 ( cd /tmp && "$HACKBOT" finding report --help | grep -q -- --platform ) && echo "finding report --platform present"
-( cd /tmp && "$HACKBOT" finding report --help | grep -q -- --templates-dir ) \
-  && echo "finding report --templates-dir present"
+if ! ( cd /tmp && "$HACKBOT" finding report --help | grep -q -- --templates-dir ); then
+  echo "FAIL: finding report --templates-dir missing" >&2
+  exit 1
+fi
+echo "finding report --templates-dir present"
 ( cd /tmp && "$HACKBOT" skills list >/dev/null ) && echo "skills list ok"
 
 echo "== secrets list degrades gracefully (no keyring, no traceback) =="
