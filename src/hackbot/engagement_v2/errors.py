@@ -39,14 +39,40 @@ class ReasonCode(str, Enum):
 class ContractError(ValueError):
     """A public failure containing only a registered, code-owned message."""
 
+    __slots__ = ()
+
     def __init__(self, reason_code: ReasonCode) -> None:
         if type(reason_code) is not ReasonCode:
             raise TypeError("reason_code must be an exact ReasonCode")
-        self.reason_code = reason_code
-        self.message = reason_code.value.lower().replace("_", " ")
-        super().__init__(f"{reason_code.value}: {self.message}")
+        super().__init__(reason_code)
+
+    @property
+    def reason_code(self) -> ReasonCode:
+        """Return the exact registered reason held by this immutable error."""
+
+        reason_code = self.args[0]
+        if type(reason_code) is not ReasonCode:
+            raise TypeError("stored reason_code must be an exact ReasonCode")
+        return reason_code
+
+    @property
+    def message(self) -> str:
+        """Derive the deterministic code-owned message."""
+
+        return self.reason_code.value.lower().replace("_", " ")
+
+    def __setattr__(self, name: str, value: object) -> None:
+        raise AttributeError("ContractError is immutable")
+
+    def __delattr__(self, name: str) -> None:
+        raise AttributeError("ContractError is immutable")
+
+    def __str__(self) -> str:
+        return f"{self.reason_code.value}: {self.message}"
 
     def as_dict(self) -> dict[str, str]:
         """Return the stable, secret-free public failure representation."""
 
-        return {"reason_code": self.reason_code.value, "message": self.message}
+        reason_code = self.reason_code
+        message = reason_code.value.lower().replace("_", " ")
+        return {"reason_code": reason_code.value, "message": message}

@@ -128,14 +128,40 @@ def test_security_enums_are_closed() -> None:
 
 def test_contract_error_is_typed_and_secret_free() -> None:
     error = ContractError(ReasonCode.INVALID_LIMIT)
-    assert error.__dict__ == {
-        "reason_code": ReasonCode.INVALID_LIMIT,
-        "message": "invalid limit",
-    }
     assert error.as_dict() == {
         "reason_code": "INVALID_LIMIT",
         "message": "invalid limit",
     }
+
+
+def test_contract_error_is_immutable_and_ignores_arbitrary_metadata() -> None:
+    error = ContractError(ReasonCode.INVALID_LIMIT)
+
+    with pytest.raises(AttributeError, match="immutable"):
+        error.reason_code = ReasonCode.INVALID_REQUEST  # type: ignore[misc]
+    with pytest.raises(AttributeError, match="immutable"):
+        error.message = "attacker-controlled"  # type: ignore[misc]
+    with pytest.raises(AttributeError, match="immutable"):
+        error.metadata = {"secret": "attacker-controlled"}  # type: ignore[attr-defined]
+    with pytest.raises(AttributeError, match="immutable"):
+        error.args = (ReasonCode.INVALID_REQUEST,)
+
+    error.__dict__["reason_code"] = ReasonCode.INVALID_REQUEST
+    error.__dict__["message"] = "attacker-controlled"
+    error.__dict__["metadata"] = {"secret": "attacker-controlled"}
+    assert error.as_dict() == {
+        "reason_code": "INVALID_LIMIT",
+        "message": "invalid limit",
+    }
+
+
+def test_projection_format_identifiers_are_exact() -> None:
+    assert contract.AUTHORITY_PROJECTION_FORMAT == "hackbot-authority-v1"
+    assert contract.EXECUTION_PROJECTION_FORMAT == "hackbot-execution-v1"
+
+
+def test_safe_fullmatch_format_identifier_is_exact() -> None:
+    assert contract.SAFE_FULLMATCH_FORMAT == "hackbot-safe-fullmatch-v1"
 
 
 def test_every_schema_version_and_document_limit_is_closed() -> None:
@@ -157,7 +183,6 @@ def test_every_schema_version_and_document_limit_is_closed() -> None:
         MAX_ACTION_MANIFEST_BYTES,
         MAX_DOCUMENT_NESTING_DEPTH,
     ) == (1_048_576, 1_048_576, 1_048_576, 1_048_576, 4_194_304, 32)
-    assert contract.AUTHORITY_PROJECTION_FORMAT == "hackbot-authority-v1"
 
 
 def test_profiles_parameter_types_and_execution_enums_are_closed() -> None:
