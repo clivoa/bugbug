@@ -35,8 +35,30 @@ def _emit(payload: dict[str, object], *, as_json: bool) -> None:
             print(f"{key}: {item}")
 
 
+def _make_runner(engagement: str, name: str):
+    from hackbot.tools.runner import CommandRunner
+
+    if name == "local":
+        return CommandRunner()
+    if name == "remote":
+        from hackbot.tools.remote import RemoteError, RemoteRunner, load_remote_config
+
+        try:
+            config = load_remote_config(str(Path(engagement) / "runner.json"))
+            return RemoteRunner(config)
+        except RemoteError as exc:
+            raise CliInputError(f"remote runner config: {exc}") from exc
+    raise CliInputError(f"unknown runner: {name}")
+
+
 def cmd_run(
-    engagement: str, action_id: str, request_path: str, *, as_json: bool, approve: bool = False
+    engagement: str,
+    action_id: str,
+    request_path: str,
+    *,
+    as_json: bool,
+    approve: bool = False,
+    runner: str = "local",
 ) -> int:
     from hackbot.audit.tool_runs import AuditError, AuditSink
     from hackbot.cli.risk_cmd import GrantAborted, interactive_grant
@@ -46,7 +68,7 @@ def cmd_run(
     from hackbot.risk.registry import ActionRegistry, RegistryError
     from hackbot.tools.actions import REAL_ACTIONS
     from hackbot.tools.adapter import run_action
-    from hackbot.tools.runner import CommandRunner, RunnerError
+    from hackbot.tools.runner import RunnerError
 
     try:
         definition = REAL_ACTIONS.require(action_id)
@@ -70,7 +92,11 @@ def cmd_run(
         print("error: request action_id does not match the command", file=sys.stderr)
         return EXIT_INVALID
 
-    runner = CommandRunner()
+    try:
+        tool_runner = _make_runner(engagement, runner)
+    except CliInputError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_INVALID
     audit = AuditSink(engagement)
     evidence = EvidenceStore(engagement)
     try:
@@ -88,7 +114,7 @@ def cmd_run(
                 request,
                 context,
                 now=now,
-                runner=runner,
+                runner=tool_runner,
                 audit=audit,
                 evidence=evidence,
                 approval_store=store,
@@ -137,7 +163,7 @@ def cmd_run(
                     fresh_context,
                     grant=grant,
                     now=datetime.now(UTC),
-                    runner=runner,
+                    runner=tool_runner,
                     audit=audit,
                     evidence=evidence,
                     approval_store=store,

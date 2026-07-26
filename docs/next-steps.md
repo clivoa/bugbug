@@ -1,11 +1,11 @@
 # Next steps
 
-Status snapshot after web directory enumeration (ffuf). Use this as the starting
-point for the next phase.
+Status snapshot after the SSH remote runner. Use this as the starting point for
+the next phase.
 
 ## Where the project stands
 
-Implemented and verified (788 tests passing, Ruff/format/mypy clean, offline
+Implemented and verified (796 tests passing, Ruff/format/mypy clean, offline
 smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
@@ -24,9 +24,11 @@ smoke pass):
   skills (with `@reeshasx` attribution; `hackbot skills list`): HTTP probes, DNS
   record lookups, TLS cert (L0), `net.port-scan` (nmap), and `web.dir-enum` (ffuf
   directory fuzzing) (L2), in-scope only. L2 runs once via
-  `hackbot tool run --approve` after a TTY-typed, single-use
-  approval consumed atomically by `evaluate`; see
-  [`tool-execution.md`](tool-execution.md) and [`skill-promotion.md`](skill-promotion.md).
+  `hackbot tool run --approve` after a TTY-typed, single-use approval consumed
+  atomically by `evaluate`. Actions can run locally or on a remote SSH host
+  (`--runner remote`, e.g. Kali) with the gate still local; see
+  [`tool-execution.md`](tool-execution.md), [`skill-promotion.md`](skill-promotion.md),
+  and [`remote-runner.md`](remote-runner.md).
 - **Evidence persistence** (`src/hackbot/evidence/`) — executed runs store their
   output **redacted** and run-linked under `<engagement>/evidence/<run_id>/`
   (audit written first); best-effort redaction, raw output never printed or
@@ -65,12 +67,13 @@ Done: the gate-bound tool substrate, actions promoted from reviewed recon-bundle
 skills (HTTP/DNS/TLS L0 + nmap port-scan & ffuf dir-enum L2, with attribution +
 `skills list`),
 redacted run-linked evidence, L2 execution over the CLI (`tool run --approve`),
-typed findings, and per-platform markdown reporting.
+typed findings, per-platform markdown reporting, and a remote SSH runner
+(`--runner remote`, verified on Kali with gobuster).
 
-1. **Linux SSH runner → Kali**: run gated actions on the Kali VM
-   (192.168.64.4) over SSH to use its full tool arsenal (ffuf/gobuster/nmap/…),
-   still passing the gate (scope + risk + approval), output captured as untrusted
-   data. Needs key-based SSH setup on the Kali host.
+1. **Remote tool/wordlist discovery**: the SSH runner works (`--runner remote`,
+   see [`remote-runner.md`](remote-runner.md); verified on Kali with gobuster).
+   Next: discover which tools/wordlists a remote host actually has (instead of
+   assuming fixed paths), and surface remote availability in `hackbot skills list`.
 2. **Custom operator wordlists**: add a `{wordlist}` placeholder to `argv_template`
    (a reviewed risk-model extension) so `web.dir-enum`/param-fuzz can use the
    operator's own wordlists (e.g. SecLists) instead of only the bundled one.
