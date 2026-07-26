@@ -149,6 +149,24 @@ def test_discover_wordlists_drops_malformed_and_out_of_allowlist(tmp_path):
     assert entries == (WordlistEntry("/usr/share/wordlists/dirb/ok.txt", 12),)
 
 
+def test_discover_wordlists_drops_non_ascii_digit_size(tmp_path):
+    class _W:
+        def run(self, argv):
+            return CommandResult(
+                0,
+                b"\xc2\xb2\t/usr/share/wordlists/dirb/x.txt\n"  # size is U+00B2 (superscript 2)
+                b"12\t/usr/share/wordlists/dirb/ok.txt\n",
+                b"",
+                7,
+                False,
+                False,
+            )
+
+    runner = RemoteRunner(_cfg(tmp_path), runner=_W(), ssh_path="/usr/bin/ssh")
+    entries = runner.discover_wordlists()
+    assert entries == (WordlistEntry("/usr/share/wordlists/dirb/ok.txt", 12),)
+
+
 def test_discover_wordlists_empty_stdout(tmp_path):
     class _W:
         def run(self, argv):

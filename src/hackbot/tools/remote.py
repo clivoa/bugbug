@@ -28,8 +28,9 @@ _WORDLIST_ROOTS: tuple[str, ...] = (
     "/usr/share/wordlists/dirb",
     "/usr/share/wordlists/dirbuster",
 )
-_MAX_WORDLIST_LINES = 2000
+_MAX_WORDLIST_LINES: int = 2000
 _WORDLIST_PATH_RE = re.compile(r"[A-Za-z0-9._/-]+")
+_DIGITS_RE = re.compile(r"[0-9]+")
 
 
 class RemoteError(RunnerError):
@@ -192,7 +193,7 @@ class RemoteRunner:
         seen: dict[str, int] = {}
         for line in result.stdout.decode("latin-1").splitlines():
             size_str, tab, path = line.partition("\t")
-            if not tab or not size_str.isdigit():
+            if not tab or _DIGITS_RE.fullmatch(size_str) is None:
                 continue
             if _WORDLIST_PATH_RE.fullmatch(path) is None:
                 continue
