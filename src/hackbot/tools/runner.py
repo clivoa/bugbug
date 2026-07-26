@@ -14,15 +14,57 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 _DEFAULT_ENV: dict[str, str] = {"PATH": "/usr/bin:/bin", "LC_ALL": "C"}
+_READ_CHUNK_BYTES = 64 * 1024
+_READ_POLL_SECONDS = 0.01
+_CLEANUP_GRACE_SECONDS = 1.0
+_CLEANUP_STOP_SECONDS = 0.1
 
 
 class RunnerError(Exception):
     """Raised for a malformed argv or a missing executable (fail-closed)."""
+
+
+@dataclass(slots=True)
+class _CaptureState:
+    data: bytearray = field(default_factory=bytearray)
+    truncated: bool = False
+    error: OSError | None = None
+    done: threading.Event = field(default_factory=threading.Event)
+
+
+def _capture_fd(
+    fd: int,
+    *,
+    cap: int,
+    stop: threading.Event,
+    failed: threading.Event,
+    state: _CaptureState,
+) -> None:
+    try:
+        while not stop.is_set():
+            try:
+                chunk = os.read(fd, _READ_CHUNK_BYTES)
+            except BlockingIOError:
+                stop.wait(_READ_POLL_SECONDS)
+                continue
+            if not chunk:
+                return
+            remaining = max(0, cap - len(state.data))
+            if remaining:
+                state.data.extend(chunk[:remaining])
+            if len(chunk) > remaining:
+                state.truncated = True
+    except OSError as exc:
+        state.error = exc
+        failed.set()
+    finally:
+        state.done.set()
 
 
 @dataclass(frozen=True, slots=True)
