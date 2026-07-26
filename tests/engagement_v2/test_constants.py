@@ -82,6 +82,7 @@ from hackbot.engagement_v2.constants import (
     RateControlMode,
     ResourceCleanupState,
     RiskLevel,
+    RunnerRole,
     SecretTransport,
     SourceIdentityMode,
     TargetCleanupState,
@@ -287,6 +288,12 @@ def test_profiles_parameter_types_and_execution_enums_are_closed() -> None:
         "direct-interface",
         "attested-egress",
     }
+
+
+def test_runner_roles_are_closed() -> None:
+    assert {item.value for item in RunnerRole} == {"execution-node", "in-scope-target"}
+    with pytest.raises(ValueError):
+        RunnerRole("operator-controlled")
 
 
 def test_all_action_and_input_bounds_are_closed() -> None:
