@@ -261,3 +261,62 @@ def test_tool_run_web_dir_enum_approve_executes(
     assert payload["evidence_run_id"]
     run_dir = lab_engagement / "evidence" / payload["evidence_run_id"]
     assert b"admin" in (run_dir / "stdout").read_bytes()
+
+
+def test_tool_run_remote_missing_config_is_invalid(lab_engagement, tmp_path, capsys):
+    request = _write_request(tmp_path, "http://127.0.0.1/", "net.http-get")
+    code = app(
+        [
+            "tool",
+            "run",
+            "net.http-get",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--runner",
+            "remote",
+            "--json",
+        ]
+    )
+    assert code == 2
+    assert "runner" in capsys.readouterr().err.lower()
+
+
+def test_tool_run_remote_uses_remote_runner(lab_engagement, tmp_path, capsys, monkeypatch):
+    import json as _json
+
+    from hackbot.tools.runner import CommandResult
+
+    (tmp_path / "k").write_text("KEY")
+    (lab_engagement / "runner.json").write_text(
+        _json.dumps({"host": "h", "user": "u", "port": 22, "key_path": str(tmp_path / "k")})
+    )
+
+    calls = {}
+
+    class _FakeRemote:
+        def __init__(self, *a, **k):
+            calls["built"] = True
+
+        def run(self, argv):
+            calls["argv"] = tuple(argv)
+            return CommandResult(0, b"remote", b"", 3, False, False)
+
+    monkeypatch.setattr("hackbot.tools.remote.RemoteRunner", _FakeRemote)
+    request = _write_request(tmp_path, "http://127.0.0.1/", "net.http-get")
+    code = app(
+        [
+            "tool",
+            "run",
+            "net.http-get",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--runner",
+            "remote",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0 and payload["executed"] is True
+    assert calls.get("built") is True

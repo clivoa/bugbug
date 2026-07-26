@@ -22,8 +22,12 @@ _SSH_CANDIDATES: tuple[str, ...] = ("/usr/bin/ssh", "/opt/homebrew/bin/ssh", "/u
 _CONFIG_KEYS = frozenset({"host", "user", "port", "key_path", "connect_timeout"})
 
 
-class RemoteError(Exception):
-    """Raised for an invalid remote config or a malformed remote invocation."""
+class RemoteError(RunnerError):
+    """Raised for an invalid remote config or a malformed remote invocation.
+
+    A ``RunnerError`` subclass so callers that already handle runner failures
+    catch a run-time remote failure too.
+    """
 
 
 @dataclass(frozen=True, slots=True)
