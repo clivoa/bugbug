@@ -145,4 +145,5 @@ def test_web_dir_enum_gobuster_is_remote_only_l2():
     assert d.uses_external_tool is True
     assert d.executable == "gobuster"  # bare name -> remote-only
     assert "-u" in d.argv_template and "{target}" in d.argv_template
+    assert "{wordlist}" in d.argv_template  # operator supplies the wordlist path
     assert "web.dir-enum-gobuster" in REGISTERED_ACTION_IDS
