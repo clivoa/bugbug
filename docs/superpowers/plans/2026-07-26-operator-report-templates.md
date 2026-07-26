@@ -123,10 +123,92 @@ def _pair(root: Path, *, report: str = REPORT, finding: str = FINDING) -> Path:
 
 
 def test_load_report_templates_accepts_valid_pair_and_literal_braces(tmp_path):
-    root = _pair(tmp_path, report=REPORT.replace("# ", "# {{draft}} "))
+    root = _pair(
+        tmp_path,
+        report=REPORT.replace("# ", "# {{draft}} "),
+        finding=FINDING.replace("{title}", "{{{title}}}"),
+    )
     pair = load_report_templates(root, platform="generic")
     assert "{{draft}}" in pair.report
-    assert pair.finding == FINDING
+    assert "{{{title}}}" in pair.finding
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"], ids=["lf", "crlf", "cr"])
+def test_load_report_templates_accepts_markdown_line_boundaries(tmp_path, newline):
+    root = _pair(
+        tmp_path,
+        report=REPORT.replace("\n", newline),
+        finding=FINDING.replace("\n", newline),
+    )
+    pair = load_report_templates(root, platform="generic")
+    assert pair.report == REPORT.replace("\n", newline)
+    assert pair.finding == FINDING.replace("\n", newline)
+
+
+@pytest.mark.parametrize(
+    ("template_name", "field_name"),
+    [
+        ("report", "findings"),
+        ("finding", "evidence"),
+        ("finding", "demonstrated_impact"),
+        ("finding", "plausible_impact"),
+    ],
+)
+@pytest.mark.parametrize(
+    "separator",
+    ["\v", "\f", "\u0085", "\u2028", "\u2029"],
+    ids=["vertical-tab", "form-feed", "nel", "line-separator", "paragraph-separator"],
+)
+def test_load_report_templates_rejects_non_markdown_line_separators(
+    tmp_path,
+    template_name,
+    field_name,
+    separator,
+):
+    template = REPORT if template_name == "report" else FINDING
+    unsafe = template.replace(
+        f"\n{{{field_name}}}\n",
+        f"{separator}{{{field_name}}}{separator}",
+    )
+    _pair(tmp_path, **{template_name: unsafe})
+    with pytest.raises(TemplateError, match=f"{field_name} must be alone on its line"):
+        load_report_templates(tmp_path, platform="generic")
+
+
+@pytest.mark.parametrize(
+    ("template_name", "field_name"),
+    [
+        ("report", "findings"),
+        ("finding", "evidence"),
+        ("finding", "demonstrated_impact"),
+        ("finding", "plausible_impact"),
+    ],
+)
+@pytest.mark.parametrize(
+    "separator",
+    ["\v", "\f", "\u0085", "\u2028", "\u2029"],
+    ids=["vertical-tab", "form-feed", "nel", "line-separator", "paragraph-separator"],
+)
+def test_load_report_templates_rejects_non_markdown_separators_adjacent_to_placeholder(
+    tmp_path,
+    template_name,
+    field_name,
+    separator,
+):
+    template = REPORT if template_name == "report" else FINDING
+    unsafe = template.replace(
+        f"\n{{{field_name}}}\n",
+        f"\n{separator}{{{field_name}}}{separator}\n",
+    )
+    _pair(tmp_path, **{template_name: unsafe})
+    with pytest.raises(TemplateError, match=f"{field_name} must be alone on its line"):
+        load_report_templates(tmp_path, platform="generic")
+
+
+def test_load_report_templates_rejects_empty_format_spec(tmp_path):
+    _pair(tmp_path, finding=FINDING.replace("{title}", "{title:}"))
+    with pytest.raises(TemplateError, match="format specs are not allowed"):
+        load_report_templates(tmp_path, platform="generic")
 
 
 @pytest.mark.parametrize(
@@ -197,6 +279,7 @@ Create `src/hackbot/reporting/templates.py` with:
 
 from __future__ import annotations
 
+import os
 import stat
 from collections import Counter
 from dataclasses import dataclass
@@ -235,6 +318,30 @@ class ReportTemplates:
     finding: str
 
 
+def _validate_plain_replacement_fields(text: str, *, label: str) -> None:
+    index = 0
+    while index < len(text):
+        brace = text[index]
+        if brace not in "{}":
+            index += 1
+            continue
+        if index + 1 < len(text) and text[index + 1] == brace:
+            index += 2
+            continue
+        if brace == "}":
+            index += 1
+            continue
+        field_end = text.find("}", index + 1)
+        if field_end == -1:
+            break
+        field = text[index + 1 : field_end]
+        if "!" in field:
+            raise TemplateError(f"{label} template placeholder conversions are not allowed")
+        if ":" in field:
+            raise TemplateError(f"{label} template placeholder format specs are not allowed")
+        index = field_end + 1
+
+
 def _validate_template(
     text: str,
     *,
@@ -242,6 +349,7 @@ def _validate_template(
     allowed: frozenset[str],
     required: frozenset[str],
 ) -> None:
+    _validate_plain_replacement_fields(text, label=label)
     try:
         parsed = list(Formatter().parse(text))
     except ValueError as exc:
@@ -260,7 +368,9 @@ def _validate_template(
         names.append(field_name)
 
     counts = Counter(names)
-    stripped_lines = [line.strip() for line in text.splitlines()]
+    stripped_lines = [
+        line.strip(" \t") for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    ]
     for field_name in sorted(required):
         if counts[field_name] != 1:
             raise TemplateError(f"{label} template: {field_name} must occur exactly once")
@@ -306,6 +416,32 @@ def test_load_report_templates_rejects_symlink(tmp_path):
         load_report_templates(root, platform="generic")
 
 
+def test_load_report_templates_rejects_file_changed_between_lstat_and_open(
+    tmp_path,
+    monkeypatch,
+):
+    root = _pair(tmp_path)
+    report = root / "generic" / "report.md"
+    replacement = root / "replacement.md"
+    replacement.write_text(REPORT.replace("# ", "# replacement "), encoding="utf-8")
+    real_lstat = Path.lstat
+    swapped = False
+
+    def lstat_then_swap(path):
+        nonlocal swapped
+        result = real_lstat(path)
+        if path == report and not swapped:
+            replacement.replace(report)
+            swapped = True
+        return result
+
+    monkeypatch.setattr(Path, "lstat", lstat_then_swap)
+
+    with pytest.raises(TemplateError, match="changed while opening"):
+        load_report_templates(root, platform="generic")
+    assert swapped
+
+
 def test_load_report_templates_rejects_directory_in_place_of_file(tmp_path):
     root = _pair(tmp_path)
     finding = root / "generic" / "finding.md"
@@ -346,14 +482,36 @@ Append to `src/hackbot/reporting/templates.py`:
 ```python
 def _read_template(path: Path) -> str:
     try:
-        mode = path.lstat().st_mode
+        path_stat = path.lstat()
     except OSError as exc:
         raise TemplateError(f"template file unavailable: {path.name}: {exc}") from exc
-    if path.is_symlink() or not stat.S_ISREG(mode):
+    if stat.S_ISLNK(path_stat.st_mode) or not stat.S_ISREG(path_stat.st_mode):
         raise TemplateError(f"template file must be a regular non-symlink file: {path.name}")
+
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
     try:
-        with path.open("rb") as stream:
-            raw = stream.read(_MAX_TEMPLATE_BYTES + 1)
+        descriptor = os.open(path, flags)
+        try:
+            opened_stat = os.fstat(descriptor)
+            if not stat.S_ISREG(opened_stat.st_mode):
+                raise TemplateError(f"template file must open as a regular file: {path.name}")
+            if (opened_stat.st_dev, opened_stat.st_ino) != (path_stat.st_dev, path_stat.st_ino):
+                raise TemplateError(f"template file changed while opening: {path.name}")
+
+            raw = bytearray()
+            read_limit = _MAX_TEMPLATE_BYTES + 1
+            while len(raw) < read_limit:
+                chunk = os.read(descriptor, read_limit - len(raw))
+                if not chunk:
+                    break
+                raw.extend(chunk)
+        finally:
+            os.close(descriptor)
     except OSError as exc:
         raise TemplateError(f"template file unreadable: {path.name}: {exc}") from exc
     if len(raw) > _MAX_TEMPLATE_BYTES:

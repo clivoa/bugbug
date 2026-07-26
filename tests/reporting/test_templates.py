@@ -31,10 +31,92 @@ def _pair(root: Path, *, report: str = REPORT, finding: str = FINDING) -> Path:
 
 
 def test_load_report_templates_accepts_valid_pair_and_literal_braces(tmp_path):
-    root = _pair(tmp_path, report=REPORT.replace("# ", "# {{draft}} "))
+    root = _pair(
+        tmp_path,
+        report=REPORT.replace("# ", "# {{draft}} "),
+        finding=FINDING.replace("{title}", "{{{title}}}"),
+    )
     pair = load_report_templates(root, platform="generic")
     assert "{{draft}}" in pair.report
-    assert pair.finding == FINDING
+    assert "{{{title}}}" in pair.finding
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"], ids=["lf", "crlf", "cr"])
+def test_load_report_templates_accepts_markdown_line_boundaries(tmp_path, newline):
+    root = _pair(
+        tmp_path,
+        report=REPORT.replace("\n", newline),
+        finding=FINDING.replace("\n", newline),
+    )
+    pair = load_report_templates(root, platform="generic")
+    assert pair.report == REPORT.replace("\n", newline)
+    assert pair.finding == FINDING.replace("\n", newline)
+
+
+@pytest.mark.parametrize(
+    ("template_name", "field_name"),
+    [
+        ("report", "findings"),
+        ("finding", "evidence"),
+        ("finding", "demonstrated_impact"),
+        ("finding", "plausible_impact"),
+    ],
+)
+@pytest.mark.parametrize(
+    "separator",
+    ["\v", "\f", "\u0085", "\u2028", "\u2029"],
+    ids=["vertical-tab", "form-feed", "nel", "line-separator", "paragraph-separator"],
+)
+def test_load_report_templates_rejects_non_markdown_line_separators(
+    tmp_path,
+    template_name,
+    field_name,
+    separator,
+):
+    template = REPORT if template_name == "report" else FINDING
+    unsafe = template.replace(
+        f"\n{{{field_name}}}\n",
+        f"{separator}{{{field_name}}}{separator}",
+    )
+    _pair(tmp_path, **{template_name: unsafe})
+    with pytest.raises(TemplateError, match=f"{field_name} must be alone on its line"):
+        load_report_templates(tmp_path, platform="generic")
+
+
+@pytest.mark.parametrize(
+    ("template_name", "field_name"),
+    [
+        ("report", "findings"),
+        ("finding", "evidence"),
+        ("finding", "demonstrated_impact"),
+        ("finding", "plausible_impact"),
+    ],
+)
+@pytest.mark.parametrize(
+    "separator",
+    ["\v", "\f", "\u0085", "\u2028", "\u2029"],
+    ids=["vertical-tab", "form-feed", "nel", "line-separator", "paragraph-separator"],
+)
+def test_load_report_templates_rejects_non_markdown_separators_adjacent_to_placeholder(
+    tmp_path,
+    template_name,
+    field_name,
+    separator,
+):
+    template = REPORT if template_name == "report" else FINDING
+    unsafe = template.replace(
+        f"\n{{{field_name}}}\n",
+        f"\n{separator}{{{field_name}}}{separator}\n",
+    )
+    _pair(tmp_path, **{template_name: unsafe})
+    with pytest.raises(TemplateError, match=f"{field_name} must be alone on its line"):
+        load_report_templates(tmp_path, platform="generic")
+
+
+def test_load_report_templates_rejects_empty_format_spec(tmp_path):
+    _pair(tmp_path, finding=FINDING.replace("{title}", "{title:}"))
+    with pytest.raises(TemplateError, match="format specs are not allowed"):
+        load_report_templates(tmp_path, platform="generic")
 
 
 @pytest.mark.parametrize(
@@ -105,6 +187,32 @@ def test_load_report_templates_rejects_symlink(tmp_path):
     report.symlink_to(source)
     with pytest.raises(TemplateError, match="regular non-symlink file"):
         load_report_templates(root, platform="generic")
+
+
+def test_load_report_templates_rejects_file_changed_between_lstat_and_open(
+    tmp_path,
+    monkeypatch,
+):
+    root = _pair(tmp_path)
+    report = root / "generic" / "report.md"
+    replacement = root / "replacement.md"
+    replacement.write_text(REPORT.replace("# ", "# replacement "), encoding="utf-8")
+    real_lstat = Path.lstat
+    swapped = False
+
+    def lstat_then_swap(path):
+        nonlocal swapped
+        result = real_lstat(path)
+        if path == report and not swapped:
+            replacement.replace(report)
+            swapped = True
+        return result
+
+    monkeypatch.setattr(Path, "lstat", lstat_then_swap)
+
+    with pytest.raises(TemplateError, match="changed while opening"):
+        load_report_templates(root, platform="generic")
+    assert swapped
 
 
 def test_load_report_templates_rejects_directory_in_place_of_file(tmp_path):
