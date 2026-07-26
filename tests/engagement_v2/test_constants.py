@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
 
@@ -153,6 +155,69 @@ def test_contract_error_is_immutable_and_ignores_arbitrary_metadata() -> None:
         "reason_code": "INVALID_LIMIT",
         "message": "invalid limit",
     }
+
+
+def test_contract_error_allows_direct_traceback_assignment() -> None:
+    error = ContractError(ReasonCode.INVALID_LIMIT)
+
+    error.__traceback__ = None
+
+    assert error.__traceback__ is None
+    assert error.as_dict() == {
+        "reason_code": "INVALID_LIMIT",
+        "message": "invalid limit",
+    }
+
+
+def test_contract_error_allows_standard_exception_bookkeeping() -> None:
+    error = ContractError(ReasonCode.INVALID_LIMIT)
+    cause = RuntimeError("private cause")
+    context = RuntimeError("private context")
+
+    error.__cause__ = cause
+    error.__context__ = context
+    error.__suppress_context__ = True
+
+    assert error.__cause__ is cause
+    assert error.__context__ is context
+    assert error.__suppress_context__ is True
+    for attribute in ("__traceback__", "__cause__", "__context__", "__suppress_context__"):
+        with pytest.raises(TypeError):
+            delattr(error, attribute)
+    assert error.as_dict() == {
+        "reason_code": "INVALID_LIMIT",
+        "message": "invalid limit",
+    }
+
+
+def test_generator_contextmanager_propagates_same_contract_error() -> None:
+    @contextmanager
+    def passthrough() -> Iterator[None]:
+        yield
+
+    original = ContractError(ReasonCode.INVALID_REQUEST)
+
+    with pytest.raises(ContractError) as raised:
+        with passthrough():
+            raise original
+
+    assert raised.value is original
+    assert raised.value.reason_code is ReasonCode.INVALID_REQUEST
+
+
+def test_normal_raise_and_bare_reraise_preserve_contract_error() -> None:
+    original = ContractError(ReasonCode.INVALID_RUNNER)
+
+    with pytest.raises(ContractError) as reraised:
+        try:
+            raise original
+        except ContractError as caught:
+            assert caught is original
+            assert caught.reason_code is ReasonCode.INVALID_RUNNER
+            raise
+
+    assert reraised.value is original
+    assert reraised.value.reason_code is ReasonCode.INVALID_RUNNER
 
 
 def test_projection_format_identifiers_are_exact() -> None:

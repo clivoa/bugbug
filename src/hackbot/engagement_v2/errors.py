@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from enum import Enum
 
+_EXCEPTION_BOOKKEEPING_ATTRIBUTES = frozenset(
+    {"__traceback__", "__cause__", "__context__", "__suppress_context__"}
+)
+
 
 class ReasonCode(str, Enum):
     """Closed public reason codes for contract failures."""
@@ -62,9 +66,15 @@ class ContractError(ValueError):
         return self.reason_code.value.lower().replace("_", " ")
 
     def __setattr__(self, name: str, value: object) -> None:
+        if name in _EXCEPTION_BOOKKEEPING_ATTRIBUTES:
+            BaseException.__setattr__(self, name, value)
+            return
         raise AttributeError("ContractError is immutable")
 
     def __delattr__(self, name: str) -> None:
+        if name in _EXCEPTION_BOOKKEEPING_ATTRIBUTES:
+            BaseException.__delattr__(self, name)
+            return
         raise AttributeError("ContractError is immutable")
 
     def __str__(self) -> str:
