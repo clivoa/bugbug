@@ -535,7 +535,9 @@ def test_render_custom_preserves_severity_order_and_keeps_braces_inert(tmp_path)
         templates_dir=_templates(tmp_path),
     )
     assert out.index("Crit one") < out.index("Low {evidence}")
-    assert out.count("20260725T120000Z-0123456789ab") == 2
+    # Each finding's redacted evidence reference includes the ID in its label
+    # and in its redacted evidence path.
+    assert out.count("20260725T120000Z-0123456789ab") == 4
 
 
 def test_render_custom_validates_templates_when_no_findings(tmp_path):
