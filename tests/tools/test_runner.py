@@ -1,5 +1,6 @@
 """Policy-free CommandRunner: argv arrays only, never a shell."""
 
+import gc
 import os
 import subprocess
 import sys
@@ -19,14 +20,16 @@ from hackbot.tools.runner import (
 
 def _capture_bytes(payload: bytes, *, cap: int) -> _CaptureState:
     read_fd, write_fd = os.pipe()
-    os.set_blocking(read_fd, False)
+    read_pipe = os.fdopen(read_fd, "rb", buffering=0)
+    os.set_blocking(read_pipe.fileno(), False)
     stop = threading.Event()
     failed = threading.Event()
     state = _CaptureState()
     thread = threading.Thread(
         target=_capture_fd,
         kwargs={
-            "fd": read_fd,
+            "fd": read_pipe.fileno(),
+            "pipe": read_pipe,
             "cap": cap,
             "stop": stop,
             "failed": failed,
@@ -43,7 +46,7 @@ def _capture_bytes(payload: bytes, *, cap: int) -> _CaptureState:
     finally:
         os.close(write_fd)
     thread.join(timeout=1)
-    os.close(read_fd)
+    read_pipe.close()
     assert thread.is_alive() is False
     assert failed.is_set() is False
     return state
@@ -72,14 +75,16 @@ def test_capture_fd_drains_large_payload_without_growing_prefix():
 
 def test_capture_fd_honors_stop_on_an_open_empty_pipe():
     read_fd, write_fd = os.pipe()
-    os.set_blocking(read_fd, False)
+    read_pipe = os.fdopen(read_fd, "rb", buffering=0)
+    os.set_blocking(read_pipe.fileno(), False)
     stop = threading.Event()
     failed = threading.Event()
     state = _CaptureState()
     thread = threading.Thread(
         target=_capture_fd,
         kwargs={
-            "fd": read_fd,
+            "fd": read_pipe.fileno(),
+            "pipe": read_pipe,
             "cap": 10,
             "stop": stop,
             "failed": failed,
@@ -91,7 +96,7 @@ def test_capture_fd_honors_stop_on_an_open_empty_pipe():
     stop.set()
     thread.join(timeout=1)
     os.close(write_fd)
-    os.close(read_fd)
+    read_pipe.close()
     assert thread.is_alive() is False
     assert state.done.is_set() is True
     assert state.error is None
@@ -99,13 +104,16 @@ def test_capture_fd_honors_stop_on_an_open_empty_pipe():
 
 def test_capture_fd_records_os_error_and_signals_failure():
     read_fd, write_fd = os.pipe()
-    os.close(read_fd)
+    read_pipe = os.fdopen(read_fd, "rb", buffering=0)
+    closed_fd = read_pipe.fileno()
+    read_pipe.close()
     os.close(write_fd)
     stop = threading.Event()
     failed = threading.Event()
     state = _CaptureState()
     _capture_fd(
-        read_fd,
+        closed_fd,
+        pipe=read_pipe,
         cap=10,
         stop=stop,
         failed=failed,
@@ -241,7 +249,7 @@ def test_nonblocking_setup_failure_fails_closed(monkeypatch):
 
 
 def test_reader_failure_kills_child_and_fails_closed(monkeypatch):
-    def fail_capture(*, fd, cap, stop, failed, state):
+    def fail_capture(*, fd, pipe, cap, stop, failed, state):
         state.error = OSError("synthetic reader failure")
         failed.set()
         state.done.set()
@@ -259,7 +267,7 @@ def test_reader_failure_after_last_failed_check_fails_closed(monkeypatch):
     done_lock = threading.Lock()
     done_count = 0
 
-    def fail_late(*, fd, cap, stop, failed, state):
+    def fail_late(*, fd, pipe, cap, stop, failed, state):
         nonlocal done_count
         assert release_readers.wait(timeout=1)
         state.error = OSError("synthetic late reader failure")
@@ -284,6 +292,43 @@ def test_reader_failure_after_last_failed_check_fails_closed(monkeypatch):
 
     with pytest.raises(RunnerError, match="capture"):
         CommandRunner(timeout_seconds=2).run(("/usr/bin/true",))
+
+
+def test_unjoined_readers_keep_pipe_fds_alive_after_runner_unwinds(monkeypatch):
+    release_readers = threading.Event()
+    readers_done = threading.Event()
+    done_lock = threading.Lock()
+    done_count = 0
+    fd_errors: list[OSError] = []
+
+    def hold_capture(*, fd=None, pipe=None, cap, stop, failed, state):
+        nonlocal done_count
+        target_fd = pipe.fileno() if pipe is not None else fd
+        assert target_fd is not None
+        release_readers.wait(timeout=3)
+        try:
+            os.fstat(target_fd)
+        except OSError as exc:
+            fd_errors.append(exc)
+        finally:
+            state.done.set()
+            with done_lock:
+                done_count += 1
+                if done_count == 2:
+                    readers_done.set()
+
+    monkeypatch.setattr("hackbot.tools.runner._capture_fd", hold_capture)
+
+    try:
+        with pytest.raises(RunnerError, match="cleanup") as caught:
+            CommandRunner(timeout_seconds=0.01).run(("/bin/sleep", "5"))
+        del caught
+        gc.collect()
+    finally:
+        release_readers.set()
+
+    assert readers_done.wait(timeout=1)
+    assert fd_errors == []
 
 
 def test_missing_executable_fails_closed():
