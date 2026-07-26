@@ -36,6 +36,7 @@ redistribution* terms and makes each promotion auditable.
 | `dns.txt` / `dns.mx` / `dns.ns` | dig | L0 | recon/dns-recon |
 | `net.http-get` / `-head` / `-options` | curl | L0 | recon/web-crawling |
 | `net.port-scan` | nmap | **L2** | recon/service-fingerprinting |
+| `web.dir-enum` | ffuf | **L2** | recon/parameter-discovery |
 
 `net.port-scan` is the first active-recon (intrusive) promotion:
 `nmap -Pn -T3 --top-ports 100 {target}`, `high_volume` → **L2**, so it requires
@@ -43,6 +44,14 @@ explicit TTY approval (`hackbot tool run net.port-scan REQUEST.json --engagement
 DIR --approve`) and only runs against in-scope targets. It is registered only
 when `nmap` resolves; **install nmap** to use it. Timing is polite (`-T3`), the
 top 100 ports only, no aggressive scripts.
+
+`web.dir-enum` is directory enumeration: `ffuf -s -u {target} -w <bundled
+wordlist>`, where the operator's `{target}` is the full URL with the `FUZZ`
+keyword (e.g. `http://host/FUZZ`). It is `high_volume` → **L2** → requires TTY
+approval, runs only in-scope, and uses a small **code-owned bundled** wordlist
+(`src/hackbot/tools/wordlists/web-content.txt`, packaged in the wheel). Install
+ffuf to use it. Custom operator wordlists (a `{wordlist}` placeholder) are a later
+increment.
 
 `net.http-post` is a generic POST, not a bundle skill, so it carries no
 provenance.
