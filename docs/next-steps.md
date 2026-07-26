@@ -5,8 +5,8 @@ the next phase.
 
 ## Where the project stands
 
-Implemented and verified (888 tests passing, Ruff/format/mypy clean, offline
-smoke pass):
+Implemented and verified (905 tests passing; 906 collected with 1 known nmap
+skip; Ruff/format/mypy clean; offline smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
 - **Programs / engagements** (`src/hackbot/programs/`) — strict local
@@ -19,11 +19,12 @@ smoke pass):
   `hackbot approval grant` (TTY only), `hackbot approval status`.
 - **Tool execution substrate** (`src/hackbot/tools/`, `src/hackbot/audit/`) — a
   gate-bound, validated subprocess runner (no shell, sanitized env, timeout,
-  output caps) that executes a code-owned argv array **only** after an `ALLOW`,
-  plus a secret-free audit trail. Actions are promoted from reviewed recon-bundle
-  skills (with `@reeshasx` attribution; `hackbot skills list`): HTTP probes, DNS
-  record lookups, TLS cert (L0), `net.port-scan` (nmap), and `web.dir-enum` (ffuf
-  directory fuzzing) (L2), in-scope only. L2 runs once via
+  output caps enforced during streaming capture) that executes a code-owned argv
+  array **only** after an `ALLOW`, plus a secret-free audit trail. Actions are
+  promoted from reviewed recon-bundle skills (with `@reeshasx` attribution;
+  `hackbot skills list`): HTTP probes, DNS record lookups, TLS cert (L0),
+  `net.port-scan` (nmap), and `web.dir-enum` (ffuf directory fuzzing) (L2),
+  in-scope only. L2 runs once via
   `hackbot tool run --approve` after a TTY-typed, single-use approval consumed
   atomically by `evaluate`. Actions can run locally or on a remote SSH host
   (`--runner remote`, e.g. Kali) with the gate still local; see
@@ -65,8 +66,8 @@ Concretely, a real tool adapter must:
 
 ## Suggested order of work
 
-Done: the gate-bound tool substrate, actions promoted from reviewed recon-bundle
-skills (HTTP/DNS/TLS L0 + nmap port-scan & ffuf dir-enum L2, with attribution +
+Done: the gate-bound tool substrate with streaming output caps, actions promoted
+from reviewed recon-bundle skills (HTTP/DNS/TLS L0 + nmap port-scan & ffuf dir-enum L2, with attribution +
 `skills list`),
 redacted run-linked evidence, L2 execution over the CLI (`tool run --approve`),
 typed findings, per-platform markdown reporting, a remote SSH runner
@@ -81,12 +82,9 @@ on Kali against SecLists, and **operator-customizable report templates** —
 explicit `--templates-dir`, strict allowlisted placeholders, and
 fail-before-output validation.
 
-1. **Streaming output caps**: `CommandRunner` currently truncates after
-   `communicate()`; move to streamed reads so a tool cannot buffer huge output
-   before the timeout fires.
-2. **Reviewed recon skills / internal-recon** stays disabled unless an
+1. **Reviewed recon skills / internal-recon** stays disabled unless an
    explicitly-authorized internal profile is confirmed.
-3. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
+2. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
 
 ## Guardrails to keep (from CLAUDE.md / SECURITY.md)
 
