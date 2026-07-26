@@ -300,6 +300,7 @@ def _challenge_fields(
             "requested_risk": int(request.requested_risk)
             if request.requested_risk is not None
             else None,
+            "wordlist": request.wordlist,
         },
         "effective_risk": int(risk),
         "scope": scope,
@@ -2000,6 +2001,7 @@ class ApprovalStore:
                 program_rule=block["program_rule"],  # type: ignore[arg-type]
                 required_headers=tuple(headers),
                 requested_risk=requested_risk,
+                wordlist=block.get("wordlist", ""),  # type: ignore[arg-type]
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise ApprovalError("APPROVAL_MALFORMED", "malformed approval request") from exc

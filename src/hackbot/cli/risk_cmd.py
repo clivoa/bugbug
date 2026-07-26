@@ -98,9 +98,12 @@ def _strict_parse(raw: bytes) -> dict[str, object]:
     return value
 
 
+_OPTIONAL_REQUEST_KEYS = frozenset({"wordlist"})
+
+
 def _check_keys(value: dict[str, object]) -> None:
     for key in value:
-        if key not in _REQUEST_KEYS:
+        if key not in _REQUEST_KEYS and key not in _OPTIONAL_REQUEST_KEYS:
             raise CliInputError(f"unknown field {key!r}")
     for key in _REQUEST_KEYS:
         if key not in value:
@@ -125,6 +128,9 @@ def _build_request(value: dict[str, object], context: PolicyContext) -> ActionRe
     headers = value["required_headers"]
     if not isinstance(headers, list):
         raise CliInputError("required_headers must be a list of strings")
+    wordlist = value.get("wordlist", "")
+    if not isinstance(wordlist, str):
+        raise CliInputError("wordlist must be a string")
     try:
         return ActionRequest(
             engagement_id=context.engagement_id,
@@ -143,6 +149,7 @@ def _build_request(value: dict[str, object], context: PolicyContext) -> ActionRe
             program_rule=value["program_rule"],  # type: ignore[arg-type]
             required_headers=tuple(headers),
             requested_risk=requested_risk,
+            wordlist=wordlist,
         )
     except (ValueError, TypeError) as exc:
         raise CliInputError(f"invalid request field: {exc}") from exc

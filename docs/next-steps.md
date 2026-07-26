@@ -5,7 +5,7 @@ the next phase.
 
 ## Where the project stands
 
-Implemented and verified (800 tests passing, Ruff/format/mypy clean, offline
+Implemented and verified (806 tests passing, Ruff/format/mypy clean, offline
 smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
@@ -67,24 +67,25 @@ Done: the gate-bound tool substrate, actions promoted from reviewed recon-bundle
 skills (HTTP/DNS/TLS L0 + nmap port-scan & ffuf dir-enum L2, with attribution +
 `skills list`),
 redacted run-linked evidence, L2 execution over the CLI (`tool run --approve`),
-typed findings, per-platform markdown reporting, and a remote SSH runner
-(`--runner remote`, verified on Kali with gobuster).
+typed findings, per-platform markdown reporting, a remote SSH runner
+(`--runner remote`, verified on Kali with gobuster), and **custom operator
+wordlists** — the `{wordlist}` argv placeholder (a reviewed risk-model extension)
+lets `web.dir-enum-gobuster` take an operator-supplied absolute path such as a
+[SecLists](https://github.com/danielmiessler/SecLists) list, verified end-to-end
+on Kali with `/usr/share/seclists/Discovery/Web-Content/common.txt`.
 
 1. **Remote wordlist discovery**: remote tool discovery is done
    (`hackbot skills list --runner remote`, verified on Kali). Next: discover which
-   *wordlists* a remote host has (instead of the fixed `/usr/share/wordlists/...`
-   path) so remote fuzzing actions adapt to the host.
-2. **Custom operator wordlists**: add a `{wordlist}` placeholder to `argv_template`
-   (a reviewed risk-model extension) so `web.dir-enum`/param-fuzz can use the
-   operator's own wordlists (e.g. SecLists) instead of only the bundled one.
-3. **Operator-customizable report templates**: let operators supply their own
+   *wordlists* a remote host actually has so remote fuzzing actions can suggest a
+   valid `{wordlist}` path instead of the operator hard-coding one.
+2. **Operator-customizable report templates**: let operators supply their own
    skeletons under `templates/<platform>/` layered over the code-owned renderers.
-4. **Streaming output caps**: `CommandRunner` currently truncates after
+3. **Streaming output caps**: `CommandRunner` currently truncates after
    `communicate()`; move to streamed reads so a tool cannot buffer huge output
    before the timeout fires.
-5. **Reviewed recon skills / internal-recon** stays disabled unless an
+4. **Reviewed recon skills / internal-recon** stays disabled unless an
    explicitly-authorized internal profile is confirmed.
-6. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
+5. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
 
 ## Guardrails to keep (from CLAUDE.md / SECURITY.md)
 
