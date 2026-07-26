@@ -127,9 +127,10 @@ if a malformed or detached descendant keeps the write end open.
 5. starts one daemon reader thread per pipe;
 6. monitors reader failure and both pipe EOFs under the absolute deadline
    without polling/reaping the direct child while either reader is alive;
-7. when both readers have stopped, rechecks reader errors and the deadline,
-   then polls the direct child with a second deadline check before accepting
-   normal completion; and
+7. when both readers have stopped, rechecks reader errors and uses
+   `waitid(..., WNOWAIT)` to observe child exit without reaping; an observation
+   timestamp before the deadline permits normal `poll()`/reap, while an expired
+   deadline takes the kill-first path; and
 8. on timeout or reader failure, kills the captured process group before any
    child reap, then returns only after bounded cleanup.
 
@@ -230,6 +231,8 @@ Implement test-first in `tests/tools/test_runner.py`.
   a stuck reader.
 - A detached descendant that inherits the pipes proves the leader is not
   polled/reaped while readers remain alive and that group kill begins first.
+- A coordinated deadline crossing during non-reaping exit observation proves
+  group kill precedes the first reaping `poll()`.
 - Failure to start the second reader proves bounded cleanup stops the first
   reader, reaps the child, and closes both pipes.
 - Existing timeout duration remains bounded.

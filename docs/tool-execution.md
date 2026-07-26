@@ -44,8 +44,9 @@ There is no path to execute without an `ALLOW`.
   The mandatory timeout covers both process execution and inherited pipe EOF; on
   expiry, the launch-time process group is killed before the group leader is
   reaped. During normal monitoring the leader is not polled until both stream
-  readers have stopped. Cleanup may add at most one second, plus scheduler
-  overhead.
+  readers have stopped; exit is then observed without reaping, and only a
+  pre-deadline observation permits normal reap. Cleanup may add at most one
+  second, plus scheduler overhead.
 - Fails closed (`RunnerError`) on an empty argv or a non-absolute / missing
   executable. `shell_execution` is an L3 floor and is never run here.
 
