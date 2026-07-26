@@ -11,7 +11,7 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 
 ## Status
 
-Early build; **905 automated tests passing** (**906 collected; 1 known nmap
+Early build; **912 automated tests passing** (**913 collected; 1 known nmap
 skip**) on **Python 3.14** (project minimum 3.11). Implemented and verified so
 far:
 - **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `program`, `risk`, `approval`,
@@ -118,7 +118,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 ```bash
 .venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
 .venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/python -m pytest tests -q                 # 906 collected; 905 pass + 1 nmap skip
+.venv/bin/python -m pytest tests -q                 # 913 collected; 912 pass + 1 nmap skip
 ```
 
 ## Documentation

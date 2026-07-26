@@ -13,8 +13,9 @@ both readers, and one absolute deadline; timeout and failure paths kill the
 captured process group and perform bounded cleanup before returning or failing
 closed.
 
-**Tech Stack:** Python 3.11+ standard library (`os`, `signal`, `subprocess`,
-`threading`, `time`), pytest, Ruff, mypy, existing offline wheel smoke test.
+**Tech Stack:** Python 3.11+ standard library (`math`, `os`, `signal`,
+`subprocess`, `threading`, `time`), pytest, Ruff, mypy, existing offline wheel
+smoke test.
 
 ## Global Constraints
 
@@ -31,6 +32,12 @@ closed.
   exit code.
 - The configured timeout covers both direct-child execution and pipe EOF. A
   descendant holding an inherited pipe cannot create an unbounded wait.
+- Normalize the timeout to `float` and reject non-finite or non-positive values
+  before HOME creation or `Popen`.
+- Partial prefix extension must use `memoryview(chunk)[:remaining]`; release the
+  view and payload reference before the next `os.read`.
+- Do not poll/reap the group leader while either reader is alive. Deadline or
+  reader failure must kill the captured process group before any reap.
 - Never call `Popen.communicate()`.
 - Any reader/setup failure after spawn must kill the captured process group,
   perform bounded cleanup, remove the ephemeral HOME, and raise `RunnerError`.
@@ -207,6 +214,7 @@ class _CaptureState:
 def _capture_fd(
     fd: int,
     *,
+    pipe: BinaryIO,
     cap: int,
     stop: threading.Event,
     failed: threading.Event,
@@ -223,9 +231,15 @@ def _capture_fd(
                 return
             remaining = max(0, cap - len(state.data))
             if remaining:
-                state.data.extend(chunk[:remaining])
+                prefix_view = memoryview(chunk)[:remaining]
+                try:
+                    state.data.extend(prefix_view)
+                finally:
+                    prefix_view.release()
+                    del prefix_view
             if len(chunk) > remaining:
                 state.truncated = True
+            del chunk
     except OSError as exc:
         state.error = exc
         failed.set()
@@ -234,7 +248,10 @@ def _capture_fd(
 ```
 
 The temporary `chunk` is the one fixed-size read allowance beyond the retained
-prefix. No second unbounded bytes object may be introduced.
+prefix. The required `pipe` argument keeps strong ownership of its FD for the
+reader lifetime. The partial prefix is a zero-copy view, and both the view and
+chunk reference are gone before the next read. No second payload `bytes` object
+may be introduced.
 
 - [ ] **Step 3: Run focused tests and static checks**
 
@@ -528,6 +545,7 @@ def run(self, argv: Sequence[str]) -> CommandResult:
                     target=_capture_fd,
                     kwargs={
                         "fd": stdout_fd,
+                        "pipe": proc.stdout,
                         "cap": self._cap,
                         "stop": stop,
                         "failed": failed,
@@ -540,6 +558,7 @@ def run(self, argv: Sequence[str]) -> CommandResult:
                     target=_capture_fd,
                     kwargs={
                         "fd": stderr_fd,
+                        "pipe": proc.stderr,
                         "cap": self._cap,
                         "stop": stop,
                         "failed": failed,
@@ -574,14 +593,22 @@ def run(self, argv: Sequence[str]) -> CommandResult:
                     OSError("subprocess output capture failed"),
                 )
                 break
-            child_reaped = proc.poll() is not None
             readers_stopped = all(not thread.is_alive() for thread in threads)
-            if child_reaped and readers_stopped:
-                break
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 timed_out = True
                 break
+            if readers_stopped:
+                capture_error = next(
+                    (state.error for state in states if state.error is not None),
+                    None,
+                )
+                if capture_error is not None:
+                    break
+                if proc.poll() is not None:
+                    if deadline - time.monotonic() <= 0:
+                        timed_out = True
+                    break
             failed.wait(min(_READ_POLL_SECONDS, remaining))
 
         if capture_error is not None or timed_out:
@@ -631,7 +658,8 @@ def run(self, argv: Sequence[str]) -> CommandResult:
 ```
 
 Use the captured `pgid = proc.pid`; do not call `os.getpgid(proc.pid)` after the
-leader may have exited. Keep the existing constructor unchanged.
+leader may have exited. Normalize the constructor timeout once and require
+`math.isfinite(timeout) and timeout > 0` before any HOME or subprocess work.
 
 - [ ] **Step 4: Add RED tests for post-spawn setup and reader failures**
 
@@ -724,6 +752,7 @@ Inspect every path:
 | pipe setup fails | yes | yes | `RunnerError` |
 | reader raises `OSError` | yes | yes | `RunnerError` |
 | reader cannot stop | yes | attempted for one deadline | `RunnerError` |
+| second reader fails to start | yes | yes, including first reader | `RunnerError` |
 
 Search for forbidden old behavior:
 
