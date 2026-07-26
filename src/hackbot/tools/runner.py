@@ -60,9 +60,15 @@ def _capture_fd(
                 return
             remaining = max(0, cap - len(state.data))
             if remaining:
-                state.data.extend(chunk[:remaining])
+                prefix_view = memoryview(chunk)[:remaining]
+                try:
+                    state.data.extend(prefix_view)
+                finally:
+                    prefix_view.release()
+                    del prefix_view
             if len(chunk) > remaining:
                 state.truncated = True
+            del chunk
     except OSError as exc:
         state.error = exc
         failed.set()
