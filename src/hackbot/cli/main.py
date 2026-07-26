@@ -312,7 +312,12 @@ def _cmd_tool(args: argparse.Namespace) -> int:
 
     if args.taction == "run":
         return tool_cmd.cmd_run(
-            args.engagement, args.action_id, args.request, as_json=args.json, approve=args.approve
+            args.engagement,
+            args.action_id,
+            args.request,
+            as_json=args.json,
+            approve=args.approve,
+            runner=args.runner,
         )
     return 2
 
@@ -431,6 +436,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--approve",
         action="store_true",
         help="approve an L2 action at the TTY and run it once",
+    )
+    tl_run.add_argument(
+        "--runner",
+        default="local",
+        help="where to execute: local | remote (remote reads <engagement>/runner.json)",
     )
     tl_run.add_argument("--json", action="store_true")
     tl.set_defaults(func=_cmd_tool)
