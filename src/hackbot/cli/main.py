@@ -348,7 +348,11 @@ def _cmd_finding(args: argparse.Namespace) -> int:
     if args.faction == "add":
         return finding_cmd.cmd_add(args.engagement, args.descriptor, as_json=args.json)
     if args.faction == "report":
-        return finding_cmd.cmd_report(args.engagement, platform=args.platform)
+        return finding_cmd.cmd_report(
+            args.engagement,
+            platform=args.platform,
+            templates_dir=args.templates_dir,
+        )
     if args.faction == "list":
         return finding_cmd.cmd_list(args.engagement, as_json=args.json)
     return 2
@@ -469,6 +473,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--platform",
         default="generic",
         help="report format: generic|hackerone|bugcrowd|yeswehack|intigriti|immunefi",
+    )
+    fd_report.add_argument(
+        "--templates-dir",
+        help="explicit root containing <platform>/report.md and finding.md",
     )
     fd_list = fd_sub.add_parser("list", help="list findings")
     fd_list.add_argument("--engagement", required=True, help="engagement directory")
