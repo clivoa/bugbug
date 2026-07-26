@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 from hackbot.findings.models import Finding, Severity
+from hackbot.reporting.templates import load_report_templates
 
 _ORDER = (Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW, Severity.INFO)
 
@@ -132,6 +134,65 @@ def render(findings: Sequence[Finding], *, engagement_id: str, platform: str = "
         blocks.append(_finding_block(finding, spec))
         blocks.append("")
     return "\n".join(header + blocks)
+
+
+def _evidence_reference(finding: Finding) -> str:
+    if finding.evidence_run_id:
+        run_id = finding.evidence_run_id
+        return f"{run_id} (redacted, under `evidence/{run_id}/`)"
+    return "none (no reproducible evidence run)"
+
+
+def _custom_finding_values(finding: Finding) -> dict[str, str]:
+    return {
+        "finding_id": finding.finding_id,
+        "title": finding.title,
+        "severity": finding.severity.value,
+        "status": finding.status.value,
+        "vulnerability_type": finding.vulnerability_type or "unspecified",
+        "target": finding.target,
+        "action_id": finding.action_id,
+        "evidence": _evidence_reference(finding),
+        "summary": finding.summary.strip() or "_Not provided._",
+        "reproduction_steps": _steps_body(finding).strip() or "_Not provided._",
+        "demonstrated_impact": (
+            finding.demonstrated_impact.strip() or "_None demonstrated._"
+        ),
+        "plausible_impact": finding.plausible_impact.strip() or "_None stated._",
+    }
+
+
+def render_custom(
+    findings: Sequence[Finding],
+    *,
+    engagement_id: str,
+    platform: str,
+    templates_dir: str | Path,
+) -> str:
+    try:
+        spec = _SPECS[platform]
+    except KeyError as exc:
+        raise ValueError(f"unknown platform: {platform}") from exc
+
+    templates = load_report_templates(templates_dir, platform=platform)
+    ordered = sorted(
+        findings, key=lambda finding: (_ORDER.index(finding.severity), finding.finding_id)
+    )
+    if ordered:
+        rendered_findings = "\n\n".join(
+            templates.finding.format_map(_custom_finding_values(finding)).rstrip()
+            for finding in ordered
+        )
+    else:
+        rendered_findings = "No findings recorded."
+    return templates.report.format_map(
+        {
+            "engagement_id": engagement_id,
+            "platform_label": spec.label,
+            "finding_count": str(len(findings)),
+            "findings": rendered_findings,
+        }
+    )
 
 
 def render_markdown(findings: Sequence[Finding], *, engagement_id: str) -> str:
