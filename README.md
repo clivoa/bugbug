@@ -11,8 +11,9 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 
 ## Status
 
-Early build; **888 automated tests passing** on **Python 3.14** (project minimum
-3.11). Implemented and verified so far:
+Early build; **905 automated tests passing** (**906 collected; 1 known nmap
+skip**) on **Python 3.14** (project minimum 3.11). Implemented and verified so
+far:
 - **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `program`, `risk`, `approval`,
   `tool`, `finding`, `skills`, `version`) — stdlib-only core, runs offline; installable as a wheel
   (`scripts/build_wheel.py` + `scripts/smoke_test.sh`, both fully offline).
@@ -23,8 +24,9 @@ Early build; **888 automated tests passing** on **Python 3.14** (project minimum
   `hackbot approval status`. See [`docs/risk-and-approval.md`](docs/risk-and-approval.md).
 - **Tool execution substrate** (`src/hackbot/tools/`, `src/hackbot/audit/`) — a
   validated, gate-bound subprocess runner that executes a code-owned argv array
-  (no shell, sanitized env, timeout, output caps) **only** after an `ALLOW`, plus
-  a secret-free audit trail. Actions promoted from reviewed recon-bundle skills
+  (no shell, sanitized env, timeout, output caps enforced during streaming
+  capture) **only** after an `ALLOW`, plus a secret-free audit trail. Actions
+  promoted from reviewed recon-bundle skills
   (with attribution): HTTP probes, DNS record lookups, TLS cert (L0),
   `net.port-scan` (nmap) and `web.dir-enum` (ffuf directory fuzzing) (L2,
   approval-gated). L2 needs `tool run --approve` (TTY, single-use); all in-scope
@@ -116,7 +118,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 ```bash
 .venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
 .venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/python -m pytest tests -q                 # 889 collected; 888 pass + 1 nmap skip
+.venv/bin/python -m pytest tests -q                 # 906 collected; 905 pass + 1 nmap skip
 ```
 
 ## Documentation

@@ -357,11 +357,7 @@ def test_timeout_kills_process_group():
 
 
 def test_timeout_retains_output_prefix():
-    code = (
-        "import os, time; "
-        "os.write(1, b'before-timeout'); "
-        "time.sleep(5)"
-    )
+    code = "import os, time; os.write(1, b'before-timeout'); time.sleep(5)"
     result = CommandRunner(
         timeout_seconds=0.2,
         output_cap_bytes=128,
@@ -375,15 +371,9 @@ Add the inherited-pipe deadline regression:
 
 ```python
 def test_descendant_holding_pipes_cannot_bypass_deadline():
-    code = (
-        "import subprocess; "
-        "subprocess.Popen(['/bin/sleep', '5']); "
-        "raise SystemExit(0)"
-    )
+    code = "import subprocess; subprocess.Popen(['/bin/sleep', '5']); raise SystemExit(0)"
     started = time.monotonic()
-    result = CommandRunner(timeout_seconds=0.2).run(
-        (sys.executable, "-c", code)
-    )
+    result = CommandRunner(timeout_seconds=0.2).run((sys.executable, "-c", code))
     elapsed = time.monotonic() - started
     assert result.timed_out is True
     assert result.exit_code is None
@@ -511,9 +501,7 @@ def run(self, argv: Sequence[str]) -> CommandResult:
                 close_fds=True,
             )
         except OSError as exc:
-            raise RunnerError(
-                f"could not start executable: {executable}"
-            ) from exc
+            raise RunnerError(f"could not start executable: {executable}") from exc
 
         pgid = proc.pid
         if proc.stdout is None or proc.stderr is None:
@@ -521,9 +509,7 @@ def run(self, argv: Sequence[str]) -> CommandResult:
             try:
                 proc.wait(timeout=_CLEANUP_GRACE_SECONDS)
             except subprocess.TimeoutExpired as exc:
-                raise RunnerError(
-                    "subprocess cleanup did not complete"
-                ) from exc
+                raise RunnerError("subprocess cleanup did not complete") from exc
             raise RunnerError("could not initialize subprocess capture")
 
         pipes = (proc.stdout, proc.stderr)
@@ -575,12 +561,8 @@ def run(self, argv: Sequence[str]) -> CommandResult:
                 stop=stop,
             )
             if not cleaned:
-                raise RunnerError(
-                    "subprocess cleanup did not complete"
-                ) from exc
-            raise RunnerError(
-                "could not initialize subprocess capture"
-            ) from exc
+                raise RunnerError("subprocess cleanup did not complete") from exc
+            raise RunnerError("could not initialize subprocess capture") from exc
 
         threads = tuple(started_threads)
         timed_out = False
@@ -593,9 +575,7 @@ def run(self, argv: Sequence[str]) -> CommandResult:
                 )
                 break
             child_reaped = proc.poll() is not None
-            readers_stopped = all(
-                not thread.is_alive() for thread in threads
-            )
+            readers_stopped = all(not thread.is_alive() for thread in threads)
             if child_reaped and readers_stopped:
                 break
             remaining = deadline - time.monotonic()
@@ -617,9 +597,9 @@ def run(self, argv: Sequence[str]) -> CommandResult:
                 None,
             )
             if capture_error is not None or late_error is not None:
-                raise RunnerError(
-                    "subprocess output capture failed"
-                ) from (capture_error or late_error)
+                raise RunnerError("subprocess output capture failed") from (
+                    capture_error or late_error
+                )
             if not cleaned:
                 raise RunnerError("subprocess cleanup did not complete")
         else:
@@ -632,9 +612,7 @@ def run(self, argv: Sequence[str]) -> CommandResult:
                     stop=stop,
                 )
                 if not cleaned:
-                    raise RunnerError(
-                        "subprocess cleanup did not complete"
-                    )
+                    raise RunnerError("subprocess cleanup did not complete")
                 timed_out = True
             else:
                 for pipe in pipes:

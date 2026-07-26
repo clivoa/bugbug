@@ -32,8 +32,15 @@ There is no path to execute without an `ALLOW`.
   killed (`start_new_session=True` + `killpg`) and `timed_out=True` is set.
 - A **sanitized environment** (`PATH=/usr/bin:/bin`, `LC_ALL=C`) — never the
   operator's environment, so no secret env var reaches a child.
-- `stdout`/`stderr` captured as **bytes**, each **byte-capped** (over-cap output
-  is truncated and `truncated=True`).
+- `stdout` and `stderr` are drained concurrently while the child runs and captured
+  as **bytes**. Each stream retains only its first configured byte prefix; any
+  excess bytes are discarded, never persisted or interpreted. Reaching exactly
+  the cap is not truncation, but any additional byte on either stream sets the
+  combined `truncated=True`.
+- Exceeding an output cap neither kills the tool nor replaces its real exit code.
+  The mandatory timeout covers both process execution and inherited pipe EOF; on
+  expiry, the launch-time process group is killed. Cleanup may add at most one
+  second, plus scheduler overhead.
 - Fails closed (`RunnerError`) on an empty argv or a non-absolute / missing
   executable. `shell_execution` is an L3 floor and is never run here.
 
