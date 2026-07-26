@@ -27,6 +27,15 @@ strict validation before commit.
 Chat history, Project fields, issue summaries, and model output are never the
 only authority for behavior.
 
+## GitHub locations
+
+- Private repository: <https://github.com/clivoa/bugbug>
+- Delivery Project: <https://github.com/users/clivoa/projects/2>
+
+The repository is linked to the Project. Its code/default branch remains
+unpublished while the local Recon-bundle publication guard requires a separate
+explicit acknowledgement for the unlicensed tracked reference material.
+
 ## Change lifecycle
 
 1. Explore the relevant current code and documents.
@@ -66,15 +75,33 @@ migration remains P7.
 
 ## GitHub Project fields
 
-The Project uses at least:
+The Project uses:
 
-- **Status:** Backlog, Ready, In Progress, In Review, Done;
+- **Delivery Status:** Backlog, Ready, In Progress, In Review, Done;
 - **Phase:** P0, P1, P2, P3, P4, P5a, P5b, P6, P7;
 - **Priority:** Critical, High, Medium, Low;
 - **OpenSpec change:** the repository-relative change path or planned slug.
 
+GitHub's built-in **Status** mirrors coarse `Todo`, `In Progress`, and `Done`
+state. **Delivery Status** is the canonical detailed workflow field.
+
 The repository README or `docs/next-steps.md` may summarize the roadmap, but the
 Project is the operational view and OpenSpec is the behavioral record.
+
+## Initial Project inventory
+
+| Phase | Issue | Initial delivery status |
+|---|---|---|
+| P0 | [#1 — normative security contracts](https://github.com/clivoa/bugbug/issues/1) | Ready |
+| P1 | [#2 — loader, authority digest, scope v2](https://github.com/clivoa/bugbug/issues/2) | Backlog |
+| P2 | [#3 — manifest, binder, policy](https://github.com/clivoa/bugbug/issues/3) | Backlog |
+| P3 | [#5 — local executor, secrets, evidence, cleanup](https://github.com/clivoa/bugbug/issues/5) | Backlog |
+| P4 | [#4 — remote helper and trust protocol](https://github.com/clivoa/bugbug/issues/4) | Backlog |
+| P5a | [#6 — non-credential internal recon](https://github.com/clivoa/bugbug/issues/6) | Backlog |
+| P5b | [#10 — credential/L3 catalog](https://github.com/clivoa/bugbug/issues/10) | Backlog |
+| P6 | [#8 — autonomous workflows](https://github.com/clivoa/bugbug/issues/8) | Backlog |
+| P7 | [#7 — migration, docs, release](https://github.com/clivoa/bugbug/issues/7) | Backlog |
+| Program | [#9 — OpenSpec adoption and reviews](https://github.com/clivoa/bugbug/issues/9) | Done/closed |
 
 ## Agent use
 
