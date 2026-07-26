@@ -320,3 +320,64 @@ def test_tool_run_remote_uses_remote_runner(lab_engagement, tmp_path, capsys, mo
     payload = json.loads(capsys.readouterr().out)
     assert code == 0 and payload["executed"] is True
     assert calls.get("built") is True
+
+
+def _write_gobuster_request(path: Path, *, wordlist: str | None) -> Path:
+    argv = ["gobuster", "dir", "-u", "http://127.0.0.1/", "-w", wordlist or "", "-q"]
+    body = {
+        "action_id": "web.dir-enum-gobuster",
+        "target": "http://127.0.0.1/",
+        "argv": argv,
+        "hypothesis_id": "hyp-1",
+        "rationale": "Directory enumeration of one in-scope lab host.",
+        "rate": 1,
+        "concurrency": 1,
+        "data_touched": "Public lab responses.",
+        "expected_impact": "One low-rate directory sweep.",
+        "stop_condition": "Stop on any error.",
+        "cleanup_plan": "No state created.",
+        "program_rule": "Authorized lab enumeration.",
+        "required_headers": [],
+        "requested_risk": None,
+    }
+    if wordlist is not None:
+        body["wordlist"] = wordlist
+    request = path / "request.json"
+    request.write_text(json.dumps(body))
+    return request
+
+
+def test_tool_run_gobuster_with_wordlist_requires_approval(lab_engagement, tmp_path, capsys):
+    request = _write_gobuster_request(tmp_path, wordlist="/usr/share/wordlists/dirb/common.txt")
+    code = app(
+        [
+            "tool",
+            "run",
+            "web.dir-enum-gobuster",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 4  # L2 -> requires approval (not executed)
+    assert payload["approval_status"] == "pending"
+
+
+def test_tool_run_gobuster_without_wordlist_is_denied(lab_engagement, tmp_path, capsys):
+    request = _write_gobuster_request(tmp_path, wordlist=None)
+    code = app(
+        [
+            "tool",
+            "run",
+            "web.dir-enum-gobuster",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 1  # empty wordlist -> render_argv None -> DENY_ARGV_TEMPLATE_MISMATCH
+    assert payload["reason_code"] == "DENY_ARGV_TEMPLATE_MISMATCH"

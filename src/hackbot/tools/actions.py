@@ -192,15 +192,7 @@ def _build_definitions() -> list[ActionDefinition]:
             uses_external_tool=True,
             high_volume=True,
             executable="gobuster",
-            argv_template=(
-                "gobuster",
-                "dir",
-                "-u",
-                "{target}",
-                "-w",
-                "/usr/share/wordlists/dirb/common.txt",
-                "-q",
-            ),
+            argv_template=("gobuster", "dir", "-u", "{target}", "-w", "{wordlist}", "-q"),
         )
     )
     return definitions
