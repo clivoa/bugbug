@@ -9,9 +9,7 @@ from pathlib import Path
 from string import Formatter
 
 _MAX_TEMPLATE_BYTES = 64 * 1024
-_REPORT_FIELDS = frozenset(
-    {"engagement_id", "platform_label", "finding_count", "findings"}
-)
+_REPORT_FIELDS = frozenset({"engagement_id", "platform_label", "finding_count", "findings"})
 _FINDING_FIELDS = frozenset(
     {
         "finding_id",
@@ -29,9 +27,7 @@ _FINDING_FIELDS = frozenset(
     }
 )
 _REPORT_REQUIRED = frozenset({"findings"})
-_FINDING_REQUIRED = frozenset(
-    {"evidence", "demonstrated_impact", "plausible_impact"}
-)
+_FINDING_REQUIRED = frozenset({"evidence", "demonstrated_impact", "plausible_impact"})
 
 
 class TemplateError(ValueError):
@@ -61,30 +57,20 @@ def _validate_template(
         if field_name is None:
             continue
         if field_name not in allowed:
-            raise TemplateError(
-                f"{label} template has unknown placeholder {field_name!r}"
-            )
+            raise TemplateError(f"{label} template has unknown placeholder {field_name!r}")
         if conversion is not None:
-            raise TemplateError(
-                f"{label} template placeholder conversions are not allowed"
-            )
+            raise TemplateError(f"{label} template placeholder conversions are not allowed")
         if format_spec:
-            raise TemplateError(
-                f"{label} template placeholder format specs are not allowed"
-            )
+            raise TemplateError(f"{label} template placeholder format specs are not allowed")
         names.append(field_name)
 
     counts = Counter(names)
     stripped_lines = [line.strip() for line in text.splitlines()]
     for field_name in sorted(required):
         if counts[field_name] != 1:
-            raise TemplateError(
-                f"{label} template: {field_name} must occur exactly once"
-            )
+            raise TemplateError(f"{label} template: {field_name} must occur exactly once")
         if stripped_lines.count("{" + field_name + "}") != 1:
-            raise TemplateError(
-                f"{label} template: {field_name} must be alone on its line"
-            )
+            raise TemplateError(f"{label} template: {field_name} must be alone on its line")
 
 
 def _read_template(path: Path) -> str:
@@ -93,18 +79,14 @@ def _read_template(path: Path) -> str:
     except OSError as exc:
         raise TemplateError(f"template file unavailable: {path.name}: {exc}") from exc
     if path.is_symlink() or not stat.S_ISREG(mode):
-        raise TemplateError(
-            f"template file must be a regular non-symlink file: {path.name}"
-        )
+        raise TemplateError(f"template file must be a regular non-symlink file: {path.name}")
     try:
         with path.open("rb") as stream:
             raw = stream.read(_MAX_TEMPLATE_BYTES + 1)
     except OSError as exc:
         raise TemplateError(f"template file unreadable: {path.name}: {exc}") from exc
     if len(raw) > _MAX_TEMPLATE_BYTES:
-        raise TemplateError(
-            f"template file {path.name} exceeds {_MAX_TEMPLATE_BYTES} bytes"
-        )
+        raise TemplateError(f"template file {path.name} exceeds {_MAX_TEMPLATE_BYTES} bytes")
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError as exc:

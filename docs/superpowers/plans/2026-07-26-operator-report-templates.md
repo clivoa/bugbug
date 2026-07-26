@@ -153,9 +153,7 @@ def test_load_report_templates_accepts_valid_pair_and_literal_braces(tmp_path):
         ),
     ],
 )
-def test_load_report_templates_rejects_invalid_finding_grammar(
-    tmp_path, finding, message
-):
+def test_load_report_templates_rejects_invalid_finding_grammar(tmp_path, finding, message):
     _pair(tmp_path, finding=finding)
     with pytest.raises(TemplateError, match=message):
         load_report_templates(tmp_path, platform="generic")
@@ -173,9 +171,7 @@ def test_load_report_templates_rejects_invalid_finding_grammar(
         (REPORT + "\n{title}\n", "unknown placeholder"),
     ],
 )
-def test_load_report_templates_rejects_invalid_report_grammar(
-    tmp_path, report, message
-):
+def test_load_report_templates_rejects_invalid_report_grammar(tmp_path, report, message):
     _pair(tmp_path, report=report)
     with pytest.raises(TemplateError, match=message):
         load_report_templates(tmp_path, platform="generic")
@@ -208,9 +204,7 @@ from pathlib import Path
 from string import Formatter
 
 _MAX_TEMPLATE_BYTES = 64 * 1024
-_REPORT_FIELDS = frozenset(
-    {"engagement_id", "platform_label", "finding_count", "findings"}
-)
+_REPORT_FIELDS = frozenset({"engagement_id", "platform_label", "finding_count", "findings"})
 _FINDING_FIELDS = frozenset(
     {
         "finding_id",
@@ -228,9 +222,7 @@ _FINDING_FIELDS = frozenset(
     }
 )
 _REPORT_REQUIRED = frozenset({"findings"})
-_FINDING_REQUIRED = frozenset(
-    {"evidence", "demonstrated_impact", "plausible_impact"}
-)
+_FINDING_REQUIRED = frozenset({"evidence", "demonstrated_impact", "plausible_impact"})
 
 
 class TemplateError(ValueError):
@@ -260,30 +252,20 @@ def _validate_template(
         if field_name is None:
             continue
         if field_name not in allowed:
-            raise TemplateError(
-                f"{label} template has unknown placeholder {field_name!r}"
-            )
+            raise TemplateError(f"{label} template has unknown placeholder {field_name!r}")
         if conversion is not None:
-            raise TemplateError(
-                f"{label} template placeholder conversions are not allowed"
-            )
+            raise TemplateError(f"{label} template placeholder conversions are not allowed")
         if format_spec:
-            raise TemplateError(
-                f"{label} template placeholder format specs are not allowed"
-            )
+            raise TemplateError(f"{label} template placeholder format specs are not allowed")
         names.append(field_name)
 
     counts = Counter(names)
     stripped_lines = [line.strip() for line in text.splitlines()]
     for field_name in sorted(required):
         if counts[field_name] != 1:
-            raise TemplateError(
-                f"{label} template: {field_name} must occur exactly once"
-            )
+            raise TemplateError(f"{label} template: {field_name} must occur exactly once")
         if stripped_lines.count("{" + field_name + "}") != 1:
-            raise TemplateError(
-                f"{label} template: {field_name} must be alone on its line"
-            )
+            raise TemplateError(f"{label} template: {field_name} must be alone on its line")
 ```
 
 - [ ] **Step 4: Run the grammar tests and verify the remaining RED**
@@ -368,27 +350,21 @@ def _read_template(path: Path) -> str:
     except OSError as exc:
         raise TemplateError(f"template file unavailable: {path.name}: {exc}") from exc
     if path.is_symlink() or not stat.S_ISREG(mode):
-        raise TemplateError(
-            f"template file must be a regular non-symlink file: {path.name}"
-        )
+        raise TemplateError(f"template file must be a regular non-symlink file: {path.name}")
     try:
         with path.open("rb") as stream:
             raw = stream.read(_MAX_TEMPLATE_BYTES + 1)
     except OSError as exc:
         raise TemplateError(f"template file unreadable: {path.name}: {exc}") from exc
     if len(raw) > _MAX_TEMPLATE_BYTES:
-        raise TemplateError(
-            f"template file {path.name} exceeds {_MAX_TEMPLATE_BYTES} bytes"
-        )
+        raise TemplateError(f"template file {path.name} exceeds {_MAX_TEMPLATE_BYTES} bytes")
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise TemplateError(f"template file {path.name} is not valid UTF-8") from exc
 
 
-def load_report_templates(
-    root: str | Path, *, platform: str
-) -> ReportTemplates:
+def load_report_templates(root: str | Path, *, platform: str) -> ReportTemplates:
     platform_dir = Path(root) / platform
     report = _read_template(platform_dir / "report.md")
     finding = _read_template(platform_dir / "finding.md")
@@ -518,9 +494,7 @@ def test_render_custom_reorders_fields_and_keeps_evidence_redacted(tmp_path):
     assert "# CUSTOM local-lab / Generic" in out
     assert "Count: 1" in out
     assert out.index("Maybe worse.") < out.index("20260725T120000Z-0123456789ab")
-    assert out.index("20260725T120000Z-0123456789ab") < out.index(
-        "Shown to execute."
-    )
+    assert out.index("20260725T120000Z-0123456789ab") < out.index("Shown to execute.")
     assert "redacted, under `evidence/20260725T120000Z-0123456789ab/`" in out
     assert "stdout" not in out.lower()
 
@@ -603,9 +577,7 @@ def _custom_finding_values(finding: Finding) -> dict[str, str]:
         "evidence": _evidence_reference(finding),
         "summary": finding.summary.strip() or "_Not provided._",
         "reproduction_steps": _steps_body(finding).strip() or "_Not provided._",
-        "demonstrated_impact": (
-            finding.demonstrated_impact.strip() or "_None demonstrated._"
-        ),
+        "demonstrated_impact": (finding.demonstrated_impact.strip() or "_None demonstrated._"),
         "plausible_impact": finding.plausible_impact.strip() or "_None stated._",
     }
 

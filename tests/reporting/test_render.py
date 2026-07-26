@@ -161,9 +161,7 @@ def test_render_custom_reorders_fields_and_keeps_evidence_redacted(tmp_path):
     assert "# CUSTOM local-lab / Generic" in out
     assert "Count: 1" in out
     assert out.index("Maybe worse.") < out.index("20260725T120000Z-0123456789ab")
-    assert out.index("20260725T120000Z-0123456789ab") < out.index(
-        "Shown to execute."
-    )
+    assert out.index("20260725T120000Z-0123456789ab") < out.index("Shown to execute.")
     assert "redacted, under `evidence/20260725T120000Z-0123456789ab/`" in out
     assert "stdout" not in out.lower()
 

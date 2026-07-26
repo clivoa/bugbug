@@ -50,15 +50,74 @@ Reports stay local under the git-ignored engagement directory.
 
 Code-owned per-platform renderers format the same finding into each platform's
 conventional section layout: `generic`, `hackerone`, `bugcrowd`, `yeswehack`,
-`intigriti`, `immunefi`. There is no template engine — the renderers are typed and
-tested, with no injection surface. Every platform keeps demonstrated and plausible
-impact separate and references redacted evidence by `run_id`.
+`intigriti`, `immunefi`. Native code-owned renderers remain the default. Every
+platform keeps demonstrated and plausible impact separate and references redacted
+evidence by `run_id`.
+
+### Operator templates
+
+Native code-owned renderers remain the default. To opt into a global
+operator-owned template pair:
+
+```text
+hackbot finding report --engagement DIR --platform hackerone \
+  --templates-dir templates
+```
+
+The command reads exactly:
+
+```text
+templates/hackerone/report.md
+templates/hackerone/finding.md
+```
+
+`report.md` accepts `{engagement_id}`, `{platform_label}`, `{finding_count}`,
+and `{findings}`. `{findings}` is required exactly once on its own line.
+
+`finding.md` accepts `{finding_id}`, `{title}`, `{severity}`, `{status}`,
+`{vulnerability_type}`, `{target}`, `{action_id}`, `{evidence}`, `{summary}`,
+`{reproduction_steps}`, `{demonstrated_impact}`, and `{plausible_impact}`.
+`{evidence}`, `{demonstrated_impact}`, and `{plausible_impact}` are each
+required exactly once on separate lines.
+
+Templates are strict UTF-8 regular files, not symlinks, and are limited to
+64 KiB each. Unknown placeholders, conversions, format specs, attribute/index
+access, malformed braces, missing files, and missing/repeated mandatory fields
+fail with exit `2` before report output. Literal braces use `{{` and `}}`.
+There are no loops, conditionals, includes, execution, implicit discovery, or
+fallback after explicit opt-in.
+
+`report.md`:
+
+```text
+# {platform_label} submission — {engagement_id}
+{finding_count} finding(s)
+{findings}
+```
+
+`finding.md`:
+
+```text
+## {title} ({severity})
+
+### Evidence
+{evidence}
+
+### Demonstrated impact
+{demonstrated_impact}
+
+### Plausible additional impact (untested)
+{plausible_impact}
+
+### Reproduction
+{reproduction_steps}
+```
 
 ## CLI
 
 ```text
 hackbot finding add FINDING.json --engagement DIR [--json]
-hackbot finding report --engagement DIR [--platform NAME]
+hackbot finding report --engagement DIR [--platform NAME] [--templates-dir DIR]
 hackbot finding list --engagement DIR [--json]
 ```
 
@@ -106,4 +165,5 @@ A descriptor lists the reviewed fields only, e.g.:
 A `demonstrated` finding cannot be stored without existing, reproducible
 evidence. Findings and reports are secret-free; reports reference redacted
 evidence, never raw output; demonstrated and plausible impact stay structurally
-separate. Platform-specific report templates (`templates/*`) are a later phase.
+separate. Custom templates remain inert Markdown and cannot omit the three
+safety-critical fields: evidence, demonstrated impact, and plausible impact.

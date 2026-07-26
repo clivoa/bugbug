@@ -155,9 +155,7 @@ def _custom_finding_values(finding: Finding) -> dict[str, str]:
         "evidence": _evidence_reference(finding),
         "summary": finding.summary.strip() or "_Not provided._",
         "reproduction_steps": _steps_body(finding).strip() or "_Not provided._",
-        "demonstrated_impact": (
-            finding.demonstrated_impact.strip() or "_None demonstrated._"
-        ),
+        "demonstrated_impact": (finding.demonstrated_impact.strip() or "_None demonstrated._"),
         "plausible_impact": finding.plausible_impact.strip() or "_None stated._",
     }
 
