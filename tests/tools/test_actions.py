@@ -134,3 +134,15 @@ def test_web_content_wordlist_exists():
     import os
 
     assert os.path.isfile(web_content_wordlist())
+
+
+def test_web_dir_enum_gobuster_is_remote_only_l2():
+    from hackbot.risk.models import RiskLevel
+
+    d = REAL_ACTIONS.require("web.dir-enum-gobuster")
+    assert d.effective_floor is RiskLevel.L2
+    assert d.high_volume is True
+    assert d.uses_external_tool is True
+    assert d.executable == "gobuster"  # bare name -> remote-only
+    assert "-u" in d.argv_template and "{target}" in d.argv_template
+    assert "web.dir-enum-gobuster" in REGISTERED_ACTION_IDS

@@ -37,6 +37,9 @@ PROMOTED_ACTIONS: dict[str, SkillProvenance] = {
     "net.http-options": _p("recon/web-crawling", "note-web-crawling", "1", "auto-if-in-scope"),
     "net.port-scan": _p("recon/service-fingerprinting", "note-port-scanning-bash", "2", "explicit"),
     "web.dir-enum": _p("recon/parameter-discovery", "note-enumeracao-diretorios", "2", "explicit"),
+    "web.dir-enum-gobuster": _p(
+        "recon/parameter-discovery", "note-enumeracao-diretorios", "2", "explicit"
+    ),
 }
 
 __all__ = ["ATTRIBUTION", "PROMOTED_ACTIONS", "SkillProvenance"]
