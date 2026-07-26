@@ -61,9 +61,7 @@ def test_load_report_templates_accepts_valid_pair_and_literal_braces(tmp_path):
         ),
     ],
 )
-def test_load_report_templates_rejects_invalid_finding_grammar(
-    tmp_path, finding, message
-):
+def test_load_report_templates_rejects_invalid_finding_grammar(tmp_path, finding, message):
     _pair(tmp_path, finding=finding)
     with pytest.raises(TemplateError, match=message):
         load_report_templates(tmp_path, platform="generic")
@@ -81,9 +79,7 @@ def test_load_report_templates_rejects_invalid_finding_grammar(
         (REPORT + "\n{title}\n", "unknown placeholder"),
     ],
 )
-def test_load_report_templates_rejects_invalid_report_grammar(
-    tmp_path, report, message
-):
+def test_load_report_templates_rejects_invalid_report_grammar(tmp_path, report, message):
     _pair(tmp_path, report=report)
     with pytest.raises(TemplateError, match=message):
         load_report_templates(tmp_path, platform="generic")

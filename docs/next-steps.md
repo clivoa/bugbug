@@ -5,7 +5,7 @@ the next phase.
 
 ## Where the project stands
 
-Implemented and verified (816 tests passing, Ruff/format/mypy clean, offline
+Implemented and verified (843 tests passing, Ruff/format/mypy clean, offline
 smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
@@ -37,7 +37,9 @@ smoke pass):
   typed findings that separate demonstrated from plausible impact and require
   reproducible evidence; per-platform markdown reports
   (`generic`/`hackerone`/`bugcrowd`/`yeswehack`/`intigriti`/`immunefi`) reference
-  redacted evidence (`hackbot finding add/report/list`); see
+  redacted evidence (`hackbot finding add/report/list`), including
+  operator-customizable templates through explicit `--templates-dir`, strict
+  allowlisted placeholders, and fail-before-output validation; see
   [`findings-and-reporting.md`](findings-and-reporting.md).
 - **Secrets** (OS keychain), **doctor**, wheel build + offline smoke test.
 
@@ -75,16 +77,16 @@ lets `web.dir-enum-gobuster` take an operator-supplied absolute path such as a
 on Kali with `/usr/share/seclists/Discovery/Web-Content/common.txt`, and **remote
 wordlist discovery** — `hackbot wordlists list --runner remote` lists `*.txt`
 files under a fixed code-owned allowlist of remote roots, display-only, verified
-on Kali against SecLists.
+on Kali against SecLists, and **operator-customizable report templates** —
+explicit `--templates-dir`, strict allowlisted placeholders, and
+fail-before-output validation.
 
-1. **Operator-customizable report templates**: let operators supply their own
-   skeletons under `templates/<platform>/` layered over the code-owned renderers.
-2. **Streaming output caps**: `CommandRunner` currently truncates after
+1. **Streaming output caps**: `CommandRunner` currently truncates after
    `communicate()`; move to streamed reads so a tool cannot buffer huge output
    before the timeout fires.
-3. **Reviewed recon skills / internal-recon** stays disabled unless an
+2. **Reviewed recon skills / internal-recon** stays disabled unless an
    explicitly-authorized internal profile is confirmed.
-4. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
+3. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
 
 ## Guardrails to keep (from CLAUDE.md / SECURITY.md)
 

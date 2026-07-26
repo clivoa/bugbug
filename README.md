@@ -11,7 +11,7 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 
 ## Status
 
-Early build; **800 automated tests passing** on **Python 3.14** (project minimum
+Early build; **843 automated tests passing** on **Python 3.14** (project minimum
 3.11). Implemented and verified so far:
 - **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `program`, `risk`, `approval`,
   `tool`, `finding`, `skills`, `version`) — stdlib-only core, runs offline; installable as a wheel
@@ -38,7 +38,8 @@ Early build; **800 automated tests passing** on **Python 3.14** (project minimum
   typed findings that separate demonstrated from plausible impact and require
   reproducible evidence (`hackbot finding add/report/list`); per-platform markdown
   reports (`--platform generic|hackerone|bugcrowd|yeswehack|intigriti|immunefi`)
-  reference redacted evidence, never raw output. See
+  reference redacted evidence, never raw output, and may explicitly use strict
+  operator Markdown templates via `--templates-dir`. See
   [`docs/findings-and-reporting.md`](docs/findings-and-reporting.md).
 - **Diagnostic** available two ways: packaged Python (`hackbot doctor [--json]`,
   cross-platform, flags Python <3.11 as incompatible) and the pre-install shell
@@ -106,6 +107,8 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 .venv/bin/hackbot risk evaluate request.json --engagement engagements/sample --json
 .venv/bin/hackbot approval status <challenge-id> --engagement engagements/sample --json
 .venv/bin/hackbot tool run net.http-get request.json --engagement engagements/local-lab --json
+.venv/bin/hackbot finding report --engagement engagements/local-lab \
+  --platform hackerone --templates-dir templates
 ```
 
 ## Recon bundle pipeline
@@ -113,7 +116,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 ```bash
 .venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
 .venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/python -m pytest tests -q                 # full safety suite (816 tests)
+.venv/bin/python -m pytest tests -q                 # full safety suite (843 tests)
 ```
 
 ## Documentation
