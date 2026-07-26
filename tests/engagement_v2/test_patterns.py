@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import re
+import sys
 from dataclasses import FrozenInstanceError
 from pathlib import Path
+from types import FrameType
 
 import pytest
 
@@ -17,6 +20,31 @@ from hackbot.engagement_v2.patterns import (
 )
 
 FIXTURE_PATH = Path(__file__).parents[1] / "fixtures" / "engagement_v2" / "patterns" / "cases.json"
+
+
+def _maximum_pattern_module_call_depth(pattern: SafePattern, value: str) -> int:
+    module_globals = vars(safe_patterns)
+    active_depth = 0
+    maximum_depth = 0
+
+    def observe_calls(frame: FrameType, event: str, _argument: object) -> None:
+        nonlocal active_depth, maximum_depth
+        if frame.f_globals is not module_globals:
+            return
+        if event == "call":
+            active_depth += 1
+            maximum_depth = max(maximum_depth, active_depth)
+        elif event == "return":
+            active_depth -= 1
+
+    previous_profiler = sys.getprofile()
+    sys.setprofile(observe_calls)
+    try:
+        assert safe_fullmatch(pattern, value)
+    finally:
+        sys.setprofile(previous_profiler)
+    assert active_depth == 0
+    return maximum_depth
 
 
 def test_frozen_synthetic_pattern_cases() -> None:
@@ -144,13 +172,62 @@ def test_compiled_pattern_values_are_deeply_immutable() -> None:
         pattern.atoms[0].minimum = 0
 
 
-def test_large_bounded_pattern_matches_iteratively() -> None:
-    pattern = compile_safe_pattern("a" * 256)
-    assert safe_fullmatch(pattern, "a" * 256)
+def test_compile_and_match_do_not_call_python_re(monkeypatch: pytest.MonkeyPatch) -> None:
+    def reject_re_entrypoint(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("safe patterns must not call Python re")
+
+    for entrypoint in (
+        "_compile",
+        "Scanner",
+        "compile",
+        "findall",
+        "finditer",
+        "fullmatch",
+        "match",
+        "search",
+        "split",
+        "sub",
+        "subn",
+    ):
+        monkeypatch.setattr(re, entrypoint, reject_re_entrypoint)
+
+    pattern = compile_safe_pattern(r"[A-Za-z0-9._\-]{1,64}")
+    assert safe_fullmatch(pattern, "scanner.example.invalid")
 
 
-def test_operation_budget_fails_closed_at_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(safe_patterns, "_operation_limit", lambda _value, _atoms: 0)
+def test_matching_call_depth_does_not_grow_with_atom_count() -> None:
+    control_depth = _maximum_pattern_module_call_depth(compile_safe_pattern("a"), "a")
+    bounded_depth = _maximum_pattern_module_call_depth(compile_safe_pattern("a" * 256), "a" * 256)
+
+    assert bounded_depth <= control_depth
+
+
+@pytest.mark.parametrize(
+    ("value_length", "atom_count", "expected"),
+    [
+        (0, 0, 1_025),
+        (7, 3, 32_800),
+        (2_048, 256, 539_757_825),
+    ],
+)
+def test_operation_limit_formula_is_exact(
+    value_length: int, atom_count: int, expected: int
+) -> None:
+    assert safe_patterns._operation_limit(value_length, atom_count) == expected
+
+
+def test_operation_budget_allows_the_operation_at_the_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(safe_patterns, "_operation_limit", lambda _value, _atoms: 2)
+
+    assert safe_fullmatch(compile_safe_pattern("a"), "a")
+
+
+def test_operation_budget_rejects_the_next_counted_operation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(safe_patterns, "_operation_limit", lambda _value, _atoms: 1)
 
     with pytest.raises(ContractError) as caught:
         safe_fullmatch(compile_safe_pattern("a"), "a")
