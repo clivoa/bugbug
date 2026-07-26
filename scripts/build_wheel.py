@@ -76,6 +76,10 @@ def main() -> int:
         if "__pycache__" in py.parts:
             continue
         members.append((str(py.relative_to(SRC)), py.read_bytes()))
+    for data in sorted((SRC / name).rglob("*.txt")):
+        if "__pycache__" in data.parts:
+            continue
+        members.append((str(data.relative_to(SRC)), data.read_bytes()))
 
     members.append((f"{distinfo}/METADATA", _metadata(proj).encode()))
     members.append((f"{distinfo}/WHEEL", WHEEL.encode()))
