@@ -1,0 +1,38 @@
+[
+  {
+    "name": "synthetic hostname",
+    "source": "[A-Za-z0-9._\\-]{1,64}",
+    "value": "scanner.example.invalid",
+    "expected": true
+  },
+  {
+    "name": "bounded decimal",
+    "source": "[0-9]{1,5}",
+    "value": "65535",
+    "expected": true
+  },
+  {
+    "name": "implicit full match",
+    "source": "[0-9]{1,5}",
+    "value": "12x",
+    "expected": false
+  },
+  {
+    "name": "escaped grammar literals",
+    "source": "fixture\\{synthetic\\}",
+    "value": "fixture{synthetic}",
+    "expected": true
+  },
+  {
+    "name": "explicit optional repetition",
+    "source": "lab{0,3}",
+    "value": "la",
+    "expected": true
+  },
+  {
+    "name": "negated printable ASCII class",
+    "source": "[^0-9]{1,4}",
+    "value": "Test",
+    "expected": true
+  }
+]
