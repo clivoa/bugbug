@@ -181,6 +181,28 @@ def _build_definitions() -> list[ActionDefinition]:
                 argv_template=(ffuf, "-s", "-u", "{target}", "-w", web_content_wordlist()),
             )
         )
+    # Remote-only ("arsenal") action: a bare tool name registers unconditionally
+    # and runs only via the SSH RemoteRunner (the local runner rejects a
+    # non-absolute executable). The wordlist path is on the remote host.
+    definitions.append(
+        ActionDefinition(
+            "web.dir-enum-gobuster",
+            RiskLevel.L0,
+            network_access=True,
+            uses_external_tool=True,
+            high_volume=True,
+            executable="gobuster",
+            argv_template=(
+                "gobuster",
+                "dir",
+                "-u",
+                "{target}",
+                "-w",
+                "/usr/share/wordlists/dirb/common.txt",
+                "-q",
+            ),
+        )
+    )
     return definitions
 
 
