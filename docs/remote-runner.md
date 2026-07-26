@@ -79,6 +79,20 @@ a code-owned `command -v` check) and marks each action `remote` / `no-remote`
 locally (so its tool basename can't be determined here). Use it to confirm, e.g.,
 that gobuster/nmap are present on the remote before running them.
 
+## Remote wordlist discovery
+
+```bash
+hackbot wordlists list --engagement <name> --runner remote
+```
+
+SSHes to the host once (infra introspection, not a gated action) and lists
+`*.txt` wordlist files under a **fixed code-owned allowlist** of roots
+(`/usr/share/seclists/Discovery/{Web-Content,DNS}`, `/usr/share/wordlists/{dirb,dirbuster}`),
+each entry as `<size_bytes> <path>`. Output is untrusted and parsed defensively
+(only allowlisted, safe-charset paths survive). Paths are **display-only**: copy
+one into a request's `wordlist` field, where the risk model re-validates it before
+`web.dir-enum-gobuster` can run. Verified on Kali against SecLists.
+
 ## Example
 
 ```bash
@@ -101,5 +115,8 @@ Execution is remote; the gate is local and unchanged. The remote host is an
 operator-controlled, authorized machine. SSH argv is code-owned and per-token
 quoted; the key is a local file; output is untrusted and evidence redacted.
 The `{wordlist}` is the one operator-supplied argv token, lexically validated and
-never dereferenced locally. Remote tool/wordlist *discovery* (enumerating which
-lists a host actually has) is a later increment.
+never dereferenced locally. Remote tool discovery and remote wordlist discovery
+(enumerating which lists a host actually has, under a fixed code-owned allowlist
+of roots) are both implemented and display-only — neither auto-populates or
+authorizes a request's `{wordlist}` field; the risk model re-validates it before
+any action runs.
