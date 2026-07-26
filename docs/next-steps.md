@@ -5,7 +5,7 @@ the next phase.
 
 ## Where the project stands
 
-Implemented and verified (905 tests passing; 906 collected with 1 known nmap
+Implemented and verified (912 tests passing; 913 collected with 1 known nmap
 skip; Ruff/format/mypy clean; offline smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.

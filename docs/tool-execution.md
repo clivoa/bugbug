@@ -28,19 +28,24 @@ There is no path to execute without an `ALLOW`.
 `hackbot.tools.runner.CommandRunner` performs only execution mechanics:
 
 - `subprocess.run`-style execution with **`shell=False`**; stdin is closed.
-- A **mandatory bounded timeout**; on expiry the child **process group** is
-  killed (`start_new_session=True` + `killpg`) and `timed_out=True` is set.
+- A **mandatory finite, positive timeout**; `NaN` and infinities fail closed
+  before spawn. On expiry the child **process group** is killed
+  (`start_new_session=True` + `killpg`) and `timed_out=True` is set.
 - A **sanitized environment** (`PATH=/usr/bin:/bin`, `LC_ALL=C`) — never the
   operator's environment, so no secret env var reaches a child.
 - `stdout` and `stderr` are drained concurrently while the child runs and captured
   as **bytes**. Each stream retains only its first configured byte prefix; any
   excess bytes are discarded, never persisted or interpreted. Reaching exactly
   the cap is not truncation, but any additional byte on either stream sets the
-  combined `truncated=True`.
+  combined `truncated=True`. Partial chunks extend the prefix through a
+  zero-copy view that is released, with its payload reference, before the next
+  pipe read.
 - Exceeding an output cap neither kills the tool nor replaces its real exit code.
   The mandatory timeout covers both process execution and inherited pipe EOF; on
-  expiry, the launch-time process group is killed. Cleanup may add at most one
-  second, plus scheduler overhead.
+  expiry, the launch-time process group is killed before the group leader is
+  reaped. During normal monitoring the leader is not polled until both stream
+  readers have stopped. Cleanup may add at most one second, plus scheduler
+  overhead.
 - Fails closed (`RunnerError`) on an empty argv or a non-absolute / missing
   executable. `shell_execution` is an L3 floor and is never run here.
 

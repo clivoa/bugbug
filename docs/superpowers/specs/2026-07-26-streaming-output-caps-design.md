@@ -1,6 +1,6 @@
 # Streaming subprocess output caps — design
 
-**Status:** approved (2026-07-26)
+**Status:** approved (2026-07-26), safety amendments incorporated
 
 **Goal:** Make `CommandRunner` enforce its existing per-stream byte caps while
 the child is running, so `stdout` and `stderr` cannot accumulate without bound
@@ -44,9 +44,12 @@ Use two private reader threads, one per pipe, while keeping
 Each reader:
 
 1. reads fixed-size chunks from one nonblocking pipe;
-2. appends only the bytes that fit in its bounded prefix buffer;
+2. appends only the bytes that fit in its bounded prefix buffer through a
+   `memoryview` of the original chunk, without allocating a sliced `bytes`
+   payload;
 3. sets its truncation flag on the first excess byte; and
-4. continues reading and discarding subsequent bytes until EOF.
+4. releases the view and chunk references before the next `os.read`, then
+   continues reading and discarding subsequent bytes until EOF.
 
 This avoids the classic deadlock where a child fills one pipe while the parent
 waits on the other. It is also simpler and more locally testable than a
@@ -72,6 +75,8 @@ Rejected alternatives:
 - A process that exceeds a cap continues to completion and retains its real
   exit code.
 - A timeout still returns `exit_code=None` and `timed_out=True`.
+- Timeout configuration must normalize to a finite positive float; `NaN` and
+  either infinity fail closed before HOME creation or process spawn.
 - Non-zero child exits remain ordinary `CommandResult` values.
 - Environment sanitization, ephemeral HOME, `shell=False`, closed stdin,
   absolute executable validation, and process-group isolation stay unchanged.
@@ -98,6 +103,9 @@ Each `Popen` pipe is switched to nonblocking mode. A reader repeatedly calls
 `os.read(fd, 64 * 1024)`:
 
 - bytes within the remaining allowance extend the prefix buffer;
+- a partial prefix is passed to `bytearray.extend` as
+  `memoryview(chunk)[:remaining]`, then both view and chunk references are
+  explicitly released before the next read;
 - any bytes beyond the allowance are discarded and mark truncation;
 - `BlockingIOError` waits briefly on the shared stop event instead of spinning;
 - `b""` marks EOF and normal completion; and
@@ -110,16 +118,20 @@ if a malformed or detached descendant keeps the write end open.
 
 `CommandRunner.run()`:
 
-1. validates argv and creates the per-run HOME;
+1. validates a finite positive timeout and argv before creating the per-run
+   HOME;
 2. records a monotonic start time and absolute deadline;
 3. starts `Popen` with its existing safety flags;
 4. records the new session's process-group ID immediately (the group leader is
    `proc.pid` because `start_new_session=True`);
 5. starts one daemon reader thread per pipe;
-6. monitors process exit and reader failure until the deadline;
-7. after direct-child exit, continues waiting for both pipe EOFs under that
-   same deadline; and
-8. returns only after both readers have joined successfully.
+6. monitors reader failure and both pipe EOFs under the absolute deadline
+   without polling/reaping the direct child while either reader is alive;
+7. when both readers have stopped, rechecks reader errors and the deadline,
+   then polls the direct child with a second deadline check before accepting
+   normal completion; and
+8. on timeout or reader failure, kills the captured process group before any
+   child reap, then returns only after bounded cleanup.
 
 The monitoring interval is bounded and small (10 ms maximum); it never replaces
 the configured deadline with a new unbounded wait.
@@ -133,7 +145,7 @@ When the deadline expires:
 
 1. set `timed_out=True`;
 2. send `SIGKILL` to the process group recorded at launch;
-3. wait for the direct child if it has not already been reaped;
+3. only after that group kill, poll/wait the still-unreaped direct child;
 4. open a single one-second cleanup deadline;
 5. reserve the final 100 ms of that deadline for forced reader shutdown;
 6. until then, allow readers to consume already available bytes and reach EOF;
@@ -204,14 +216,22 @@ Implement test-first in `tests/tools/test_runner.py`.
   continues draining/discarding and preserves that exact exit code.
 - A focused monkeypatch makes `Popen.communicate()` fail if called, proving the
   old accumulation path is gone.
+- Deterministic ownership tests prove partial extension receives a view of the
+  original chunk and that the previous payload generation is released before
+  the next `os.read`.
 
 ### Timeout and process groups
 
+- `NaN`, positive infinity, and negative infinity are rejected before spawn.
 - A child emits a prefix, flushes, then sleeps past the deadline: the prefix is
   retained, `timed_out=True`, and `exit_code=None`.
 - A direct child launches a descendant that inherits the pipes and exits: the
   run still honors its deadline, kills the captured group, and returns without
   a stuck reader.
+- A detached descendant that inherits the pipes proves the leader is not
+  polled/reaped while readers remain alive and that group kill begins first.
+- Failure to start the second reader proves bounded cleanup stops the first
+  reader, reaps the child, and closes both pipes.
 - Existing timeout duration remains bounded.
 
 ### Regression
@@ -243,14 +263,18 @@ Update:
 
 1. No code path calls `Popen.communicate()`.
 2. At most one configured prefix plus one fixed read chunk is held per stream
-   by the capture layer.
+   by the capture layer; partial append uses a zero-copy view and releases both
+   the view and payload reference before the next read.
 3. Excess output is drained and discarded until EOF or timeout.
 4. Exit codes and timeout semantics match the existing public contract.
 5. Caps remain separate for stdout and stderr.
 6. Both pipes can produce large output without deadlock.
 7. Direct-child exit cannot bypass the deadline while a descendant holds a
    pipe open.
-8. Reader failures and stuck cleanup fail closed with `RunnerError`.
-9. Audit, evidence, remote execution, adapters, and CLI require no interface
+8. Timeout kills the captured process group before the leader is reaped; the
+   normal monitor does not poll the leader until both readers stop.
+9. Reader failures, partial reader startup, and stuck cleanup fail closed with
+   `RunnerError`.
+10. Audit, evidence, remote execution, adapters, and CLI require no interface
    changes.
-10. All regression gates pass and published counts match fresh evidence.
+11. All regression gates pass and published counts match fresh evidence.
