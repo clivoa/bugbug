@@ -263,11 +263,11 @@ class CommandRunner:
                     break
                 child_reaped = proc.poll() is not None
                 readers_stopped = all(not thread.is_alive() for thread in threads)
-                if child_reaped and readers_stopped:
-                    break
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     timed_out = True
+                    break
+                if child_reaped and readers_stopped:
                     break
                 failed.wait(min(_READ_POLL_SECONDS, remaining))
 

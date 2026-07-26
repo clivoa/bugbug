@@ -163,6 +163,54 @@ def test_timeout_retains_output_prefix():
     assert result.exit_code is None
 
 
+def test_completion_observed_after_deadline_is_timeout(monkeypatch):
+    readers_done = threading.Event()
+    done_lock = threading.Lock()
+    done_count = 0
+    clock_lock = threading.Lock()
+    deadline_crossed = False
+    expired_ticks = 0
+
+    def finish_capture(*, fd, pipe, cap, stop, failed, state):
+        nonlocal done_count
+        state.done.set()
+        with done_lock:
+            done_count += 1
+            if done_count == 2:
+                readers_done.set()
+
+    def controlled_monotonic():
+        nonlocal expired_ticks
+        with clock_lock:
+            if not deadline_crossed:
+                return 0.0
+            expired_ticks += 1
+            return 1.0 + expired_ticks / 10
+
+    original_poll = subprocess.Popen.poll
+
+    def poll_crossing_deadline(proc):
+        nonlocal deadline_crossed
+        result = original_poll(proc)
+        if result is not None:
+            assert readers_done.wait(timeout=1)
+            with clock_lock:
+                deadline_crossed = True
+        return result
+
+    monkeypatch.setattr("hackbot.tools.runner._capture_fd", finish_capture)
+    monkeypatch.setattr(
+        "hackbot.tools.runner.time.monotonic",
+        controlled_monotonic,
+    )
+    monkeypatch.setattr(subprocess.Popen, "poll", poll_crossing_deadline)
+
+    result = CommandRunner(timeout_seconds=0.5).run(("/usr/bin/true",))
+
+    assert result.timed_out is True
+    assert result.exit_code is None
+
+
 def test_output_is_capped_and_marked_truncated():
     result = CommandRunner(output_cap_bytes=10).run(("/bin/echo", "x" * 1000))
     assert result.truncated is True
