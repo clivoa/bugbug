@@ -299,6 +299,21 @@ class CommandRunner:
                         raise RunnerError("subprocess cleanup did not complete")
                     timed_out = True
                 else:
+                    late_error = next(
+                        (state.error for state in states if state.error is not None),
+                        None,
+                    )
+                    if late_error is not None:
+                        cleaned = _cleanup_spawned_process(
+                            proc,
+                            pgid=pgid,
+                            pipes=pipes,
+                            threads=threads,
+                            stop=stop,
+                        )
+                        if not cleaned:
+                            raise RunnerError("subprocess cleanup did not complete") from late_error
+                        raise RunnerError("subprocess output capture failed") from late_error
                     for pipe in pipes:
                         pipe.close()
 

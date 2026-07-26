@@ -253,6 +253,39 @@ def test_reader_failure_kills_child_and_fails_closed(monkeypatch):
     assert time.monotonic() - started < 2
 
 
+def test_reader_failure_after_last_failed_check_fails_closed(monkeypatch):
+    release_readers = threading.Event()
+    readers_done = threading.Event()
+    done_lock = threading.Lock()
+    done_count = 0
+
+    def fail_late(*, fd, cap, stop, failed, state):
+        nonlocal done_count
+        assert release_readers.wait(timeout=1)
+        state.error = OSError("synthetic late reader failure")
+        failed.set()
+        state.done.set()
+        with done_lock:
+            done_count += 1
+            if done_count == 2:
+                readers_done.set()
+
+    original_poll = subprocess.Popen.poll
+
+    def poll_after_readers_fail(proc):
+        result = original_poll(proc)
+        if result is not None:
+            release_readers.set()
+            assert readers_done.wait(timeout=1)
+        return result
+
+    monkeypatch.setattr("hackbot.tools.runner._capture_fd", fail_late)
+    monkeypatch.setattr(subprocess.Popen, "poll", poll_after_readers_fail)
+
+    with pytest.raises(RunnerError, match="capture"):
+        CommandRunner(timeout_seconds=2).run(("/usr/bin/true",))
+
+
 def test_missing_executable_fails_closed():
     with pytest.raises(RunnerError):
         CommandRunner().run(("/nonexistent/tool-xyz",))
