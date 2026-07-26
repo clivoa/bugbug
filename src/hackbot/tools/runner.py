@@ -42,6 +42,7 @@ class _CaptureState:
 def _capture_fd(
     fd: int,
     *,
+    pipe: BinaryIO,
     cap: int,
     stop: threading.Event,
     failed: threading.Event,
@@ -212,6 +213,7 @@ class CommandRunner:
                         target=_capture_fd,
                         kwargs={
                             "fd": stdout_fd,
+                            "pipe": stdout_pipe,
                             "cap": self._cap,
                             "stop": stop,
                             "failed": failed,
@@ -224,6 +226,7 @@ class CommandRunner:
                         target=_capture_fd,
                         kwargs={
                             "fd": stderr_fd,
+                            "pipe": stderr_pipe,
                             "cap": self._cap,
                             "stop": stop,
                             "failed": failed,
