@@ -1,5 +1,7 @@
 """Policy-free CommandRunner: argv arrays only, never a shell."""
 
+import os
+
 import pytest
 
 from hackbot.tools.runner import CommandResult, CommandRunner, RunnerError
@@ -47,3 +49,12 @@ def test_missing_executable_fails_closed():
 def test_empty_argv_fails_closed():
     with pytest.raises(RunnerError):
         CommandRunner().run(())
+
+
+def test_provides_an_ephemeral_home():
+    result = CommandRunner().run(("/usr/bin/env",))
+    out = result.stdout.decode()
+    assert "HOME=" in out  # tools that need a config/cache dir get one
+    real = os.environ.get("HOME", "")
+    if real:
+        assert f"HOME={real}\n" not in out  # never the operator's real HOME

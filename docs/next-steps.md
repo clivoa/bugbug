@@ -1,11 +1,11 @@
 # Next steps
 
-Status snapshot after findings & reporting. Use this as the starting point for
-the next phase.
+Status snapshot after web directory enumeration (ffuf). Use this as the starting
+point for the next phase.
 
 ## Where the project stands
 
-Implemented and verified (782 tests passing, Ruff/format/mypy clean, offline
+Implemented and verified (788 tests passing, Ruff/format/mypy clean, offline
 smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
@@ -22,8 +22,9 @@ smoke pass):
   output caps) that executes a code-owned argv array **only** after an `ALLOW`,
   plus a secret-free audit trail. Actions are promoted from reviewed recon-bundle
   skills (with `@reeshasx` attribution; `hackbot skills list`): HTTP probes, DNS
-  record lookups, TLS cert (L0), and `net.port-scan` (nmap, L2), in-scope only. L2
-  runs once via `hackbot tool run --approve` after a TTY-typed, single-use
+  record lookups, TLS cert (L0), `net.port-scan` (nmap), and `web.dir-enum` (ffuf
+  directory fuzzing) (L2), in-scope only. L2 runs once via
+  `hackbot tool run --approve` after a TTY-typed, single-use
   approval consumed atomically by `evaluate`; see
   [`tool-execution.md`](tool-execution.md) and [`skill-promotion.md`](skill-promotion.md).
 - **Evidence persistence** (`src/hackbot/evidence/`) — executed runs store their
@@ -61,22 +62,26 @@ Concretely, a real tool adapter must:
 ## Suggested order of work
 
 Done: the gate-bound tool substrate, actions promoted from reviewed recon-bundle
-skills (HTTP/DNS/TLS L0 + nmap port-scan L2, with attribution + `skills list`),
+skills (HTTP/DNS/TLS L0 + nmap port-scan & ffuf dir-enum L2, with attribution +
+`skills list`),
 redacted run-linked evidence, L2 execution over the CLI (`tool run --approve`),
 typed findings, and per-platform markdown reporting.
 
-1. **argv-placeholder extension for fuzzing tools**: DNS/TLS/HTTP probes and an
-   nmap port scan are promoted (see [`skill-promotion.md`](skill-promotion.md));
-   fuzzing/wordlist tools (ffuf/gobuster, `-u {target}/FUZZ -w <wordlist>`) need
-   richer whole-token placeholders in `argv_template` before they can be promoted.
-2. **Operator-customizable report templates**: let operators supply their own
+1. **Linux SSH runner → Kali**: run gated actions on the Kali VM
+   (192.168.64.4) over SSH to use its full tool arsenal (ffuf/gobuster/nmap/…),
+   still passing the gate (scope + risk + approval), output captured as untrusted
+   data. Needs key-based SSH setup on the Kali host.
+2. **Custom operator wordlists**: add a `{wordlist}` placeholder to `argv_template`
+   (a reviewed risk-model extension) so `web.dir-enum`/param-fuzz can use the
+   operator's own wordlists (e.g. SecLists) instead of only the bundled one.
+3. **Operator-customizable report templates**: let operators supply their own
    skeletons under `templates/<platform>/` layered over the code-owned renderers.
-3. **Streaming output caps**: `CommandRunner` currently truncates after
+4. **Streaming output caps**: `CommandRunner` currently truncates after
    `communicate()`; move to streamed reads so a tool cannot buffer huge output
    before the timeout fires.
-4. **Reviewed recon skills / internal-recon** stays disabled unless an
+5. **Reviewed recon skills / internal-recon** stays disabled unless an
    explicitly-authorized internal profile is confirmed.
-5. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
+6. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
 
 ## Guardrails to keep (from CLAUDE.md / SECURITY.md)
 

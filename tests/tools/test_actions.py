@@ -9,9 +9,11 @@ from hackbot.tools.actions import (
     REGISTERED_ACTION_IDS,
     curl_path,
     dig_path,
+    ffuf_path,
     nmap_path,
     openssl_path,
     resolve_executable,
+    web_content_wordlist,
 )
 
 
@@ -114,3 +116,21 @@ def test_registered_action_ids_lists_only_available_actions():
     assert "dns.txt" in REGISTERED_ACTION_IDS
     if nmap_path() is None:
         assert "net.port-scan" not in REGISTERED_ACTION_IDS
+
+
+@pytest.mark.skipif(ffuf_path() is None, reason="ffuf not installed")
+def test_web_dir_enum_is_registered_l2_high_volume():
+    from hackbot.risk.models import RiskLevel
+
+    d = REAL_ACTIONS.require("web.dir-enum")
+    assert d.effective_floor is RiskLevel.L2
+    assert d.high_volume is True
+    assert d.network_access is True and d.uses_external_tool is True
+    assert "-u" in d.argv_template and "{target}" in d.argv_template
+    assert web_content_wordlist() in d.argv_template
+
+
+def test_web_content_wordlist_exists():
+    import os
+
+    assert os.path.isfile(web_content_wordlist())
