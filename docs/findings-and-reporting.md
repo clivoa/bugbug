@@ -81,11 +81,17 @@ and `{findings}`. `{findings}` is required exactly once on its own line.
 required exactly once on separate lines.
 
 Templates are strict UTF-8 regular files, not symlinks, and are limited to
-64 KiB each. Unknown placeholders, conversions, format specs, attribute/index
-access, malformed braces, missing files, and missing/repeated mandatory fields
-fail with exit `2` before report output. Literal braces use `{{` and `}}`.
-There are no loops, conditionals, includes, execution, implicit discovery, or
-fallback after explicit opt-in. Stdout remains empty on any template error.
+64 KiB each. Files are opened by descriptor without following symlinks, and the
+opened regular file must retain the same device/inode identity observed during
+the initial path check. Structural “own line” validation recognizes only LF,
+CRLF, and CR; vertical tab, form feed, NEL, and Unicode line/paragraph
+separators are ordinary Markdown-line content. Unknown placeholders,
+conversions, format specs (including an empty spec such as `{title:}`),
+attribute/index access, malformed braces, missing files, and missing/repeated
+mandatory fields fail with exit `2` before report output. Literal braces use
+`{{` and `}}`. There are no loops, conditionals, includes, execution, implicit
+discovery, or fallback after explicit opt-in. Stdout remains empty on any
+template error.
 
 `report.md`:
 
