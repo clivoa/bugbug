@@ -198,3 +198,66 @@ def test_tool_run_l2_approve_without_tty_does_not_execute(
     assert code == 3
     assert "interactive TTY required" in capsys.readouterr().err
     assert not (lab_engagement / "evidence").exists()
+
+
+from hackbot.tools.actions import ffuf_path, web_content_wordlist  # noqa: E402
+
+
+def _write_dir_enum_request(path: Path, target: str) -> Path:
+    request = path / "request.json"
+    request.write_text(
+        json.dumps(
+            {
+                "action_id": "web.dir-enum",
+                "target": target,
+                "argv": [
+                    ffuf_path() or "/opt/homebrew/bin/ffuf",
+                    "-s",
+                    "-u",
+                    target,
+                    "-w",
+                    web_content_wordlist(),
+                ],
+                "hypothesis_id": "hyp-1",
+                "rationale": "Enumerate one in-scope lab path set once.",
+                "rate": 1,
+                "concurrency": 1,
+                "data_touched": "Public lab responses.",
+                "expected_impact": "One low-rate directory sweep.",
+                "stop_condition": "Stop on any error.",
+                "cleanup_plan": "No state created.",
+                "program_rule": "Authorized lab enumeration.",
+                "required_headers": [],
+                "requested_risk": None,
+            }
+        )
+    )
+    return request
+
+
+@pytest.mark.skipif(ffuf_path() is None, reason="ffuf not installed")
+def test_tool_run_web_dir_enum_approve_executes(
+    lab_engagement, tmp_path, capsys, monkeypatch, local_server
+):
+    monkeypatch.setattr("hackbot.cli.main._read_approval_from_tty", lambda _c: None)
+    target = local_server.rstrip("/") + "/FUZZ"
+    request = _write_dir_enum_request(tmp_path, target)
+    code = app(
+        [
+            "tool",
+            "run",
+            "web.dir-enum",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--approve",
+            "--json",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["executed"] is True
+    assert payload["exit_code"] == 0
+    assert payload["evidence_run_id"]
+    run_dir = lab_engagement / "evidence" / payload["evidence_run_id"]
+    assert b"admin" in (run_dir / "stdout").read_bytes()

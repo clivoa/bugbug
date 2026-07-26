@@ -203,3 +203,21 @@ def test_tool_run_without_config_extra_fails_cleanly(offline_venv, tmp_path):
     assert "Traceback" not in combined
     assert "hackbot[config]" in combined
     assert not (engagement / "audit").exists()
+
+
+def test_wordlist_is_packaged(offline_venv):
+    import glob
+
+    hits = glob.glob(
+        str(
+            offline_venv
+            / "lib"
+            / "python*"
+            / "site-packages"
+            / "hackbot"
+            / "tools"
+            / "wordlists"
+            / "web-content.txt"
+        )
+    )
+    assert hits, "bundled wordlist missing from the installed wheel"
