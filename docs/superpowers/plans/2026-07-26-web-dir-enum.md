@@ -115,8 +115,12 @@ def test_web_dir_enum_requires_approval(lab_engagement):
         requested_risk=None,
     )
     outcome = run_action(
-        definition, request, context, now=datetime.now(UTC),
-        runner=FakeRunner(), audit=AuditSink(lab_engagement),
+        definition,
+        request,
+        context,
+        now=datetime.now(UTC),
+        runner=FakeRunner(),
+        audit=AuditSink(lab_engagement),
     )
     assert outcome.decision.kind is DecisionKind.REQUIRES_APPROVAL
     assert outcome.executed is False
@@ -137,7 +141,11 @@ In `src/hackbot/tools/actions.py`, add near the top:
 ```python
 from pathlib import Path
 
-_FFUF_CANDIDATES: tuple[str, ...] = ("/opt/homebrew/bin/ffuf", "/usr/local/bin/ffuf", "/usr/bin/ffuf")
+_FFUF_CANDIDATES: tuple[str, ...] = (
+    "/opt/homebrew/bin/ffuf",
+    "/usr/local/bin/ffuf",
+    "/usr/bin/ffuf",
+)
 _WORDLIST_DIR = Path(__file__).resolve().parent / "wordlists"
 
 
@@ -217,7 +225,14 @@ def _write_dir_enum_request(path: Path, target: str) -> Path:
             {
                 "action_id": "web.dir-enum",
                 "target": target,
-                "argv": [ffuf_path() or "/opt/homebrew/bin/ffuf", "-s", "-u", target, "-w", web_content_wordlist()],
+                "argv": [
+                    ffuf_path() or "/opt/homebrew/bin/ffuf",
+                    "-s",
+                    "-u",
+                    target,
+                    "-w",
+                    web_content_wordlist(),
+                ],
                 "hypothesis_id": "hyp-1",
                 "rationale": "Enumerate one in-scope lab path set once.",
                 "rate": 1,
@@ -243,8 +258,16 @@ def test_tool_run_web_dir_enum_approve_executes(
     target = local_server.rstrip("/") + "/FUZZ"
     request = _write_dir_enum_request(tmp_path, target)
     code = app(
-        ["tool", "run", "web.dir-enum", str(request), "--engagement", str(lab_engagement),
-         "--approve", "--json"]
+        [
+            "tool",
+            "run",
+            "web.dir-enum",
+            str(request),
+            "--engagement",
+            str(lab_engagement),
+            "--approve",
+            "--json",
+        ]
     )
     payload = json.loads(capsys.readouterr().out)
     assert code == 0
@@ -262,7 +285,16 @@ def test_wordlist_is_packaged(offline_venv):
     import glob
 
     hits = glob.glob(
-        str(offline_venv / "lib" / "python*" / "site-packages" / "hackbot" / "tools" / "wordlists" / "web-content.txt")
+        str(
+            offline_venv
+            / "lib"
+            / "python*"
+            / "site-packages"
+            / "hackbot"
+            / "tools"
+            / "wordlists"
+            / "web-content.txt"
+        )
     )
     assert hits, "bundled wordlist missing from the installed wheel"
 ```

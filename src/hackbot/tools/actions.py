@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import os
 from collections.abc import Sequence
+from pathlib import Path
 
 from hackbot.risk.models import ActionDefinition, RiskLevel
 from hackbot.risk.registry import ActionRegistry
+
+_WORDLIST_DIR = Path(__file__).resolve().parent / "wordlists"
 
 _CURL_CANDIDATES: tuple[str, ...] = (
     "/usr/bin/curl",
@@ -33,6 +36,11 @@ _NMAP_CANDIDATES: tuple[str, ...] = (
     "/usr/bin/nmap",
     "/opt/homebrew/bin/nmap",
     "/usr/local/bin/nmap",
+)
+_FFUF_CANDIDATES: tuple[str, ...] = (
+    "/opt/homebrew/bin/ffuf",
+    "/usr/local/bin/ffuf",
+    "/usr/bin/ffuf",
 )
 
 
@@ -57,6 +65,14 @@ def openssl_path() -> str | None:
 
 def nmap_path() -> str | None:
     return resolve_executable(_NMAP_CANDIDATES)
+
+
+def ffuf_path() -> str | None:
+    return resolve_executable(_FFUF_CANDIDATES)
+
+
+def web_content_wordlist() -> str:
+    return str(_WORDLIST_DIR / "web-content.txt")
 
 
 def _build_definitions() -> list[ActionDefinition]:
@@ -152,6 +168,19 @@ def _build_definitions() -> list[ActionDefinition]:
                 argv_template=(nmap, "-Pn", "-T3", "--top-ports", "100", "{target}"),
             )
         )
+    ffuf = ffuf_path()
+    if ffuf is not None and Path(web_content_wordlist()).is_file():
+        definitions.append(
+            ActionDefinition(
+                "web.dir-enum",
+                RiskLevel.L0,
+                network_access=True,
+                uses_external_tool=True,
+                high_volume=True,
+                executable=ffuf,
+                argv_template=(ffuf, "-s", "-u", "{target}", "-w", web_content_wordlist()),
+            )
+        )
     return definitions
 
 
@@ -164,7 +193,9 @@ __all__ = [
     "REGISTERED_ACTION_IDS",
     "curl_path",
     "dig_path",
+    "ffuf_path",
     "nmap_path",
     "openssl_path",
     "resolve_executable",
+    "web_content_wordlist",
 ]

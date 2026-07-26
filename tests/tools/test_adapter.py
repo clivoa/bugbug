@@ -160,3 +160,44 @@ def test_deny_captures_no_evidence(lab_engagement):
     )
     assert outcome.evidence_run_id is None
     assert not (lab_engagement / "evidence").exists()
+
+
+def test_web_dir_enum_requires_approval(lab_engagement):
+    from hackbot.tools.actions import REAL_ACTIONS, ffuf_path, web_content_wordlist
+
+    if ffuf_path() is None:
+        import pytest
+
+        pytest.skip("ffuf not installed")
+    context = load_policy_context(lab_engagement)
+    definition = REAL_ACTIONS.require("web.dir-enum")
+    target = "http://127.0.0.1/FUZZ"
+    argv = (ffuf_path(), "-s", "-u", target, "-w", web_content_wordlist())
+    request = ActionRequest(
+        engagement_id=context.engagement_id,
+        engagement_path=context.engagement_path,
+        action_id="web.dir-enum",
+        target=target,
+        argv=argv,
+        hypothesis_id="hyp-1",
+        rationale="Enumerate one in-scope lab path set once.",
+        rate=1,
+        concurrency=1,
+        data_touched="Public lab responses.",
+        expected_impact="One low-rate directory sweep.",
+        stop_condition="Stop on any error.",
+        cleanup_plan="No state created.",
+        program_rule="Authorized lab enumeration.",
+        required_headers=(),
+        requested_risk=None,
+    )
+    outcome = run_action(
+        definition,
+        request,
+        context,
+        now=datetime.now(UTC),
+        runner=FakeRunner(),
+        audit=AuditSink(lab_engagement),
+    )
+    assert outcome.decision.kind is DecisionKind.REQUIRES_APPROVAL
+    assert outcome.executed is False

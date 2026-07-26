@@ -11,7 +11,7 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 
 ## Status
 
-Early build; **782 automated tests passing** on **Python 3.14** (project minimum
+Early build; **788 automated tests passing** on **Python 3.14** (project minimum
 3.11). Implemented and verified so far:
 - **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `program`, `risk`, `approval`,
   `tool`, `finding`, `skills`, `version`) — stdlib-only core, runs offline; installable as a wheel
@@ -26,9 +26,10 @@ Early build; **782 automated tests passing** on **Python 3.14** (project minimum
   (no shell, sanitized env, timeout, output caps) **only** after an `ALLOW`, plus
   a secret-free audit trail. Actions promoted from reviewed recon-bundle skills
   (with attribution): HTTP probes, DNS record lookups, TLS cert (L0),
-  `net.port-scan` (nmap, L2, approval-gated). L2 needs `tool run --approve` (TTY,
-  single-use); all in-scope only. Executed runs persist **redacted, run-linked
-  evidence** (`src/hackbot/evidence/`) per engagement. See
+  `net.port-scan` (nmap) and `web.dir-enum` (ffuf directory fuzzing) (L2,
+  approval-gated). L2 needs `tool run --approve` (TTY, single-use); all in-scope
+  only. Executed runs persist **redacted, run-linked evidence**
+  (`src/hackbot/evidence/`) per engagement. See
   [`docs/tool-execution.md`](docs/tool-execution.md) and
   [`docs/skill-promotion.md`](docs/skill-promotion.md).
 - **Findings & reporting** (`src/hackbot/findings/`, `src/hackbot/reporting/`) —
@@ -110,7 +111,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 ```bash
 .venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
 .venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/python -m pytest tests -q                 # full safety suite (782 tests)
+.venv/bin/python -m pytest tests -q                 # full safety suite (788 tests)
 ```
 
 ## Documentation
