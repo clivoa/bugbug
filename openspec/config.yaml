@@ -3,7 +3,11 @@ schema: spec-driven
 context: |
   Project: Hackbot (bugbug), a local modular and auditable workstation for
   explicitly authorized bug-bounty, local-lab, and private-pentest work.
-  Stack: Python 3.11+, Typer CLI, Pydantic v2, pytest, Ruff, mypy.
+  Stack: Python 3.11+, standard-library argparse CLI, frozen dataclasses and
+  explicit strict validators, pytest, Ruff, and mypy. Core runtime is
+  dependency-free; PyYAML and keyring are optional extras. Do not introduce
+  Pydantic, Typer, or another runtime dependency without a separately approved
+  design.
   Security boundaries: default deny; scope deny wins; target/tool/model output
   is untrusted; subprocesses use absolute executable plus argv and shell=False;
   secrets never enter argv, environment, audit, evidence metadata, findings,
