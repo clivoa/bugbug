@@ -1,0 +1,37 @@
+schema: spec-driven
+
+context: |
+  Project: Hackbot (bugbug), a local modular and auditable workstation for
+  explicitly authorized bug-bounty, local-lab, and private-pentest work.
+  Stack: Python 3.11+, Typer CLI, Pydantic v2, pytest, Ruff, mypy.
+  Security boundaries: default deny; scope deny wins; target/tool/model output
+  is untrusted; subprocesses use absolute executable plus argv and shell=False;
+  secrets never enter argv, environment, audit, evidence metadata, findings,
+  reports, or errors.
+  Evidence: demonstrated and plausible impacts are always separate and
+  evidence-linked. Exit code alone never demonstrates impact.
+  Compatibility: schema v1 behavior remains unchanged until explicit,
+  recoverable migration.
+  Canonical umbrella design:
+  docs/superpowers/specs/2026-07-26-engagement-v2-internal-pentest-design.md
+  External review dispositions live under docs/reviews/.
+  OpenSpec is adopted brownfield-first: create focused delta changes and do not
+  bulk-convert historical design documents.
+
+rules:
+  proposal:
+    - State the security boundary being changed and list explicit non-goals.
+    - Link the umbrella design and relevant review dispositions.
+    - Keep one independently verifiable delivery unit per change.
+  specs:
+    - Use normative SHALL/MUST requirements with concrete positive and negative scenarios.
+    - Define default-deny behavior and stable failure reasons for every sensitive path.
+    - Never leave TBD, TODO, placeholder values, or implicit enums/limits.
+  design:
+    - Document trust assumptions, canonical data flow, failure states, compatibility, and rollback.
+    - Distinguish mechanically enforced properties from operator declarations and target self-reports.
+    - Include exact bounds or bind the design to a versioned normative artifact that defines them.
+  tasks:
+    - Order tests before implementation and keep each task independently verifiable.
+    - Include documentation, migration safety, publication guards, and fresh verification evidence.
+    - Do not mark a task complete until its stated verification command passes.
