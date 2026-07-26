@@ -133,6 +133,17 @@ def test_captures_stdout_and_zero_exit():
     assert result.truncated is False
 
 
+@pytest.mark.parametrize("timeout_seconds", [float("nan"), float("inf"), -float("inf")])
+def test_non_finite_timeout_fails_before_spawn(monkeypatch, timeout_seconds):
+    def forbidden_popen(*args, **kwargs):
+        pytest.fail("Popen must not be called for a non-finite timeout")
+
+    monkeypatch.setattr(subprocess, "Popen", forbidden_popen)
+
+    with pytest.raises(RunnerError, match="positive"):
+        CommandRunner(timeout_seconds=timeout_seconds).run(("/bin/echo", "no"))
+
+
 def test_argv_is_never_shell_interpreted():
     result = CommandRunner().run(("/bin/echo", "a; rm -rf /"))
     assert b"a; rm -rf /" in result.stdout

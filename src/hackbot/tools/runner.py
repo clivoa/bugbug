@@ -9,6 +9,7 @@ before invoking it.
 
 from __future__ import annotations
 
+import math
 import os
 import shutil
 import signal
@@ -154,10 +155,12 @@ class CommandRunner:
         output_cap_bytes: int = 1_048_576,
         env: Mapping[str, str] | None = None,
     ) -> None:
-        if timeout_seconds <= 0 or output_cap_bytes <= 0:
+        timeout = float(timeout_seconds)
+        cap = int(output_cap_bytes)
+        if not math.isfinite(timeout) or timeout <= 0 or cap <= 0:
             raise RunnerError("timeout and output cap must be positive")
-        self._timeout = float(timeout_seconds)
-        self._cap = int(output_cap_bytes)
+        self._timeout = timeout
+        self._cap = cap
         self._env = dict(env) if env is not None else dict(_DEFAULT_ENV)
 
     def run(self, argv: Sequence[str]) -> CommandResult:
