@@ -22,6 +22,16 @@ from hackbot.tools.runner import CommandResult, CommandRunner, RunnerError
 _SSH_CANDIDATES: tuple[str, ...] = ("/usr/bin/ssh", "/opt/homebrew/bin/ssh", "/usr/local/bin/ssh")
 _CONFIG_KEYS = frozenset({"host", "user", "port", "key_path", "connect_timeout"})
 _TOOL_RE = re.compile(r"[A-Za-z0-9._-]+")
+_WORDLIST_ROOTS: tuple[str, ...] = (
+    "/usr/share/seclists/Discovery/Web-Content",
+    "/usr/share/seclists/Discovery/DNS",
+    "/usr/share/wordlists/dirb",
+    "/usr/share/wordlists/dirbuster",
+)
+_MAX_WORDLIST_LINES: int = 2000
+_WORDLIST_PATH_RE = re.compile(r"[A-Za-z0-9._/-]+")
+_DIGITS_RE = re.compile(r"[0-9]+")
+_MAX_SIZE_DIGITS = 19  # a real byte-count never exceeds 19 digits (2**63 ~ 9.2e18)
 
 
 class RemoteError(RunnerError):
@@ -39,6 +49,12 @@ class RemoteConfig:
     port: int
     key_path: str
     connect_timeout: int = 10
+
+
+@dataclass(frozen=True, slots=True)
+class WordlistEntry:
+    path: str
+    size_bytes: int
 
 
 def _clean(value: object, *, name: str) -> str:
@@ -156,3 +172,37 @@ class RemoteRunner:
             raise RemoteError(str(exc)) from exc
         reported = result.stdout.decode("latin-1").split()
         return {name for name in reported if name in set(names)}
+
+    def discover_wordlists(self) -> tuple[WordlistEntry, ...]:
+        """List *.txt wordlist files under a fixed code-owned allowlist of roots.
+
+        Infra introspection of the operator's own host (not a gated action). The
+        command is code-owned (fixed ``find`` over ``_WORDLIST_ROOTS``); each root
+        is quoted. Stdout is untrusted: only ``<int>\\t<allowlisted-path>`` lines
+        with a safe path charset are kept; anything else is dropped.
+        """
+        per_root = "; ".join(
+            f"find {shlex.quote(root)} -maxdepth 4 -type f -name '*.txt' "
+            r"-printf '%s\t%p\n' 2>/dev/null"
+            for root in _WORDLIST_ROOTS
+        )
+        script = f"({per_root}) | head -n {_MAX_WORDLIST_LINES}"
+        try:
+            result = self._runner.run(self._ssh_argv(script))  # type: ignore[attr-defined]
+        except RunnerError as exc:
+            raise RemoteError(str(exc)) from exc
+        seen: dict[str, int] = {}
+        for line in result.stdout.decode("latin-1").splitlines():
+            size_str, tab, path = line.partition("\t")
+            if (
+                not tab
+                or _DIGITS_RE.fullmatch(size_str) is None
+                or len(size_str) > _MAX_SIZE_DIGITS
+            ):
+                continue
+            if _WORDLIST_PATH_RE.fullmatch(path) is None:
+                continue
+            if not any(path.startswith(root + "/") for root in _WORDLIST_ROOTS):
+                continue
+            seen.setdefault(path, int(size_str))
+        return tuple(WordlistEntry(path, seen[path]) for path in sorted(seen))

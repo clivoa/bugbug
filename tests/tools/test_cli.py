@@ -381,3 +381,68 @@ def test_tool_run_gobuster_without_wordlist_is_denied(lab_engagement, tmp_path, 
     payload = json.loads(capsys.readouterr().out)
     assert code == 1  # empty wordlist -> render_argv None -> DENY_ARGV_TEMPLATE_MISMATCH
     assert payload["reason_code"] == "DENY_ARGV_TEMPLATE_MISMATCH"
+
+
+def test_wordlists_list_remote_prints_entries(tmp_path, capsys, monkeypatch):
+    import json as _json
+
+    from hackbot.cli import wordlists_cmd
+    from hackbot.tools.remote import WordlistEntry
+
+    eng = tmp_path / "eng"
+    (eng).mkdir()
+    (eng / "runner.json").write_text("{}")
+
+    class _R:
+        def __init__(self, *a, **k):
+            pass
+
+        def discover_wordlists(self):
+            return (
+                WordlistEntry("/usr/share/wordlists/dirb/common.txt", 4614),
+                WordlistEntry("/usr/share/seclists/Discovery/DNS/n.txt", 10),
+            )
+
+    monkeypatch.setattr(wordlists_cmd, "load_remote_config", lambda p: object())
+    monkeypatch.setattr(wordlists_cmd, "RemoteRunner", _R)
+
+    rc = wordlists_cmd.cmd_list(engagement=str(eng), runner="remote", as_json=True)
+    assert rc == 0
+    payload = _json.loads(capsys.readouterr().out)
+    assert payload["wordlists"] == [
+        {"path": "/usr/share/seclists/Discovery/DNS/n.txt", "size_bytes": 10},
+        {"path": "/usr/share/wordlists/dirb/common.txt", "size_bytes": 4614},
+    ]
+
+
+def test_wordlists_list_requires_engagement(capsys):
+    from hackbot.cli import wordlists_cmd
+
+    rc = wordlists_cmd.cmd_list(engagement=None, runner="remote", as_json=False)
+    assert rc == 2
+    assert "engagement" in capsys.readouterr().err.lower()
+
+
+def test_wordlists_list_rejects_non_remote_runner(capsys):
+    from hackbot.cli import wordlists_cmd
+
+    rc = wordlists_cmd.cmd_list(engagement="x", runner="local", as_json=False)
+    assert rc == 2
+    assert "runner" in capsys.readouterr().err.lower()
+
+
+def test_wordlists_list_reports_remote_error(tmp_path, capsys, monkeypatch):
+    from hackbot.cli import wordlists_cmd
+    from hackbot.tools.remote import RemoteError
+
+    eng = tmp_path / "eng"
+    eng.mkdir()
+    (eng / "runner.json").write_text("{}")
+
+    def _boom(_p):
+        raise RemoteError("bad config")
+
+    monkeypatch.setattr(wordlists_cmd, "load_remote_config", _boom)
+    rc = wordlists_cmd.cmd_list(engagement=str(eng), runner="remote", as_json=False)
+    assert rc == 2
+    assert "bad config" in capsys.readouterr().err
