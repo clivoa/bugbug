@@ -356,6 +356,11 @@ ED25519_PUBLIC_KEY_BYTES = 32
 ED25519_SIGNATURE_BYTES = 64
 
 
+class RunnerRole(str, Enum):
+    EXECUTION_NODE = "execution-node"
+    IN_SCOPE_TARGET = "in-scope-target"
+
+
 class SourceIdentityMode(str, Enum):
     NONE = "none"
     DIRECT_INTERFACE = "direct-interface"
