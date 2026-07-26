@@ -63,6 +63,18 @@ refuses a non-absolute executable. Example:
 Local-tool actions (curl/dig/ffuf) also run remotely — their basename resolves on
 the remote `PATH`.
 
+## Remote tool discovery
+
+```bash
+hackbot skills list --engagement <name> --runner remote
+```
+
+SSHes to the host once (infra introspection, not a gated action — the command is
+a code-owned `command -v` check) and marks each action `remote` / `no-remote`
+(its tool is / isn't on the host), or `unknown` for an action not registered
+locally (so its tool basename can't be determined here). Use it to confirm, e.g.,
+that gobuster/nmap are present on the remote before running them.
+
 ## Example
 
 ```bash

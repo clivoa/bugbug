@@ -5,7 +5,7 @@ the next phase.
 
 ## Where the project stands
 
-Implemented and verified (796 tests passing, Ruff/format/mypy clean, offline
+Implemented and verified (800 tests passing, Ruff/format/mypy clean, offline
 smoke pass):
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
@@ -70,10 +70,10 @@ redacted run-linked evidence, L2 execution over the CLI (`tool run --approve`),
 typed findings, per-platform markdown reporting, and a remote SSH runner
 (`--runner remote`, verified on Kali with gobuster).
 
-1. **Remote tool/wordlist discovery**: the SSH runner works (`--runner remote`,
-   see [`remote-runner.md`](remote-runner.md); verified on Kali with gobuster).
-   Next: discover which tools/wordlists a remote host actually has (instead of
-   assuming fixed paths), and surface remote availability in `hackbot skills list`.
+1. **Remote wordlist discovery**: remote tool discovery is done
+   (`hackbot skills list --runner remote`, verified on Kali). Next: discover which
+   *wordlists* a remote host has (instead of the fixed `/usr/share/wordlists/...`
+   path) so remote fuzzing actions adapt to the host.
 2. **Custom operator wordlists**: add a `{wordlist}` placeholder to `argv_template`
    (a reviewed risk-model extension) so `web.dir-enum`/param-fuzz can use the
    operator's own wordlists (e.g. SecLists) instead of only the bundled one.
