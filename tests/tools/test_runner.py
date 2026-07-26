@@ -1,7 +1,10 @@
 """Policy-free CommandRunner: argv arrays only, never a shell."""
 
 import os
+import subprocess
+import sys
 import threading
+import time
 
 import pytest
 
@@ -138,13 +141,116 @@ def test_timeout_kills_process_group():
     result = CommandRunner(timeout_seconds=0.5).run(("/bin/sleep", "5"))
     assert result.timed_out is True
     assert result.exit_code is None
-    assert result.duration_ms < 4000
+    assert 400 <= result.duration_ms < 2000
+
+
+def test_timeout_retains_output_prefix():
+    code = "import os, time; os.write(1, b'before-timeout'); time.sleep(5)"
+    result = CommandRunner(
+        timeout_seconds=0.2,
+        output_cap_bytes=128,
+    ).run((sys.executable, "-c", code))
+    assert result.stdout == b"before-timeout"
+    assert result.timed_out is True
+    assert result.exit_code is None
 
 
 def test_output_is_capped_and_marked_truncated():
     result = CommandRunner(output_cap_bytes=10).run(("/bin/echo", "x" * 1000))
     assert result.truncated is True
     assert len(result.stdout) <= 10
+
+
+def test_exact_cap_is_not_marked_truncated():
+    result = CommandRunner(output_cap_bytes=4).run(
+        (sys.executable, "-c", "import os; os.write(1, b'abcd')")
+    )
+    assert result.stdout == b"abcd"
+    assert result.truncated is False
+
+
+def test_first_byte_over_cap_is_marked_truncated():
+    result = CommandRunner(output_cap_bytes=4).run(
+        (sys.executable, "-c", "import os; os.write(1, b'abcde')")
+    )
+    assert result.stdout == b"abcd"
+    assert result.truncated is True
+
+
+def test_large_stdout_and_stderr_are_drained_independently():
+    code = (
+        "import os\n"
+        "for _ in range(128):\n"
+        "    os.write(1, b'o' * 65536)\n"
+        "    os.write(2, b'e' * 65536)\n"
+    )
+    result = CommandRunner(
+        timeout_seconds=5,
+        output_cap_bytes=4096,
+    ).run((sys.executable, "-c", code))
+    assert result.exit_code == 0
+    assert result.stdout == b"o" * 4096
+    assert result.stderr == b"e" * 4096
+    assert result.truncated is True
+    assert result.timed_out is False
+
+
+def test_excess_output_is_discarded_without_changing_exit_code():
+    code = "import os; os.write(1, b'x' * 1048576); raise SystemExit(7)"
+    result = CommandRunner(
+        timeout_seconds=5,
+        output_cap_bytes=32,
+    ).run((sys.executable, "-c", code))
+    assert result.exit_code == 7
+    assert result.stdout == b"x" * 32
+    assert result.truncated is True
+    assert result.timed_out is False
+
+
+def test_runner_never_calls_communicate(monkeypatch):
+    def forbidden_communicate(*args, **kwargs):
+        pytest.fail("CommandRunner must not call Popen.communicate")
+
+    monkeypatch.setattr(subprocess.Popen, "communicate", forbidden_communicate)
+    result = CommandRunner().run(("/bin/echo", "streamed"))
+    assert result.stdout.strip() == b"streamed"
+
+
+def test_descendant_holding_pipes_cannot_bypass_deadline():
+    code = "import subprocess; subprocess.Popen(['/bin/sleep', '5']); raise SystemExit(0)"
+    started = time.monotonic()
+    result = CommandRunner(timeout_seconds=0.2).run((sys.executable, "-c", code))
+    elapsed = time.monotonic() - started
+    assert result.timed_out is True
+    assert result.exit_code is None
+    assert elapsed < 2
+
+
+def test_nonblocking_setup_failure_fails_closed(monkeypatch):
+    def fail_set_nonblocking(pipe):
+        raise OSError("synthetic set_blocking failure")
+
+    monkeypatch.setattr(
+        "hackbot.tools.runner._set_nonblocking",
+        fail_set_nonblocking,
+    )
+    started = time.monotonic()
+    with pytest.raises(RunnerError, match="capture"):
+        CommandRunner(timeout_seconds=5).run(("/bin/sleep", "5"))
+    assert time.monotonic() - started < 2
+
+
+def test_reader_failure_kills_child_and_fails_closed(monkeypatch):
+    def fail_capture(*, fd, cap, stop, failed, state):
+        state.error = OSError("synthetic reader failure")
+        failed.set()
+        state.done.set()
+
+    monkeypatch.setattr("hackbot.tools.runner._capture_fd", fail_capture)
+    started = time.monotonic()
+    with pytest.raises(RunnerError, match="capture"):
+        CommandRunner(timeout_seconds=5).run(("/bin/sleep", "5"))
+    assert time.monotonic() - started < 2
 
 
 def test_missing_executable_fails_closed():
