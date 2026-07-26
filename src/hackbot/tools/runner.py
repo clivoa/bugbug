@@ -10,8 +10,10 @@ before invoking it.
 from __future__ import annotations
 
 import os
+import shutil
 import signal
 import subprocess
+import tempfile
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -57,29 +59,36 @@ class CommandRunner:
         executable = items[0]
         if not (os.path.isabs(executable) and os.path.isfile(executable)):
             raise RunnerError(f"executable not found: {executable}")
+        # A fresh, empty, per-run HOME: tools that need a config/cache dir get one
+        # without ever seeing the operator's real HOME (which may hold secrets).
+        home = tempfile.mkdtemp(prefix="hackbot-tool-home-")
+        env = {**self._env, "HOME": home}
         start = time.monotonic()
         try:
-            proc = subprocess.Popen(
-                list(items),
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                env=self._env,
-                start_new_session=True,
-                close_fds=True,
-            )
-        except OSError as exc:
-            raise RunnerError(f"could not start executable: {executable}") from exc
-        timed_out = False
-        try:
-            stdout, stderr = proc.communicate(timeout=self._timeout)
-        except subprocess.TimeoutExpired:
-            timed_out = True
             try:
-                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
-            stdout, stderr = proc.communicate()
+                proc = subprocess.Popen(
+                    list(items),
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    env=env,
+                    start_new_session=True,
+                    close_fds=True,
+                )
+            except OSError as exc:
+                raise RunnerError(f"could not start executable: {executable}") from exc
+            timed_out = False
+            try:
+                stdout, stderr = proc.communicate(timeout=self._timeout)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                try:
+                    os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+                stdout, stderr = proc.communicate()
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
         duration_ms = int((time.monotonic() - start) * 1000)
         stdout, out_truncated = self._truncate(stdout)
         stderr, err_truncated = self._truncate(stderr)
