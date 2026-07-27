@@ -168,7 +168,9 @@ def test_secret_never_in_audit(tmp_path: Path) -> None:
     )
     audit_text = repr(result.audit)
     assert "s3cr3t-token-value" not in audit_text
-    assert "{secret_file:api_key}" in str(result.audit["argv_projection"])
+    projection = str(result.audit["argv_projection"])
+    assert "{secret_file}" in projection  # placeholder kept, binding id stripped
+    assert "api_key" not in projection
 
 
 def test_missing_secret_fails_closed(tmp_path: Path) -> None:
@@ -227,6 +229,61 @@ def test_credential_action_cannot_use_redacted_output(tmp_path: Path) -> None:
             output_persistence_allowed=True,
         )
     assert excinfo.value.reason_code is ReasonCode.EVIDENCE_POLICY_DENIED
+
+
+def test_spawn_failure_cleans_up_secret_and_fails_closed(tmp_path: Path) -> None:
+    backend = _Backend()
+    backend.set(namespaced_key(_ID, "api_key"), "s3cr3t-token-value")
+    action = _action(
+        executables={"linux": "/nonexistent/bogus-exe"},
+        secrets={"api_key": {"transport": "file"}},
+        argv=["{secret_file:api_key}"],
+    )
+    bound = BoundCommand(
+        executable="/nonexistent/bogus-exe",
+        argv=("/nonexistent/bogus-exe", SecretReference("api_key")),
+        targets={},
+        secret_references=frozenset({"api_key"}),
+    )
+    result = run(
+        bound, action, _snapshot(), _decision(), secret_backend=backend, base_dir=str(tmp_path)
+    )
+    assert result.executed is False
+    # No secret material and no run directory survive.
+    assert [p for p in tmp_path.rglob("*") if p.is_file()] == []
+    assert [p for p in tmp_path.iterdir() if p.name.startswith("run-")] == []
+    # The failure reason leaks neither the secret nor the executable path.
+    assert "s3cr3t-token-value" not in result.reason
+    assert "/nonexistent" not in result.reason
+
+
+def test_structured_mode_requires_persistence(tmp_path: Path) -> None:
+    action = _action(evidence_policy={"mode": "structured"})
+    with pytest.raises(ContractError) as excinfo:
+        run(
+            _bound("/bin/echo", "hi"),
+            action,
+            _snapshot(),
+            _decision(),
+            secret_backend=_Backend(),
+            base_dir=str(tmp_path),
+            output_persistence_allowed=False,
+        )
+    assert excinfo.value.reason_code is ReasonCode.EVIDENCE_POLICY_DENIED
+
+
+def test_structured_mode_stores_no_raw_output(tmp_path: Path) -> None:
+    action = _action(evidence_policy={"mode": "structured"})
+    result = run(
+        _bound("/bin/echo", "hi"),
+        action,
+        _snapshot(),
+        _decision(),
+        secret_backend=_Backend(),
+        base_dir=str(tmp_path),
+        output_persistence_allowed=True,
+    )
+    assert "stdout" not in result.evidence
 
 
 def test_metadata_only_stores_no_raw_output(tmp_path: Path) -> None:

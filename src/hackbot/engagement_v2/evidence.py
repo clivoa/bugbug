@@ -29,12 +29,10 @@ def check_evidence_mode(
 
     if mode == EvidenceMode.METADATA_ONLY.value:
         return
-    if mode == EvidenceMode.REDACTED_OUTPUT.value:
+    if mode in (EvidenceMode.REDACTED_OUTPUT.value, EvidenceMode.STRUCTURED.value):
+        # Both persist beyond metadata, so both require the persistence policy and
+        # neither is valid for a credential/sensitive-data capability.
         if not output_persistence_allowed or (capabilities & _SENSITIVE_CAPABILITIES):
-            raise ContractError(ReasonCode.EVIDENCE_POLICY_DENIED)
-        return
-    if mode == EvidenceMode.STRUCTURED.value:
-        if capabilities & _SENSITIVE_CAPABILITIES:
             raise ContractError(ReasonCode.EVIDENCE_POLICY_DENIED)
         return
     raise ContractError(ReasonCode.EVIDENCE_POLICY_DENIED)

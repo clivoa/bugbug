@@ -68,8 +68,11 @@ Resolution uses the engagement namespace identity as the lookup scope through th
 existing keychain adapter; a reference resolving only under another engagement
 fails closed. Material reaches the child only via `stdin` or a mode-`0600`
 exclusive file (memory-backed `TMPDIR` when available). The resolved byte values
-are recorded transiently only to drive redaction and are zeroed after cleanup;
-they never enter argv/env/audit/evidence/errors.
+are held only transiently to drive redaction and delivery and are dropped after
+the run; they never enter argv/env/audit/evidence/errors. Any error after the
+private directory is created routes through resource cleanup and returns a
+fail-closed result, so a resolved secret file never survives a spawn/finalize
+failure.
 
 ### 4. Evidence is conservative and redaction is layered
 
