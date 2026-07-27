@@ -174,6 +174,8 @@ Expected: one documentation-only commit; `.venv` remains untracked.
 **Files:**
 
 - Create: `docs/handoffs/2026-07-27-engagement-v2-p0.md`
+- Modify: `docs/reviews/2026-07-27-engagement-v2-p0-contracts-review-disposition.md`
+- Modify: `openspec/changes/engagement-v2-security-contracts/tasks.md`
 - Modify: draft PR #11 body
 - Modify: Issue #1 body
 - External: Project #2 item metadata remains `Status=In Progress`, `Delivery Status=In Review`, `Phase=P0`, `Priority=Critical`.
@@ -183,7 +185,34 @@ Expected: one documentation-only commit; `.venv` remains untracked.
 - Consumes: archive from Task 1, Git history, OpenSpec task state, PR #11, Issue #1, and Project #2.
 - Produces: one authoritative continuation document and updated remote handoff links.
 
-- [ ] **Step 1: Prove the consolidated handoff is initially absent**
+- [ ] **Step 1: Reconcile the concurrent Claude review with live delivery state**
+
+Preserve the independent review and its N1–N4 dispositions in
+`docs/reviews/2026-07-27-engagement-v2-p0-contracts-review-disposition.md`.
+Correct only its delivery claims:
+
+- the feature branch was pushed, but PR #11 remains draft and unmerged;
+- OpenSpec archive has not occurred;
+- P0 is cleared for merge, not already merged/archived;
+- N2 remains a forward-carry acceptance criterion for P2/P4.
+
+Restore OpenSpec task 8.2 to `[ ]` because merge, archive, Issue/Project
+completion, and P1 promotion are still pending. Retain a note beside 8.2 that
+the independent review is complete and N2 is documented.
+
+Verify:
+
+```bash
+gh pr view 11 --repo clivoa/bugbug --json state,isDraft,mergedAt,headRefOid
+git merge-base --is-ancestor 4173929b550ecb60eb8d6e1fda0d0f68933cf015 origin/main
+test "$?" = 1
+rg -n '^- \\[ \\] 8\\.2 ' openspec/changes/engagement-v2-security-contracts/tasks.md
+```
+
+Expected: PR open/draft/unmerged, `origin/main` does not contain `4173929`,
+and task 8.2 is unchecked.
+
+- [ ] **Step 2: Prove the consolidated handoff is initially absent**
 
 Run:
 
@@ -193,7 +222,7 @@ test ! -e docs/handoffs/2026-07-27-engagement-v2-p0.md
 
 Expected: exit 0.
 
-- [ ] **Step 2: Write the authoritative handoff**
+- [ ] **Step 3: Write the authoritative handoff**
 
 The document must contain these sections:
 
@@ -209,8 +238,11 @@ The document must contain these sections:
    publication-guard tests, schema/fixture checks, Ruff, mypy, OpenSpec, secret
    scan, and diff check.
 6. `Review history` — five final Important plus five selected Minor findings,
-   fix commit `4173929`, and final 10/10 re-review verdict.
-7. `Deferred work` — every non-blocking item retained in the final reviews.
+   fix commit `4173929`, final 10/10 re-review verdict, and the later independent
+   Claude review with dispositions N1–N4.
+7. `Deferred work` — every non-blocking item retained in the final reviews,
+   including forward-carry N2: P2/P4 consumers must bind `argv[0]` to the
+   canonical executable path.
 8. `OpenSpec/GitHub workflow` — tasks 1.1–8.1 complete and 8.2 open.
 9. `Exact next steps` — inspect PR, merge, verify remote merge SHA/checks,
    archive OpenSpec, rerun gates, push archive, close Issue/Project, then move P1
@@ -219,7 +251,7 @@ The document must contain these sections:
     the handoff, archive index, active OpenSpec, and PR state; forbids archive
     before merge and requires evidence before status changes.
 
-- [ ] **Step 3: Verify references and Git state**
+- [ ] **Step 4: Verify references and Git state**
 
 Run:
 
@@ -233,7 +265,7 @@ rg -n '^## (Current state|P0 boundary|Frozen operator decisions|Implementation m
 
 Expected: both commits and all ten sections exist.
 
-- [ ] **Step 4: Run documentation and repository gates**
+- [ ] **Step 5: Run documentation and repository gates**
 
 ```bash
 .venv/bin/ruff check .
@@ -254,15 +286,18 @@ rg -n '(gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (RSA |
 Expected: Ruff, pytest, publication guard, OpenSpec, and diff check exit 0;
 secret scan emits no match and exits 1.
 
-- [ ] **Step 5: Commit the consolidated handoff**
+- [ ] **Step 6: Commit the consolidated handoff**
 
 ```bash
-git add docs/handoffs/2026-07-27-engagement-v2-p0.md
+git add \
+  docs/handoffs/2026-07-27-engagement-v2-p0.md \
+  docs/reviews/2026-07-27-engagement-v2-p0-contracts-review-disposition.md \
+  openspec/changes/engagement-v2-security-contracts/tasks.md
 git diff --cached --check
 git commit -m "docs: add engagement v2 continuation handoff"
 ```
 
-- [ ] **Step 6: Push through the approved private publication flow**
+- [ ] **Step 7: Push through the approved private publication flow**
 
 ```bash
 HACKBOT_ALLOW_PUBLISH_RECON=1 git push origin feat/engagement-v2-security-contracts
@@ -271,7 +306,7 @@ HACKBOT_ALLOW_PUBLISH_RECON=1 git push origin feat/engagement-v2-security-contra
 Expected: publication guard acknowledges the override and remote branch advances
 to the local documentation HEAD.
 
-- [ ] **Step 7: Update and verify GitHub handoff**
+- [ ] **Step 8: Update and verify GitHub handoff**
 
 Update PR #11 and Issue #1 to link:
 
