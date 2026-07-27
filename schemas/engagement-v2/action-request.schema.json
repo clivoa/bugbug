@@ -4,18 +4,21 @@
       "maxLength": 71,
       "minLength": 71,
       "pattern": "^sha256:[0-9a-f]{64}$",
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 71
     },
     "identifier": {
       "maxLength": 128,
       "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 128
     },
     "parameter_value": {
       "oneOf": [
         {
           "maxLength": 8192,
-          "type": "string"
+          "type": "string",
+          "x-hackbot-max-utf8-bytes": 8192
         },
         {
           "maximum": 9223372036854775807,
@@ -45,7 +48,8 @@
     "target": {
       "maxLength": 2048,
       "minLength": 1,
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 2048
     },
     "target_list": {
       "items": {
@@ -67,12 +71,14 @@
     "cleanup_plan": {
       "maxLength": 8192,
       "minLength": 1,
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 8192
     },
     "expected_impact": {
       "maxLength": 8192,
       "minLength": 1,
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 8192
     },
     "hypothesis_id": {
       "$ref": "#/$defs/identifier"
@@ -90,7 +96,8 @@
     "rationale": {
       "maxLength": 8192,
       "minLength": 1,
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 8192
     },
     "requested_risk": {
       "$ref": "#/$defs/risk_level"
@@ -102,7 +109,8 @@
     "stop_condition": {
       "maxLength": 8192,
       "minLength": 1,
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 8192
     }
   },
   "required": [

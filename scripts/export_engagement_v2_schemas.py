@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import errno
+import inspect
 import os
+import secrets
+import stat
 import sys
-import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -17,78 +20,191 @@ from hackbot.engagement_v2.schemas import render_schema_files  # noqa: E402
 
 SCHEMA_ROOT = REPOSITORY_ROOT / "schemas" / "engagement-v2"
 _PRIVATE_FILE_MODE = 0o600
+_DIRECTORY_MODE = 0o755
+_TEMPORARY_ATTEMPTS = 100
 
 
-def _reject_symlink(path: Path) -> None:
-    if path.is_symlink():
-        raise RuntimeError(f"symlink destination rejected: {path}")
+def _before_entry_open(_name: str) -> None:
+    """Provide a deterministic race-injection seam for the test suite."""
 
 
-def _reject_symlink_components(path: Path) -> None:
-    absolute = path if path.is_absolute() else Path.cwd() / path
-    for candidate in (*reversed(absolute.parents), absolute):
-        _reject_symlink(candidate)
+def _before_replace(_name: str) -> None:
+    """Provide a deterministic race-injection seam for the test suite."""
 
 
-def _drifted_files(destination: Path, rendered: dict[str, bytes]) -> tuple[str, ...]:
-    if destination.is_symlink() or not destination.is_dir():
-        return tuple(sorted(rendered))
-
-    drifted: list[str] = []
-    for name, expected in sorted(rendered.items()):
-        path = destination / name
-        _reject_symlink(path)
-        try:
-            actual = path.read_bytes()
-        except OSError:
-            drifted.append(name)
-            continue
-        if actual != expected:
-            drifted.append(name)
-    return tuple(drifted)
+def _require_descriptor_safe_primitives() -> None:
+    required_flags = ("O_DIRECTORY", "O_NOFOLLOW")
+    required_functions = (os.open, os.mkdir, os.unlink)
+    replace_parameters = inspect.signature(os.replace).parameters
+    if (
+        os.name != "posix"
+        or any(not isinstance(getattr(os, name, None), int) for name in required_flags)
+        or any(function not in os.supports_dir_fd for function in required_functions)
+        or not {"src_dir_fd", "dst_dir_fd"} <= set(replace_parameters)
+    ):
+        raise RuntimeError("descriptor-safe schema export is unavailable on this platform")
 
 
-def _write_one(destination: Path, name: str, content: bytes) -> None:
-    target = destination / name
-    _reject_symlink_components(target)
-    file_descriptor, temporary_name = tempfile.mkstemp(
-        dir=destination,
-        prefix=f".{name}.",
-        suffix=".tmp",
-    )
-    temporary = Path(temporary_name)
+def _directory_flags() -> int:
+    return os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+
+
+def _entry_flags() -> int:
+    return os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+
+
+def _raise_unsafe_path(path: Path, error: OSError) -> None:
+    if error.errno in {errno.ELOOP, errno.ENOTDIR}:
+        raise RuntimeError(f"symlink destination rejected: {path}") from error
+    raise error
+
+
+def _open_pinned_directory(destination: Path, *, create: bool) -> int:
+    absolute = destination if destination.is_absolute() else Path.cwd() / destination
+    descriptor = os.open(absolute.anchor, _directory_flags())
     try:
-        os.fchmod(file_descriptor, _PRIVATE_FILE_MODE)
-        with os.fdopen(file_descriptor, "wb") as stream:
-            file_descriptor = -1
+        for component in absolute.parts[1:]:
+            if component in {"", ".", ".."}:
+                raise RuntimeError(f"invalid schema destination component: {component!r}")
+            try:
+                next_descriptor = os.open(
+                    component,
+                    _directory_flags(),
+                    dir_fd=descriptor,
+                )
+            except FileNotFoundError:
+                if not create:
+                    raise
+                try:
+                    os.mkdir(component, _DIRECTORY_MODE, dir_fd=descriptor)
+                except FileExistsError:
+                    pass
+                try:
+                    next_descriptor = os.open(
+                        component,
+                        _directory_flags(),
+                        dir_fd=descriptor,
+                    )
+                except OSError as error:
+                    _raise_unsafe_path(absolute, error)
+            except OSError as error:
+                _raise_unsafe_path(absolute, error)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
+def _open_existing_entry(directory_descriptor: int, name: str) -> int:
+    _before_entry_open(name)
+    try:
+        return os.open(name, _entry_flags(), dir_fd=directory_descriptor)
+    except OSError as error:
+        if error.errno == errno.ELOOP:
+            raise RuntimeError(f"symlink destination rejected: {name}") from error
+        raise
+
+
+def _read_entry(directory_descriptor: int, name: str) -> bytes:
+    descriptor = _open_existing_entry(directory_descriptor, name)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise RuntimeError(f"schema destination entry is not a regular file: {name}")
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = -1
+            return stream.read()
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _reject_symlink_entry(directory_descriptor: int, name: str) -> None:
+    try:
+        descriptor = _open_existing_entry(directory_descriptor, name)
+    except FileNotFoundError:
+        return
+    try:
+        pass
+    finally:
+        os.close(descriptor)
+
+
+def _drifted_files(directory_descriptor: int, rendered: dict[str, bytes]) -> tuple[str, ...]:
+    expected_names = set(rendered)
+    actual_names = set(os.listdir(directory_descriptor))
+    drifted = actual_names ^ expected_names
+
+    for name in sorted(actual_names - expected_names):
+        _reject_symlink_entry(directory_descriptor, name)
+
+    for name in sorted(actual_names & expected_names):
+        try:
+            actual = _read_entry(directory_descriptor, name)
+        except FileNotFoundError:
+            drifted.add(name)
+            continue
+        if actual != rendered[name]:
+            drifted.add(name)
+    return tuple(sorted(drifted))
+
+
+def _temporary_name(name: str) -> str:
+    return f".{name}.{secrets.token_hex(16)}.tmp"
+
+
+def _write_one(directory_descriptor: int, name: str, content: bytes) -> None:
+    _reject_symlink_entry(directory_descriptor, name)
+    temporary_name = ""
+    descriptor = -1
+    for _ in range(_TEMPORARY_ATTEMPTS):
+        temporary_name = _temporary_name(name)
+        try:
+            descriptor = os.open(
+                temporary_name,
+                os.O_WRONLY
+                | os.O_CREAT
+                | os.O_EXCL
+                | os.O_NOFOLLOW
+                | getattr(os, "O_CLOEXEC", 0),
+                _PRIVATE_FILE_MODE,
+                dir_fd=directory_descriptor,
+            )
+        except FileExistsError:
+            continue
+        break
+    if descriptor < 0:
+        raise RuntimeError(f"could not create exclusive schema temporary for {name}")
+
+    try:
+        os.fchmod(descriptor, _PRIVATE_FILE_MODE)
+        with os.fdopen(descriptor, "wb") as stream:
+            descriptor = -1
             stream.write(content)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, target)
+        _before_replace(name)
+        os.replace(
+            temporary_name,
+            name,
+            src_dir_fd=directory_descriptor,
+            dst_dir_fd=directory_descriptor,
+        )
     finally:
-        if file_descriptor >= 0:
-            os.close(file_descriptor)
+        if descriptor >= 0:
+            os.close(descriptor)
         try:
-            temporary.unlink()
+            os.unlink(temporary_name, dir_fd=directory_descriptor)
         except FileNotFoundError:
             pass
 
 
 def _write_files(destination: Path, rendered: dict[str, bytes]) -> None:
-    _reject_symlink_components(destination)
-    destination.mkdir(parents=True, exist_ok=True)
-    _reject_symlink_components(destination)
-    if not destination.is_dir():
-        raise RuntimeError(f"schema destination is not a directory: {destination}")
-
-    for name in rendered:
-        _reject_symlink_components(destination / name)
-    for name, content in rendered.items():
-        _write_one(destination, name, content)
-
-    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
-    directory_descriptor = os.open(destination, directory_flags)
+    directory_descriptor = _open_pinned_directory(destination, create=True)
     try:
+        for name, content in sorted(rendered.items()):
+            _write_one(directory_descriptor, name, content)
         os.fsync(directory_descriptor)
     finally:
         os.close(directory_descriptor)
@@ -108,10 +224,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the exporter and return its process exit status."""
 
     arguments = _parser().parse_args(argv)
+    _require_descriptor_safe_primitives()
     rendered = render_schema_files()
     if arguments.check:
-        _reject_symlink_components(SCHEMA_ROOT)
-        drifted = _drifted_files(SCHEMA_ROOT, rendered)
+        try:
+            directory_descriptor = _open_pinned_directory(SCHEMA_ROOT, create=False)
+        except FileNotFoundError:
+            drifted = tuple(sorted(rendered))
+        else:
+            try:
+                drifted = _drifted_files(directory_descriptor, rendered)
+            finally:
+                os.close(directory_descriptor)
         for name in drifted:
             print(f"drift: {name}", file=sys.stderr)
         return int(bool(drifted))

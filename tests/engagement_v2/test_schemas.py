@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from scripts import export_engagement_v2_schemas as exporter
 
+import hackbot.engagement_v2.schemas as schemas
 from hackbot.engagement_v2.schemas import render_schema_files, schema_documents
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -275,22 +276,26 @@ def test_identifier_digest_and_authorization_contracts_are_exact() -> None:
         "maxLength": 128,
         "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
         "type": "string",
+        "x-hackbot-max-utf8-bytes": 128,
     }
     assert actions["$defs"]["operator_action_id"] == {
         "maxLength": 128,
         "pattern": "^operator\\.[a-z0-9]+(?:[._-][a-z0-9]+)*$",
         "type": "string",
+        "x-hackbot-max-utf8-bytes": 128,
     }
     assert actions["$defs"]["secret_reference"] == {
         "maxLength": 135,
         "pattern": "^secret:[a-z0-9]+(?:[._-][a-z0-9]+)*$",
         "type": "string",
+        "x-hackbot-max-utf8-bytes": 135,
     }
     assert authorization["$defs"]["digest"] == {
         "maxLength": 71,
         "minLength": 71,
         "pattern": "^sha256:[0-9a-f]{64}$",
         "type": "string",
+        "x-hackbot-max-utf8-bytes": 71,
     }
     assert authorization["properties"]["confirmed_authority_digest"] == {"$ref": "#/$defs/digest"}
 
@@ -381,6 +386,60 @@ def test_action_enums_parameter_bounds_and_collection_caps_are_exact() -> None:
     assert actions["x-hackbot-max-prepared-input-bytes"] == 67108864
     assert actions["x-hackbot-max-argv-bytes"] == 65536
     assert actions["x-hackbot-max-retained-output-bytes"] == 67108864
+
+
+def test_schema_enforcement_contracts_describe_nonportable_relationships() -> None:
+    actions = schema_documents()["actions.schema.json"]
+    parameter = actions["$defs"]["parameter"]
+
+    assert actions["properties"]["actions"]["x-hackbot-unique-by"] == "id"
+    assert parameter["properties"]["pattern"] == {
+        "format": "hackbot-safe-fullmatch-v1",
+        "maxLength": 256,
+        "minLength": 1,
+        "type": "string",
+        "x-hackbot-max-utf8-bytes": 256,
+    }
+    assert {
+        "if": {"required": ["pattern"]},
+        "then": {"required": ["pattern_format"]},
+    } in parameter["allOf"]
+
+    duplicate_ids = [
+        {"id": "operator.scan", "title": "one"},
+        {"id": "operator.scan", "title": "two"},
+    ]
+    assert duplicate_ids[0] != duplicate_ids[1]
+    assert actions["properties"]["actions"]["uniqueItems"] is True
+    assert "pattern_format" not in {
+        "type": "string",
+        "required": True,
+        "max_length": 32,
+        "pattern": "[a-z]{1,32}",
+    }
+
+
+def test_utf8_byte_limit_annotations_cover_every_bounded_string() -> None:
+    missing: list[dict[str, object]] = []
+
+    def visit(value: object) -> None:
+        if isinstance(value, dict):
+            if value.get("type") == "string" and "maxLength" in value:
+                if value.get("x-hackbot-max-utf8-bytes") != value["maxLength"]:
+                    missing.append(value)
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    for document in schema_documents().values():
+        visit(document)
+
+    assert missing == []
+    text = "é" * 4097
+    assert len(text) <= 8192
+    assert len(text.encode("utf-8")) > 8192
 
 
 def test_action_objects_require_explicit_security_declarations() -> None:
@@ -527,9 +586,18 @@ def test_runner_security_view_and_remote_protocol_limits_are_exact() -> None:
     assert remote["$defs"]["nonce"] == {
         "maxLength": 43,
         "minLength": 43,
-        "pattern": "^[A-Za-z0-9_-]{43}$",
+        "pattern": "^[A-Za-z0-9_-]{42}[AQgw]$",
         "type": "string",
+        "x-hackbot-max-utf8-bytes": 43,
     }
+    nonce = re.compile(remote["$defs"]["nonce"]["pattern"], re.ASCII)
+    assert nonce.fullmatch("A" * 42 + "A")
+    assert nonce.fullmatch("A" * 42 + "Q")
+    assert nonce.fullmatch("A" * 42 + "g")
+    assert nonce.fullmatch("A" * 42 + "w")
+    assert nonce.fullmatch("A" * 42 + "B") is None
+    assert nonce.fullmatch("A" * 42 + "_") is None
+    assert remote["properties"]["frames"]["x-hackbot-unique-by"] == "index"
     assert remote["properties"]["frames"]["maxItems"] == 256
     assert remote["$defs"]["frame_descriptor"]["properties"]["frame_type"]["enum"] == [1, 2, 3]
     assert remote["$defs"]["frame_descriptor"]["properties"]["length"]["maximum"] == 67108864
@@ -544,6 +612,15 @@ def test_runner_security_view_and_remote_protocol_limits_are_exact() -> None:
     assert remote["x-hackbot-ed25519-signature-bytes"] == 64
     assert remote["x-hackbot-nonce-bytes"] == 32
     assert remote["x-hackbot-max-egress-observation-age-seconds"] == 60
+
+
+def test_remote_header_urn_tracks_protocol_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(schemas, "PROTOCOL_VERSION", 9)
+
+    remote = schemas._remote_header_schema()
+
+    assert remote["$id"] == "urn:hackbot:schema:engagement-v2:remote-header:9"
+    assert remote["properties"]["protocol_version"] == {"const": 9, "type": "integer"}
 
 
 def test_schema_rendering_and_manifest_hashes_are_deterministic() -> None:
@@ -625,6 +702,92 @@ def test_exporter_check_performs_zero_writes_and_lists_sorted_drift(
     assert not (destination / "program.schema.json").exists()
 
 
+def test_exporter_check_reports_unexpected_regular_entries_without_writing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "engagement-v2"
+    destination.mkdir()
+    for name, content in render_schema_files().items():
+        (destination / name).write_bytes(content)
+    extra = destination / "unexpected.json"
+    extra.write_bytes(b"preserve me\n")
+    before = extra.read_bytes(), extra.stat().st_mtime_ns
+    monkeypatch.setattr(exporter, "SCHEMA_ROOT", destination)
+
+    assert exporter.main(["--check"]) == 1
+
+    assert capsys.readouterr().err.splitlines() == ["drift: unexpected.json"]
+    assert (extra.read_bytes(), extra.stat().st_mtime_ns) == before
+
+
+def test_exporter_check_rejects_unexpected_symlink_entries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "engagement-v2"
+    destination.mkdir()
+    external = tmp_path / "external"
+    external.write_bytes(b"do not read\n")
+    (destination / "unexpected.json").symlink_to(external)
+    monkeypatch.setattr(exporter, "SCHEMA_ROOT", destination)
+
+    with pytest.raises(RuntimeError, match="symlink destination rejected"):
+        exporter.main(["--check"])
+
+    assert external.read_bytes() == b"do not read\n"
+
+
+@pytest.mark.parametrize("arguments", [[], ["--check"]])
+def test_exporter_pins_directory_descriptor_across_destination_swap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    arguments: list[str],
+) -> None:
+    destination = tmp_path / "engagement-v2"
+    destination.mkdir()
+    if arguments:
+        for name, content in render_schema_files().items():
+            (destination / name).write_bytes(content)
+    parked = tmp_path / "parked"
+    attacker = tmp_path / "attacker"
+    attacker.mkdir()
+    injected = False
+
+    def swap_destination(_name: str) -> None:
+        nonlocal injected
+        if injected:
+            return
+        injected = True
+        destination.rename(parked)
+        destination.symlink_to(attacker, target_is_directory=True)
+
+    hook_name = "_before_entry_open" if arguments else "_before_replace"
+    monkeypatch.setattr(exporter, hook_name, swap_destination, raising=False)
+    monkeypatch.setattr(exporter, "SCHEMA_ROOT", destination)
+
+    assert exporter.main(arguments) == 0
+
+    assert injected
+    assert list(attacker.iterdir()) == []
+    if arguments:
+        assert {path.name for path in parked.iterdir()} == set(render_schema_files())
+    else:
+        assert {path.name for path in parked.iterdir()} == set(render_schema_files())
+
+
+def test_exporter_fails_closed_without_nofollow_directory_support(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(exporter.os, "O_NOFOLLOW")
+    monkeypatch.setattr(exporter, "SCHEMA_ROOT", tmp_path / "engagement-v2")
+
+    with pytest.raises(RuntimeError, match="descriptor-safe"):
+        exporter.main(["--check"])
+
+
 def test_exporter_check_does_not_create_a_missing_destination(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -697,8 +860,14 @@ def test_exporter_fsyncs_and_removes_temporary_file_after_replace_failure(
         fsynced.append(file_descriptor)
         real_fsync(file_descriptor)
 
-    def failing_replace(source: Path, target: Path) -> None:
-        raise OSError(f"replace failed for {source.name} -> {target.name}")
+    def failing_replace(
+        source: str,
+        target: str,
+        *,
+        src_dir_fd: int,
+        dst_dir_fd: int,
+    ) -> None:
+        raise OSError(f"replace failed for {source} -> {target}")
 
     monkeypatch.setattr(exporter.os, "fsync", recording_fsync)
     monkeypatch.setattr(exporter.os, "replace", failing_replace)
