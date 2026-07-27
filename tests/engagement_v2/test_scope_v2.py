@@ -111,3 +111,38 @@ def test_ip_outside_cidr_denied() -> None:
     decision = _scope({"cidrs": ["10.20.0.0/16"]}).check("10.30.0.1")
     assert not decision.authorized
     assert decision.reason is ScopeDenyReason.OUT_OF_SCOPE_NO_MATCH
+
+
+# --------------------------------------------- path normalization (false-allow) ---
+def test_url_dot_segment_traversal_denied() -> None:
+    scope = _scope({"urls": ["https://app.corp.example/admin"]})
+    assert not scope.check("https://app.corp.example/admin/../secret").authorized
+    assert (
+        scope.check("https://app.corp.example/admin/../secret").reason
+        is ScopeDenyReason.OUT_OF_SCOPE_NO_MATCH
+    )
+
+
+def test_url_encoded_traversal_denied() -> None:
+    scope = _scope({"urls": ["https://app.corp.example/admin"]})
+    assert not scope.check("https://app.corp.example/admin/%2e%2e/secret").authorized
+
+
+def test_url_dot_segment_within_scope_authorized() -> None:
+    scope = _scope({"urls": ["https://app.corp.example/admin"]})
+    assert scope.check("https://app.corp.example/admin/./users").authorized
+
+
+# --------------------------------------------- deny-wins across kinds ---
+def test_cross_kind_host_exclusion_blocks_http() -> None:
+    scope = _scope({"wildcard_domains": ["*.example.com"]}, {"hosts": ["secret.example.com"]})
+    decision = scope.check("https://secret.example.com/")
+    assert not decision.authorized
+    assert decision.reason is ScopeDenyReason.EXCLUDED_BY_RULE
+
+
+def test_cross_kind_host_exclusion_blocks_endpoint() -> None:
+    scope = _scope({"hosts": ["dc01.corp.example"]}, {"domains": ["dc01.corp.example"]})
+    decision = scope.check("smb://dc01.corp.example:445")
+    assert not decision.authorized
+    assert decision.reason is ScopeDenyReason.EXCLUDED_BY_RULE

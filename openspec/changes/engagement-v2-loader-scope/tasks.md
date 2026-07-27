@@ -42,4 +42,4 @@
 ## 8. Verification and delivery
 
 - [x] 8.1 Run focused P1 tests, the full pytest suite, Ruff check/format, mypy, schema/fixture drift, OpenSpec strict validation, the secret-scan regex over new paths, and `git diff --check`; record fresh outputs.
-- [ ] 8.2 Request independent review, resolve findings, update Issue #2/Project fields, and archive the OpenSpec change only after implementation, verification, and merge.
+- [ ] 8.2 Request independent review, resolve findings, update Issue #2/Project fields, and archive the OpenSpec change only after implementation, verification, and merge. Independent review complete (verdict: largely faithful and safe); all findings resolved with tests and spec scenarios — disposition in `docs/reviews/2026-07-27-engagement-v2-p1-loader-scope-review-disposition.md`. Remaining: operator-acknowledged push, merge, then archive.

@@ -22,6 +22,10 @@ resolution and SHALL treat scope inputs as immutable at decision time.
 - **WHEN** a target matches both an in-scope rule and an exclusion
 - **THEN** the decision denies with reason `excluded-by-rule`
 
+#### Scenario: Exclusion is kind-agnostic (deny-wins across kinds)
+- **WHEN** a target host is authorized by an in-scope rule of one kind and named by an out-of-scope rule of any kind (for example an in-scope `wildcard_domains` host that appears in an out-of-scope `hosts` rule)
+- **THEN** the decision denies with reason `excluded-by-rule`
+
 #### Scenario: Unparsable target is denied
 - **WHEN** a target cannot be parsed into a supported scope kind
 - **THEN** the decision denies with reason `unparsable-target` and never defaults to authorized
@@ -51,6 +55,10 @@ rule SHALL authorize only the exact scheme, host, and port.
 #### Scenario: Network endpoint requires exact port
 - **WHEN** a `network_endpoints` rule for `smb://fileserver:445` exists and the target is `smb://fileserver:139`
 - **THEN** the decision denies with reason `out-of-scope-no-match`
+
+#### Scenario: URL path matching is dot-segment normalized
+- **WHEN** a `urls` rule for `https://app.corp.example/admin` exists and the target is `https://app.corp.example/admin/../secret` (or its percent-encoded `%2e%2e` form)
+- **THEN** the target path is normalized to `/secret` and the decision denies with reason `out-of-scope-no-match`, never inheriting the `/admin` prefix authorization
 
 ### Requirement: CIDR containment and exclusion by overlap
 A `cidrs` rule SHALL authorize a target only when the target's literal IP
