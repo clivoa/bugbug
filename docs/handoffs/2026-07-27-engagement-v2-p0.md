@@ -193,6 +193,10 @@ control-character rule; and schema versions are unambiguously encoded in
 schema IDs. The authoritative dispositions are in
 `docs/reviews/2026-07-27-engagement-v2-p0-contracts-review-disposition.md`.
 
+The final documentation-only pre-merge review and its whitespace-policy finding,
+fix, and clean scoped re-review are recorded in
+`docs/reviews/2026-07-27-engagement-v2-p0-handoff-premerge-review.md`.
+
 ## Deferred work
 
 The final reviews retained these non-blocking items for later phases:
