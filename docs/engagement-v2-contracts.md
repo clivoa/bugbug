@@ -72,13 +72,14 @@ The deterministic synthetic fixture corpus is under
 
 ## Protocol values and P0 non-activation
 
-The protocol contract fixes magic `HBV2RUN\\x00`, protocol version 1, a
+The protocol contract fixes magic `b"HBV2RUN\x00"`, protocol version 1, a
 1,048,576-byte header cap, at most 256 frames, a 67,108,864-byte per-frame cap,
 a 75,497,472-byte request cap, and a 41,943,040-byte response cap. A run binding
 uses a lowercase UUIDv4, a 32-byte/43-character unpadded-base64url nonce, a
 1–300 second lifetime, and at most 30 seconds of clock skew. The specifications
-also reserve a 600-second replay reservation and a 60-second egress-observation
-age for their future consumers.
+also reserve a P4 replay reservation retained for 600 seconds after expiry, or
+until a longer in-progress run finalizes. The egress-observation age is 60
+seconds.
 
 These are validation and framing primitives only. **No SSH, helper, or replay
 cache exists in P0.** P0 neither opens a socket nor reserves a replay tuple nor
