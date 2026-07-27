@@ -1,0 +1,7 @@
+schema_version: 1
+in_scope:
+  domains:
+    - app.corp.example
+out_of_scope:
+  domains:
+    - printer01.corp.example

@@ -1,0 +1,33 @@
+{
+  "in_scope": {
+    "cidrs": [
+      "10.20.0.0/16"
+    ],
+    "domains": [
+      "app.corp.example"
+    ],
+    "hosts": [
+      "dc01.corp.example",
+      "fileserver"
+    ],
+    "network_endpoints": [
+      "ldaps://dc01.corp.example:636",
+      "smb://fileserver:445"
+    ],
+    "urls": [
+      "https://app.corp.example/admin"
+    ],
+    "wildcard_domains": [
+      "*.apps.corp.example"
+    ]
+  },
+  "out_of_scope": {
+    "cidrs": [
+      "10.20.5.0/24"
+    ],
+    "hosts": [
+      "printer01"
+    ]
+  },
+  "schema_version": 2
+}

@@ -1,0 +1,34 @@
+{
+  "architecture": "x86_64",
+  "egress_attestation": null,
+  "helper": {
+    "path": "/opt/hackbot/helper",
+    "protocol_version": 1,
+    "sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "node_identity": "lab.node",
+  "operating_system": "linux",
+  "permitted_privileges": [
+    "network-raw"
+  ],
+  "privilege_signer_public_key_fingerprint": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "role": "execution-node",
+  "schema_version": 2,
+  "source_identity": {
+    "address": "10.10.0.5",
+    "mode": "direct-interface"
+  },
+  "ssh": {
+    "connection_timeout_seconds": 10,
+    "host": "10.10.0.5",
+    "host_key_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "identity": "lab.key",
+    "known_hosts_path": "/home/operator/.ssh/known_hosts",
+    "options": {
+      "batch_mode": true
+    },
+    "port": 22,
+    "private_key_path": "/home/operator/.ssh/id_ed25519",
+    "user": "operator"
+  }
+}
