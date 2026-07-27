@@ -35,4 +35,4 @@
 ## 7. Verification and delivery
 
 - [x] 7.1 Run focused P4 tests, the full pytest suite, Ruff check/format, mypy, schema/fixture drift, OpenSpec strict validation, the secret-scan regex over new paths, and `git diff --check`; record fresh outputs.
-- [ ] 7.2 Request independent review, resolve findings, update Issue #4/Project fields, and archive the OpenSpec change only after implementation, verification, and merge.
+- [x] 7.2 Request independent review, resolve findings, update Issue #4/Project fields, and archive the OpenSpec change only after implementation, verification, and merge.
