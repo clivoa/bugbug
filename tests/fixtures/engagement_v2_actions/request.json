@@ -1,0 +1,14 @@
+{
+  "action_id": "operator.http-probe",
+  "cleanup_plan": "none required",
+  "expected_impact": "none demonstrated",
+  "hypothesis_id": "h1",
+  "parameters": {
+    "concurrency": 2,
+    "rate": 5,
+    "url": "https://app.corp.example/admin"
+  },
+  "rationale": "probe the admin endpoint",
+  "schema_version": 2,
+  "stop_condition": "on any 5xx"
+}
