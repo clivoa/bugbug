@@ -47,7 +47,7 @@ def request_doc(**overrides: Any) -> dict[str, Any]:
         "schema_version": 2,
         "action_id": "operator.http-probe",
         "parameters": {
-            "rate": 10,
+            "rate": 5,
             "concurrency": 2,
             "url": "https://app.corp.example/admin",
         },

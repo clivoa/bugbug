@@ -13,9 +13,17 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from hackbot.engagement_v2.constants import MAX_PORT, MIN_PORT, ParameterType
+from hackbot.engagement_v2.constants import (
+    MAX_ARGV_BYTES,
+    MAX_ARGV_TOKEN_BYTES,
+    MAX_PORT,
+    MAX_SCALAR_OR_TARGET_BYTES,
+    MIN_PORT,
+    ParameterType,
+)
 from hackbot.engagement_v2.errors import ContractError, ReasonCode
 from hackbot.engagement_v2.manifest import ActionDefinition, ParameterDef
+from hackbot.engagement_v2.patterns import safe_fullmatch
 
 _PLACEHOLDER = re.compile(
     r"\{(value|target|targets_file|artifact_file|secret_file):([a-z][a-z0-9_]{0,63})\}",
@@ -69,11 +77,14 @@ def _render_value(param: ParameterDef, value: object) -> str:
     # string-like: string, enum, domain, host, ip, cidr, url, network-endpoint, ...
     if not isinstance(value, str):
         raise _reject(ReasonCode.INVALID_REQUEST)
+    if "\x00" in value:
+        raise _reject(ReasonCode.INVALID_REQUEST)
     if kind == ParameterType.ENUM.value and value not in param.enum_values:
         raise _reject(ReasonCode.INVALID_REQUEST)
-    if param.max_length is not None and len(value.encode("utf-8")) > param.max_length:
+    cap = param.max_length if param.max_length is not None else MAX_SCALAR_OR_TARGET_BYTES
+    if len(value.encode("utf-8")) > cap:
         raise _reject(ReasonCode.INVALID_REQUEST)
-    if "\x00" in value:
+    if param.pattern is not None and not safe_fullmatch(param.pattern, value):
         raise _reject(ReasonCode.INVALID_REQUEST)
     return value
 
@@ -138,6 +149,18 @@ def bind(
                 raise _reject(ReasonCode.INVALID_PLACEHOLDER)
             secret_references.add(name)
             argv.append(SecretReference(name))
+
+    # Bound-argv byte caps (concrete string tokens only; file/secret refs are
+    # materialized by P3).
+    total = 0
+    for bound_token in argv:
+        if isinstance(bound_token, str):
+            encoded = len(bound_token.encode("utf-8"))
+            if encoded > MAX_ARGV_TOKEN_BYTES:
+                raise _reject(ReasonCode.INVALID_REQUEST)
+            total += encoded + 1  # per-token terminator
+    if total > MAX_ARGV_BYTES:
+        raise _reject(ReasonCode.INVALID_REQUEST)
 
     return BoundCommand(
         executable=executable,

@@ -54,6 +54,14 @@ only and SHALL NOT be resolved by the binder.
 - **WHEN** a `{value:id}` bound to an integer parameter is outside its manifest bounds
 - **THEN** the binder fails with `INVALID_REQUEST`
 
+#### Scenario: Unbounded scalar hits the default byte cap
+- **WHEN** a string parameter without an explicit `max_length` is bound to a value larger than the default scalar cap, or a rendered token exceeds the per-token byte cap, or the total rendered argv exceeds its byte cap
+- **THEN** the binder fails with `INVALID_REQUEST`
+
+#### Scenario: Safe pattern is enforced at bind time
+- **WHEN** a parameter declares a `hackbot-safe-fullmatch-v1` pattern and the bound value does not fully match it
+- **THEN** the binder fails with `INVALID_REQUEST`
+
 #### Scenario: Secret placeholder stays a reference
 - **WHEN** an action declares a `{secret_file:id}` placeholder
 - **THEN** the binder records a secret reference and never reads or embeds secret material (P3 resolves it)

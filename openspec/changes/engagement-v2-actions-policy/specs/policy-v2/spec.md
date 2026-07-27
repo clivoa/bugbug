@@ -56,6 +56,20 @@ subset.
 - **WHEN** every target is in scope and not excluded
 - **THEN** the scope stage does not deny
 
+### Requirement: Prohibited tools, vulnerability types, and excluded impacts
+The engine SHALL deny with `DENY_POLICY_LIMIT` when the selected executable's
+basename appears in `prohibited_tools`, when the action's declared vulnerability
+types intersect `prohibited_vulnerability_types`, or when its declared impacts
+intersect `excluded_impacts`.
+
+#### Scenario: Prohibited tool denies
+- **WHEN** the selected executable's basename is listed in `prohibited_tools`
+- **THEN** the decision denies with `DENY_POLICY_LIMIT`
+
+#### Scenario: Excluded impact denies
+- **WHEN** an action declares an impact listed in `excluded_impacts`
+- **THEN** the decision denies with `DENY_POLICY_LIMIT`
+
 ### Requirement: Rate enforceability and effective risk level
 A request declaring a finite rate for an action whose rate control cannot enforce
 it SHALL deny with `DENY_RATE_UNENFORCEABLE`. Other numeric-limit violations

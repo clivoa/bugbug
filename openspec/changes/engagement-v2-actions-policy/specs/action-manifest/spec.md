@@ -34,9 +34,21 @@ on Windows and case-sensitive otherwise.
 - **WHEN** an action's executable is not an absolute path
 - **THEN** loading fails with `INVALID_ACTION_MANIFEST`
 
-#### Scenario: Interpreter inline-eval rejected
-- **WHEN** an action uses an interpreter basename with an inline-eval flag (for example `python -c`)
-- **THEN** loading fails with `INVALID_ACTION_MANIFEST` unless the action is a declared `L3` shell/interpreter form, and elevation as `argv[0]` is always rejected
+#### Scenario: Interpreter inline-eval rejected even at L3
+- **WHEN** an action names a shell/interpreter executable and any argv token is an inline-eval flag for that basename (for example `bash -c`, `python -c`)
+- **THEN** loading fails with `INVALID_ACTION_MANIFEST` even when the action declares `L3`; the only safe L3 form is an interpreter with an immutable `{artifact_file:id}` script
+
+#### Scenario: Elevation basename as an argv token rejected
+- **WHEN** any argv token's basename is an elevation basename (`sudo`, `su`, `doas`, `pkexec`, `runas`, `runas.exe`)
+- **THEN** loading fails with `INVALID_ACTION_MANIFEST`
+
+#### Scenario: Target-shaped value parameter rejected
+- **WHEN** a `{value:id}` placeholder references a parameter of a target-shaped type (`domain`, `host`, `ip`, `cidr`, `url`, `network-endpoint`, `target-list`)
+- **THEN** loading fails with `INVALID_ACTION_MANIFEST`; target-shaped inputs MUST use scope-checked `{target:id}`/`{targets_file:id}` bindings
+
+#### Scenario: Unknown action field rejected
+- **WHEN** an action object contains a field outside the allowed action schema
+- **THEN** loading fails with `INVALID_ACTION_MANIFEST`
 
 ### Requirement: Rate-control declaration
 A network action SHALL declare exactly one rate-control mode. `not-applicable`
