@@ -23,6 +23,14 @@ The external Task 4 report was copied byte-for-byte from:
 
 `/tmp/claude-task4-descriptor-exporter-review.md`
 
+Some source reports contain historical trailing whitespace or a final blank
+line. Those bytes are evidence, not current formatting style. The archive is
+therefore excluded from Ruff formatting in `pyproject.toml` and marked
+`-whitespace` in `.gitattributes`. This keeps both byte comparison and
+range-wide `git diff --check` deterministic without silently rewriting reports.
+All non-archived files remain subject to the normal formatter and whitespace
+checks.
+
 The later independent Claude review is already durable outside this directory:
 [`2026-07-27-engagement-v2-p0-contracts-review-disposition.md`](../2026-07-27-engagement-v2-p0-contracts-review-disposition.md).
 
