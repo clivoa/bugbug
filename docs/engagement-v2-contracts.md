@@ -120,7 +120,10 @@ loader.
 | P2 action manifest, binder, and policy | Action enums/bounds, safe placeholders/patterns, execution projection, lifecycle, and denial reasons. | Binding, policy decisions, secret retrieval, or subprocess execution. |
 | P4 remote helper and trust protocol | Framing, run binding, protocol caps, response chain, trust/permit constants, and schemas. | SSH, helper process, replay cache, host/helper verification, or privilege broker. |
 
-P0 is the active **Ready** change; P1–P7 remain dependent and must not treat
-these contracts as an activated execution surface. The governing change is
-[`openspec/changes/engagement-v2-security-contracts/`](../openspec/changes/engagement-v2-security-contracts/),
-tracked by [GitHub Issue #1](https://github.com/clivoa/bugbug/issues/1).
+P0 is merged and archived; its current normative contracts live in
+[`openspec/specs/`](../openspec/specs/). The proposal, design, tasks, and delta
+specs remain in
+[`openspec/changes/archive/2026-07-27-engagement-v2-security-contracts/`](../openspec/changes/archive/2026-07-27-engagement-v2-security-contracts/).
+P1 is Ready, while P2–P7 remain dependent and must not treat these contracts as
+an activated execution surface. Delivery history is tracked by closed
+[GitHub Issue #1](https://github.com/clivoa/bugbug/issues/1).

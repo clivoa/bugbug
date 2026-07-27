@@ -48,14 +48,16 @@ predates P0 and is not a current P0 full-verification claim.
 ## Current P0 status
 
 - **P0 engagement v2 security contracts** (`src/hackbot/engagement_v2/`) —
-  active **Ready** OpenSpec change with isolated constants, canonical values and
-  digests, safe patterns, generated schemas, fixtures, and bounded framing;
-  see [`engagement-v2-contracts.md`](engagement-v2-contracts.md). P0 does not
-  enable engagement v2 execution: schema v1 remains current. P1–P7 remain
-  dependent on this contract boundary.
+  **Done**, merged, verified, and archived, with isolated constants, canonical
+  values and digests, safe patterns, generated schemas, fixtures, and bounded
+  framing; see [`engagement-v2-contracts.md`](engagement-v2-contracts.md).
+  Current normative text lives under `openspec/specs/`. P0 does not enable
+  engagement v2 execution: schema v1 remains current. P1 is **Ready**; P2–P7
+  remain dependent on their preceding phases.
 
-Task 8 full verification and delivery remain pending. Do not publish a new
-full-suite count until that task records fresh results.
+P0 tasks 1.1–8.2 are complete. Post-archive verification recorded 1157 passed,
+1 skipped; publication guard 4 passed; Ruff, mypy, schemas, fixtures, OpenSpec,
+secret scan, and diff check clean.
 
 The only executing path is the gate-bound substrate above; there is still no
 provider call or MCP.

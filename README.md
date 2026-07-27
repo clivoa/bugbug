@@ -11,9 +11,14 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 
 ## Status
 
-Early build; **912 automated tests passing** (**913 collected; 1 known nmap
+Early build; **1157 automated tests passing** (**1158 collected; 1 known nmap
 skip**) on **Python 3.14** (project minimum 3.11). Implemented and verified so
 far:
+- **Engagement v2 P0 security contracts** — merged and archived, with strict
+  canonical values/digests, safe patterns, generated schemas/fixtures, and
+  bounded protocol primitives. P0 does not activate v2 execution; P1
+  loader/scope design is Ready. See
+  [`docs/engagement-v2-contracts.md`](docs/engagement-v2-contracts.md).
 - **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `program`, `risk`, `approval`,
   `tool`, `finding`, `skills`, `version`) — stdlib-only core, runs offline; installable as a wheel
   (`scripts/build_wheel.py` + `scripts/smoke_test.sh`, both fully offline).
@@ -118,7 +123,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 ```bash
 .venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
 .venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/python -m pytest tests -q                 # 913 collected; 912 pass + 1 nmap skip
+.venv/bin/python -m pytest tests -q                 # 1158 collected; 1157 pass + 1 nmap skip
 ```
 
 ## Documentation
@@ -128,6 +133,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 - [`docs/skill-promotion.md`](docs/skill-promotion.md) — recon-bundle provenance + promoted skills
 - [`docs/remote-runner.md`](docs/remote-runner.md) — run gated actions on a remote SSH host
 - [`docs/findings-and-reporting.md`](docs/findings-and-reporting.md) — typed findings + markdown reports
+- [`docs/engagement-v2-contracts.md`](docs/engagement-v2-contracts.md) — archived P0 boundary + current contracts
 - [`docs/next-steps.md`](docs/next-steps.md) — current status and the roadmap for the next phase
 - [`docs/reference-review.md`](docs/reference-review.md) — upstream project analysis
 - [`docs/licenses-and-attribution.md`](docs/licenses-and-attribution.md) — license ledger
