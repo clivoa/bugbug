@@ -7,7 +7,10 @@ import base64
 import hashlib
 import json
 import os
+import stat
 import sys
+import tempfile
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Final
@@ -21,7 +24,11 @@ from hackbot.engagement_v2.canonical import (  # noqa: E402
     canonical_bytes,
     execution_digest,
 )
-from hackbot.engagement_v2.constants import PROTOCOL_VERSION  # noqa: E402
+from hackbot.engagement_v2.constants import (  # noqa: E402
+    MAX_REQUEST_LIFETIME_SECONDS,
+    NONCE_BYTES,
+    PROTOCOL_VERSION,
+)
 from hackbot.engagement_v2.patterns import (  # noqa: E402
     compile_safe_pattern,
     safe_fullmatch,
@@ -128,9 +135,12 @@ def _request_protocol_header(payload: bytes) -> dict[str, object]:
     header: dict[str, object] = {
         "protocol_version": PROTOCOL_VERSION,
         "run_id": "123e4567-e89b-42d3-a456-426614174000",
-        "nonce": base64.urlsafe_b64encode(b"\x00" * 32).decode("ascii").rstrip("="),
+        "nonce": base64.urlsafe_b64encode(b"\x00" * NONCE_BYTES).decode("ascii").rstrip("="),
         "issued_at": "2026-07-26T12:00:00Z",
-        "expires_at": "2026-07-26T12:05:00Z",
+        "expires_at": (
+            datetime(2026, 7, 26, 12, 0, tzinfo=UTC)
+            + timedelta(seconds=MAX_REQUEST_LIFETIME_SECONDS)
+        ).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "authority_digest": "sha256:" + "1" * 64,
         "action_id": "operator.fixture",
         "argv": ["/opt/example.invalid/bin/synthetic-runner", "--fixture"],
@@ -162,9 +172,18 @@ def _protocol_fixtures() -> dict[str, bytes]:
     stream = BytesIO()
     write_message(stream, message)
     encoded_message = stream.getvalue()
+    raw_header = canonical_bytes(header)
+    header_offset = encoded_message.find(raw_header)
+    if (
+        header_offset < 0
+        or encoded_message.find(raw_header, header_offset + 1) != -1
+        or header_offset + len(raw_header) >= len(encoded_message)
+    ):
+        raise ValueError("ambiguous protocol fixture boundary")
+    frame_bytes = encoded_message[header_offset + len(raw_header) :]
     return {
-        "protocol/request-header.json": canonical_bytes(header),
-        "protocol/request-frame.bin": encoded_message[-60:],
+        "protocol/request-header.json": raw_header,
+        "protocol/request-frame.bin": frame_bytes,
         "protocol/request-message.bin": encoded_message,
     }
 
@@ -176,27 +195,154 @@ def _generated_bytes() -> dict[str, bytes]:
     return fixtures
 
 
-def _atomic_write(path: Path, value: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = path.with_name(f".{path.name}.tmp")
-    with temporary_path.open("wb") as temporary_file:
-        temporary_file.write(value)
-    os.replace(temporary_path, path)
+def _unsafe_path(path: Path, reason: str) -> ValueError:
+    return ValueError(f"unsafe fixture path {path}: {reason}")
+
+
+def _directory(path: Path, *, create: bool) -> None:
+    """Require a real directory at *path*, creating only a missing component."""
+
+    try:
+        status = path.lstat()
+    except FileNotFoundError:
+        if not create:
+            raise
+        path.mkdir()
+        status = path.lstat()
+    if stat.S_ISLNK(status.st_mode):
+        raise _unsafe_path(path, "symlink")
+    if not stat.S_ISDIR(status.st_mode):
+        raise _unsafe_path(path, "not a directory")
+
+
+def _managed_parent(root: Path, relative_path: str, *, create: bool) -> Path | None:
+    """Return a real managed parent without traversing symlink components."""
+
+    _directory(root, create=False)
+    parent = root
+    for component in Path(relative_path).parts[:-1]:
+        parent = parent / component
+        try:
+            _directory(parent, create=create)
+        except FileNotFoundError:
+            return None
+    return parent
+
+
+def _read_managed_file(root: Path, relative_path: str) -> bytes | None:
+    """Read one regular managed file without following a destination symlink."""
+
+    parent = _managed_parent(root, relative_path, create=False)
+    if parent is None:
+        return None
+    destination = parent / Path(relative_path).name
+    try:
+        status = destination.lstat()
+    except FileNotFoundError:
+        return None
+    if stat.S_ISLNK(status.st_mode):
+        raise _unsafe_path(destination, "symlink")
+    if not stat.S_ISREG(status.st_mode):
+        raise _unsafe_path(destination, "not a regular file")
+    descriptor = os.open(destination, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise _unsafe_path(destination, "not a regular file")
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = -1
+            return source.read()
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _atomic_write(root: Path, relative_path: str, value: bytes) -> None:
+    """Publish a managed regular file through an exclusive sibling staging file."""
+
+    parent = _managed_parent(root, relative_path, create=True)
+    if parent is None:
+        raise _unsafe_path(root, "missing managed parent")
+    destination = parent / Path(relative_path).name
+    try:
+        existing = destination.lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        if stat.S_ISLNK(existing.st_mode):
+            raise _unsafe_path(destination, "symlink")
+        if not stat.S_ISREG(existing.st_mode):
+            raise _unsafe_path(destination, "not a regular file")
+
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{destination.name}.", dir=parent)
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as temporary_file:
+            descriptor = -1
+            temporary_file.write(value)
+        try:
+            existing = destination.lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            if stat.S_ISLNK(existing.st_mode):
+                raise _unsafe_path(destination, "symlink")
+            if not stat.S_ISREG(existing.st_mode):
+                raise _unsafe_path(destination, "not a regular file")
+        os.replace(temporary_path, destination)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            temporary_path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _fixture_entries(root: Path, generated: dict[str, bytes]) -> set[str]:
+    """Enumerate fixture entries without following directory or file symlinks."""
+
+    _directory(root, create=False)
+    entries: set[str] = set()
+    managed_directories = {
+        "/".join(Path(relative_path).parts[:-1])
+        for relative_path in generated
+        if len(Path(relative_path).parts) > 1
+    }
+
+    def visit(directory: Path, prefix: Path) -> None:
+        for child in directory.iterdir():
+            relative_path = (prefix / child.name).as_posix()
+            status = child.lstat()
+            if stat.S_ISDIR(status.st_mode):
+                if relative_path not in managed_directories:
+                    entries.add(relative_path)
+                visit(child, prefix / child.name)
+            else:
+                entries.add(relative_path)
+
+    visit(root, Path())
+    return entries
 
 
 def generate(root: Path, *, check: bool) -> tuple[str, ...]:
     """Generate fixtures below *root*, or report drift without mutating it."""
 
     generated = _generated_bytes()
-    differing = tuple(
+    try:
+        _directory(root, create=not check)
+    except FileNotFoundError:
+        return tuple(sorted(generated))
+    managed_differences = {
         relative_path
-        for relative_path in sorted(generated)
-        if not (root / relative_path).is_file()
-        or (root / relative_path).read_bytes() != generated[relative_path]
+        for relative_path, value in generated.items()
+        if _read_managed_file(root, relative_path) != value
+    }
+    differing = tuple(
+        sorted(managed_differences | (_fixture_entries(root, generated) - set(generated)))
     )
     if not check:
-        for relative_path in differing:
-            _atomic_write(root / relative_path, generated[relative_path])
+        for relative_path in sorted(managed_differences):
+            _atomic_write(root, relative_path, generated[relative_path])
     return differing
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import random
 import re
 import shutil
@@ -55,6 +56,82 @@ def test_fixture_check_detects_drift_without_writing(tmp_path: Path) -> None:
     assert changed.read_bytes() == before
 
 
+def test_fixture_update_rejects_a_root_symlink(tmp_path: Path) -> None:
+    """Catch updates that treat an external directory as the fixture root."""
+
+    external_root = tmp_path / "external-root"
+    external_root.mkdir()
+    root = tmp_path / "fixtures"
+    os.symlink(external_root, root, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlink"):
+        generate(root, check=False)
+
+    assert list(external_root.iterdir()) == []
+
+
+def test_fixture_check_rejects_a_managed_destination_symlink(tmp_path: Path) -> None:
+    """Catch checks that accept an external file through a managed symlink."""
+
+    copy_fixture_tree(tmp_path)
+    destination = tmp_path / "canonical" / "authority-digest.txt"
+    external = tmp_path / "external-digest.txt"
+    external.write_bytes(destination.read_bytes())
+    destination.unlink()
+    os.symlink(external, destination)
+
+    with pytest.raises(ValueError, match="symlink"):
+        generate(tmp_path, check=True)
+
+    assert (
+        external.read_bytes()
+        == FIXTURE_ROOT.joinpath("canonical", "authority-digest.txt").read_bytes()
+    )
+
+
+def test_fixture_update_rejects_a_managed_parent_symlink(tmp_path: Path) -> None:
+    """Catch updates that publish generated files outside the fixture root."""
+
+    root = tmp_path / "fixtures"
+    root.mkdir()
+    external_parent = tmp_path / "external-canonical"
+    external_parent.mkdir()
+    os.symlink(external_parent, root / "canonical", target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlink"):
+        generate(root, check=False)
+
+    assert list(external_parent.iterdir()) == []
+
+
+def test_fixture_update_ignores_a_predictable_staging_symlink(tmp_path: Path) -> None:
+    """Catch updates that truncate an external target through staging names."""
+
+    root = tmp_path / "fixtures"
+    canonical = root / "canonical"
+    canonical.mkdir(parents=True)
+    external = tmp_path / "external-staging.txt"
+    external.write_bytes(b"external bytes")
+    os.symlink(external, canonical / ".authority-input.json.tmp")
+
+    generate(root, check=False)
+
+    assert external.read_bytes() == b"external bytes"
+
+
+def test_fixture_extra_file_is_reported_and_left_intact(tmp_path: Path) -> None:
+    """Catch checks that accept an ungenerated fixture artifact as clean."""
+
+    copy_fixture_tree(tmp_path)
+    extra = tmp_path / "canonical" / "old-contract.json"
+    extra.write_text("{}\n", encoding="ascii")
+    before = extra.read_bytes()
+
+    assert generate(tmp_path, check=True) == ("canonical/old-contract.json",)
+    assert generate(tmp_path, check=False) == ("canonical/old-contract.json",)
+    assert extra.read_bytes() == before
+
+
 def test_cli_check_reports_sorted_drift_without_writing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -65,12 +142,14 @@ def test_cli_check_reports_sorted_drift_without_writing(
         "sha256:" + "0" * 64 + "\n", encoding="ascii"
     )
     (tmp_path / "patterns" / "cases.json").write_text("[]\n", encoding="ascii")
+    (tmp_path / "canonical" / "old-contract.json").write_text("{}\n", encoding="ascii")
     before = fixture_bytes(tmp_path)
     monkeypatch.setattr(fixture_generator, "_DEFAULT_ROOT", tmp_path)
 
     assert fixture_generator.main(["--check"]) == 1
     assert capsys.readouterr().out.splitlines() == [
         "canonical/authority-digest.txt",
+        "canonical/old-contract.json",
         "patterns/cases.json",
     ]
     assert fixture_bytes(tmp_path) == before
@@ -89,6 +168,18 @@ def test_fixture_update_recreates_exact_approved_bytes(tmp_path: Path) -> None:
     generate(tmp_path, check=False)
 
     assert fixture_bytes(tmp_path) == fixture_bytes(FIXTURE_ROOT)
+
+
+def test_protocol_frame_fixture_is_the_complete_message_suffix_after_header() -> None:
+    """Catch frame extraction that relies on a private fixed wire-length slice."""
+
+    protocol_root = FIXTURE_ROOT / "protocol"
+    message = (protocol_root / "request-message.bin").read_bytes()
+    header = (protocol_root / "request-header.json").read_bytes()
+    frame = (protocol_root / "request-frame.bin").read_bytes()
+
+    assert message.count(header) == 1
+    assert frame == message[message.index(header) + len(header) :]
 
 
 def test_fixture_output_is_independent_of_process_state(
