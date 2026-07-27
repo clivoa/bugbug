@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import struct
+import tracemalloc
 from datetime import UTC, datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
@@ -61,6 +62,22 @@ class _ShortReadStream(BytesIO):
         if size < 0:
             return super().read(size)
         return super().read(min(size, self.chunk_size))
+
+
+class _OneByteReadStream:
+    """A bounded stream returning one byte per exact-read call."""
+
+    def __init__(self, size: int) -> None:
+        self.remaining = size
+        self.calls = 0
+
+    def read(self, size: int = -1, /) -> bytes:
+        self.calls += 1
+        if self.remaining == 0:
+            return b""
+        assert size > 0
+        self.remaining -= 1
+        return b"x"
 
 
 class _GuardedReadStream:
@@ -206,6 +223,21 @@ def test_message_round_trip_is_byte_stable_with_short_reads() -> None:
     short_stream = _ShortReadStream(encoded)
     assert read_message(short_stream) == message
     assert len(short_stream.read_sizes) > 6
+
+
+def test_exact_read_does_not_retain_one_object_per_one_byte_read() -> None:
+    stream = _OneByteReadStream(MAX_PROTOCOL_HEADER_BYTES)
+
+    tracemalloc.start()
+    try:
+        value = protocol._read_exact(stream, MAX_PROTOCOL_HEADER_BYTES)
+        _, peak_bytes = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert value == b"x" * MAX_PROTOCOL_HEADER_BYTES
+    assert stream.calls == MAX_PROTOCOL_HEADER_BYTES
+    assert peak_bytes < MAX_PROTOCOL_HEADER_BYTES * 4
 
 
 @pytest.mark.parametrize(
@@ -633,7 +665,14 @@ def test_request_argv_accepts_only_generated_schema_placeholder_grammar() -> Non
     write_message(stream, message)
     assert read_message(BytesIO(stream.getvalue())) == message
 
-    for invalid_token in ("prefix{target:primary}", "{unknown:primary}", "{target:Bad}"):
+    for invalid_token in (
+        "prefix{target:primary}",
+        "{unknown:primary}",
+        "{target:Bad}",
+        "{target:1-target}",
+        "{target:target-name}",
+        "{target:target.name}",
+    ):
         invalid_header = _request_header()
         invalid_header["argv"] = [invalid_token]
         _bind_request_header(invalid_header)
@@ -946,8 +985,10 @@ def test_deterministic_protocol_fixtures_have_exact_bytes_and_hashes() -> None:
     stream = BytesIO()
     write_message(stream, message)
 
-    assert fixture_bytes["request-frame.bin"] == stream.getvalue()[-60:]
-    assert stream.getvalue() == fixture_bytes["request-message.bin"]
+    encoded = stream.getvalue()
+    frame_offset = _PREFIX.size + len(canonical_bytes(header))
+    assert fixture_bytes["request-frame.bin"] == encoded[frame_offset:]
+    assert encoded == fixture_bytes["request-message.bin"]
     assert read_message(BytesIO(fixture_bytes["request-message.bin"])) == message
 
 

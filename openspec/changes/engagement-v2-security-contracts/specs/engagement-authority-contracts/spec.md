@@ -70,7 +70,7 @@ The sensitive policy fields SHALL be exact booleans:
 `operator_output_persistence_allowed`, `social_engineering_allowed`,
 `denial_of_service_allowed`, and `destructive_testing_allowed`.
 Absence SHALL normalize to false; any non-boolean value MUST fail with
-`INVALID_SCHEMA`.
+`INVALID_DOCUMENT_STRUCTURE`.
 
 #### Scenario: Profiles do not alter a materialized decision input
 - **WHEN** two contract values differ only by profile and have identical materialized policy fields
@@ -113,11 +113,20 @@ The `hackbot-authority-v1` projection SHALL include normalized security fields
 from program, scope, actions, the P6 workflow slot, and the runner security
 view. Before P6, the workflow slot SHALL be exactly null.
 
-The runner security view SHALL include role, canonical node identity, SSH host,
-port and user, pinned host-key SHA-256 fingerprint, helper absolute path,
-helper protocol version and digest, operating system, architecture, permitted
-privileges, source-identity mode, and egress-attestation identity. It SHALL
-exclude private-key content/path and connection timeout.
+The runner security view SHALL consume the code-owned projection field registry
+and include role; canonical node identity; SSH host, port, user, identity,
+known-hosts path, pinned host-key SHA-256 fingerprint, and fixed security
+options; helper absolute path, protocol version, and each configured trust
+selector (`sha256` and/or `code_signing_identity`); operating system;
+architecture; permitted privileges; source-identity mode and address; the
+complete configured egress-attestation tuple (adapter path, adapter binary
+SHA-256, signer public-key fingerprint, and maximum observation age); and the
+privilege signer public-key fingerprint.
+
+Only the operational local SSH private-key path/content and connection timeout
+SHALL be excluded from the runner security view. Private-key content SHALL NOT
+be representable in runner schema v2. The authority exclusions below remain
+unchanged.
 
 The projection SHALL exclude `authorization.json` itself, confirmation
 timestamp, confirmer, note, secret references/values, evidence, and runtime
@@ -141,8 +150,8 @@ projection bytes.
 Authorization schema v2 SHALL require `confirmed`, `confirmation_timestamp`,
 `confirmed_by`, `confirmed_authority_digest`, and `note`. A false confirmation
 MUST return `DENY_AUTHORIZATION_UNCONFIRMED`. A malformed digest MUST return
-`INVALID_SCHEMA`. A well-formed digest unequal to the frozen authority snapshot
-MUST return `DENY_AUTHORIZATION_STALE`.
+`INVALID_DOCUMENT_STRUCTURE`. A well-formed digest unequal to the frozen
+authority snapshot MUST return `DENY_AUTHORIZATION_STALE`.
 
 Confirmation SHALL bind the engagement as a whole and SHALL NOT create a
 per-action approval or L3 grant.

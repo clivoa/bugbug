@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
 import pytest
 
+import hackbot.engagement_v2.constants as constants
 from hackbot.engagement_v2.canonical import (
     authority_digest,
     canonical_bytes,
@@ -142,3 +144,56 @@ def test_authority_fixture_is_frozen_canonical_bytes_and_digest() -> None:
 
     assert canonical_bytes(projection) == expected_bytes
     assert authority_digest(projection) == expected_digest
+
+
+def test_caller_normalizes_set_like_inputs_while_canonical_argv_stays_ordered() -> None:
+    fixture = json.loads(
+        (FIXTURE_DIRECTORY / "caller-normalized-collections.json").read_text(encoding="utf-8")
+    )
+
+    assert fixture["set_like_input"] == [
+        "packet-capture",
+        "network-raw",
+        "packet-capture",
+    ]
+    projection = fixture["canonical_projection"]
+    assert projection == {
+        "argv": ["/opt/example.invalid/bin/tool", "--second", "--first"],
+        "permitted_privileges": ["network-raw", "packet-capture"],
+    }
+    assert projection["permitted_privileges"] == sorted(set(fixture["set_like_input"]))
+    assert canonical_bytes(projection) == (
+        b'{"argv":["/opt/example.invalid/bin/tool","--second","--first"],'
+        b'"permitted_privileges":["network-raw","packet-capture"]}'
+    )
+
+
+def test_runner_security_projection_golden_vector_binds_every_registered_field() -> None:
+    projection_path = FIXTURE_DIRECTORY / "runner-security-projection.json"
+    digest_path = FIXTURE_DIRECTORY / "runner-security-authority-digest.txt"
+    projection = json.loads(projection_path.read_text(encoding="utf-8"))
+    expected_digest = digest_path.read_text(encoding="ascii").removesuffix("\n")
+
+    assert authority_digest(projection) == expected_digest
+    assert expected_digest == (
+        "sha256:ad39a9a43757e3e0c2305942e061120d92223fdb0229da981f67afde5bee0a2c"
+    )
+
+    for field in constants.RUNNER_SECURITY_PROJECTION_FIELDS:
+        changed = copy.deepcopy(projection)
+        path = field.split(".")
+        parent = changed
+        for segment in path[:-1]:
+            parent = parent[segment]
+        value = parent[path[-1]]
+        if type(value) is bool:
+            replacement: object = not value
+        elif type(value) is int:
+            replacement = value + 1
+        elif type(value) is list:
+            replacement = [*value, "superuser"]
+        else:
+            replacement = f"{value}-changed"
+        parent[path[-1]] = replacement
+
+        assert authority_digest(changed) != expected_digest, field

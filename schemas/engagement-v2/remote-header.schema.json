@@ -10,7 +10,7 @@
     "argv_token": {
       "maxLength": 4096,
       "minLength": 1,
-      "pattern": "^(?:[^{}]+|\\{(?:value|target|targets_file|artifact_file|secret_file):[a-z0-9]+(?:[._-][a-z0-9]+)*\\})$",
+      "pattern": "^(?:[^{}]+|\\{(?:value|target|targets_file|artifact_file|secret_file):[a-z][a-z0-9_]{0,63}\\})$",
       "type": "string",
       "x-hackbot-max-utf8-bytes": 4096
     },
@@ -231,6 +231,7 @@
     "stderr_cap_bytes"
   ],
   "type": "object",
+  "x-hackbot-canonical-format": "hackbot-canonical-json-v1",
   "x-hackbot-ed25519-public-key-bytes": 32,
   "x-hackbot-ed25519-signature-bytes": 64,
   "x-hackbot-max-clock-skew-seconds": 30,

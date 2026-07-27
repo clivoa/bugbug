@@ -254,6 +254,10 @@ def test_contract_document_declares_v2_unavailable() -> None:
     assert 'b"HBV2RUN\\x00"' in text
     assert "600 seconds after expiry" in text
     assert "until a longer in-progress run finalizes" in text
+    assert (
+        "| `protocol` | Immutable `FrameType`, `Frame`, `FramedMessage`, `RunBinding`, "
+        "plus `write_message`, `read_message`, and `response_chain`. |"
+    ) in text
 
 
 def test_next_steps_separates_historical_v1_snapshot_from_p0_status() -> None:

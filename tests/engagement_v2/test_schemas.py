@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from scripts import export_engagement_v2_schemas as exporter
 
+import hackbot.engagement_v2.constants as contract
 import hackbot.engagement_v2.schemas as schemas
 from hackbot.engagement_v2.schemas import render_schema_files, schema_documents
 
@@ -99,6 +100,9 @@ def test_schema_set_draft_ids_and_object_closure_are_exact() -> None:
     )
     assert not [default for document in docs.values() for default in _schema_defaults(document)]
     assert all(document["x-hackbot-max-document-nesting-depth"] == 32 for document in docs.values())
+    assert {
+        name: document.get("x-hackbot-canonical-format") for name, document in docs.items()
+    } == {name: "hackbot-canonical-json-v1" for name in EXPECTED_IDS}
 
 
 def test_every_local_json_pointer_reference_resolves_within_its_document() -> None:
@@ -298,6 +302,45 @@ def test_identifier_digest_and_authorization_contracts_are_exact() -> None:
         "x-hackbot-max-utf8-bytes": 71,
     }
     assert authorization["properties"]["confirmed_authority_digest"] == {"$ref": "#/$defs/digest"}
+
+
+def test_binding_names_are_snake_case_while_value_identifiers_remain_general() -> None:
+    docs = schema_documents()
+    actions = docs["actions.schema.json"]
+    request = docs["action-request.schema.json"]
+    defs = actions["$defs"]
+    action = defs["action"]
+    binding_name = defs["binding_name"]
+
+    assert binding_name == {
+        "maxLength": 64,
+        "pattern": "^[a-z][a-z0-9_]{0,63}$",
+        "type": "string",
+        "x-hackbot-max-utf8-bytes": 64,
+    }
+    binding_pattern = re.compile(binding_name["pattern"], re.ASCII)
+    for invalid in ("1-target", "target-name", "target.name"):
+        assert binding_pattern.fullmatch(invalid) is None
+    assert binding_pattern.fullmatch("target_name")
+
+    mapping_pattern = "^[a-z][a-z0-9_]{0,63}$"
+    assert set(action["properties"]["parameters"]["patternProperties"]) == {mapping_pattern}
+    assert set(action["properties"]["secrets"]["patternProperties"]) == {mapping_pattern}
+    assert set(request["properties"]["parameters"]["patternProperties"]) == {mapping_pattern}
+    assert action["properties"]["targets"]["items"]["properties"]["parameter"] == {
+        "$ref": "#/$defs/binding_name"
+    }
+    assert action["properties"]["rate_control"]["properties"]["rate_parameter"] == {
+        "$ref": "#/$defs/binding_name"
+    }
+    assert action["properties"]["rate_control"]["properties"]["concurrency_parameter"] == {
+        "$ref": "#/$defs/binding_name"
+    }
+
+    value_identifier = re.compile(defs["identifier"]["pattern"], re.ASCII)
+    assert value_identifier.fullmatch("operator.probe-1")
+    assert value_identifier.fullmatch("runner.example")
+    assert re.fullmatch(defs["secret_reference"]["pattern"], "secret:operator.token-1", re.ASCII)
 
 
 def test_action_enums_parameter_bounds_and_collection_caps_are_exact() -> None:
@@ -513,6 +556,9 @@ def test_argv_schema_allows_only_literal_or_whole_token_placeholders() -> None:
     assert pattern.fullmatch("{targets_file:hosts}")
     assert pattern.fullmatch("{artifact_file:script}")
     assert pattern.fullmatch("{secret_file:bind_password}")
+    assert pattern.fullmatch("{target:1-target}") is None
+    assert pattern.fullmatch("{target:target-name}") is None
+    assert pattern.fullmatch("{target:target.name}") is None
     assert pattern.fullmatch("--target={target:host}") is None
     assert pattern.fullmatch("{unknown:host}") is None
     assert pattern.fullmatch("unmatched{") is None
@@ -578,6 +624,15 @@ def test_runner_security_view_and_remote_protocol_limits_are_exact() -> None:
         "const": 1,
         "type": "integer",
     }
+    assert runner["properties"]["egress_attestation"]["oneOf"][1]["required"] == [
+        "adapter_path",
+        "adapter_sha256",
+        "signer_public_key_fingerprint",
+        "max_observation_age_seconds",
+    ]
+    assert runner["properties"]["egress_attestation"]["oneOf"][1]["properties"][
+        "max_observation_age_seconds"
+    ] == {"const": 60, "type": "integer"}
     assert runner["x-hackbot-max-document-bytes"] == 1048576
     assert remote["properties"]["run_id"] == {"$ref": "#/$defs/run_id"}
     assert remote["$defs"]["run_id"]["pattern"] == (
@@ -612,6 +667,41 @@ def test_runner_security_view_and_remote_protocol_limits_are_exact() -> None:
     assert remote["x-hackbot-ed25519-signature-bytes"] == 64
     assert remote["x-hackbot-nonce-bytes"] == 32
     assert remote["x-hackbot-max-egress-observation-age-seconds"] == 60
+
+
+def test_runner_schema_leaf_fields_match_the_security_projection_registry() -> None:
+    runner = schema_documents()["runner.schema.json"]
+
+    def leaf_paths(node: object, prefix: str = "") -> set[str]:
+        assert isinstance(node, dict)
+        properties = node.get("properties")
+        if isinstance(properties, dict):
+            return {
+                path
+                for name, child in properties.items()
+                for path in leaf_paths(child, f"{prefix}.{name}" if prefix else name)
+            }
+        alternatives = node.get("oneOf")
+        if isinstance(alternatives, list):
+            object_alternatives = [
+                alternative
+                for alternative in alternatives
+                if isinstance(alternative, dict) and isinstance(alternative.get("properties"), dict)
+            ]
+            if object_alternatives:
+                return {
+                    path
+                    for alternative in object_alternatives
+                    for path in leaf_paths(alternative, prefix)
+                }
+        return {prefix}
+
+    assert leaf_paths(runner) == {
+        "schema_version",
+        *contract.RUNNER_SECURITY_PROJECTION_FIELDS,
+        *contract.RUNNER_SECURITY_PROJECTION_EXCLUDED_FIELDS,
+    }
+    assert "ssh.private_key_content" not in leaf_paths(runner)
 
 
 def test_remote_header_urn_tracks_protocol_version(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -670,6 +760,63 @@ def test_exporter_writes_private_files_and_check_reports_no_drift(
         path.name: (path.read_bytes(), path.stat().st_mtime_ns) for path in destination.iterdir()
     }
     assert after == before
+
+
+def test_exporter_publishes_schema_documents_before_manifest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "engagement-v2"
+    attempted: list[str] = []
+
+    def observe(name: str) -> None:
+        attempted.append(name)
+
+    monkeypatch.setattr(exporter, "_before_replace", observe)
+
+    exporter._write_files(destination, render_schema_files())
+
+    assert attempted == [
+        "action-request.schema.json",
+        "actions.schema.json",
+        "authorization.schema.json",
+        "program.schema.json",
+        "remote-header.schema.json",
+        "runner.schema.json",
+        "scope.schema.json",
+        "manifest.json",
+    ]
+
+
+def test_exporter_never_publishes_manifest_after_a_schema_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "engagement-v2"
+    destination.mkdir()
+    old_manifest = b'{"contract":"old"}\n'
+    (destination / "manifest.json").write_bytes(old_manifest)
+    attempted: list[str] = []
+
+    def fail_on_runner(name: str) -> None:
+        attempted.append(name)
+        if name == "runner.schema.json":
+            raise OSError("synthetic schema publication failure")
+
+    monkeypatch.setattr(exporter, "_before_replace", fail_on_runner)
+
+    with pytest.raises(OSError, match="synthetic schema publication failure"):
+        exporter._write_files(destination, render_schema_files())
+
+    assert attempted == [
+        "action-request.schema.json",
+        "actions.schema.json",
+        "authorization.schema.json",
+        "program.schema.json",
+        "remote-header.schema.json",
+        "runner.schema.json",
+    ]
+    assert (destination / "manifest.json").read_bytes() == old_manifest
 
 
 def test_exporter_check_performs_zero_writes_and_lists_sorted_drift(

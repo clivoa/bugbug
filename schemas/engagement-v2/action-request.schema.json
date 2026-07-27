@@ -1,5 +1,11 @@
 {
   "$defs": {
+    "binding_name": {
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 64
+    },
     "digest": {
       "maxLength": 71,
       "minLength": 71,
@@ -124,5 +130,6 @@
     "cleanup_plan"
   ],
   "type": "object",
+  "x-hackbot-canonical-format": "hackbot-canonical-json-v1",
   "x-hackbot-max-document-nesting-depth": 32
 }

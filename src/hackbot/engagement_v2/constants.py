@@ -66,7 +66,8 @@ POLICY_BOOLEAN_FIELDS = frozenset(
 
 # Strict identifiers and digests. Only contract identifier/digest syntax is
 # compiled here; the safe user-supplied pattern language belongs to Task 3.
-MAPPING_KEY_PATTERN = re.compile(r"[a-z][a-z0-9_]{0,63}", re.ASCII)
+BINDING_NAME_PATTERN = re.compile(r"[a-z][a-z0-9_]{0,63}", re.ASCII)
+MAPPING_KEY_PATTERN = BINDING_NAME_PATTERN
 IDENTIFIER_PATTERN = re.compile(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", re.ASCII)
 SECRET_REFERENCE_PATTERN = re.compile(r"secret:[a-z0-9]+(?:[._-][a-z0-9]+)*", re.ASCII)
 AUTHORITY_DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}", re.ASCII)
@@ -123,6 +124,7 @@ MAX_ACTION_VULNERABILITY_TYPES = 64
 MAX_ACTION_IMPACTS = 64
 MAX_ARGV_TOKENS = 128
 MAX_IDENTIFIER_BYTES = 128
+MAX_BINDING_NAME_BYTES = 64
 MAX_SCALAR_OR_TARGET_BYTES = 2_048
 MIN_UTF8_STRING_BYTES = 1
 MAX_UTF8_STRING_BYTES = 8_192
@@ -370,3 +372,41 @@ class SourceIdentityMode(str, Enum):
 MAX_EGRESS_OBSERVATION_AGE_SECONDS = 60
 HELPER_RUN_DIRECTORY_MODE = 0o700
 HELPER_FILE_MODE = 0o600
+
+# P1 consumes this exact registry when constructing the confirmed runner
+# security view. P0 freezes only the projection contract and golden vector.
+RUNNER_SECURITY_PROJECTION_FIELDS = (
+    "role",
+    "node_identity",
+    "ssh.host",
+    "ssh.port",
+    "ssh.user",
+    "ssh.identity",
+    "ssh.known_hosts_path",
+    "ssh.host_key_sha256",
+    "ssh.options.batch_mode",
+    "ssh.options.identities_only",
+    "ssh.options.strict_host_key_checking",
+    "ssh.options.agent_forwarding",
+    "ssh.options.x11_forwarding",
+    "ssh.options.port_forwarding",
+    "ssh.options.tty",
+    "helper.path",
+    "helper.protocol_version",
+    "helper.sha256",
+    "helper.code_signing_identity",
+    "operating_system",
+    "architecture",
+    "permitted_privileges",
+    "source_identity.mode",
+    "source_identity.address",
+    "egress_attestation.adapter_path",
+    "egress_attestation.adapter_sha256",
+    "egress_attestation.signer_public_key_fingerprint",
+    "egress_attestation.max_observation_age_seconds",
+    "privilege_signer_public_key_fingerprint",
+)
+RUNNER_SECURITY_PROJECTION_EXCLUDED_FIELDS = (
+    "ssh.private_key_path",
+    "ssh.connection_timeout_seconds",
+)

@@ -105,6 +105,12 @@ helper command.
 commands, and action-controlled remote command text MUST be absent.
 Helper self-report SHALL NOT satisfy helper identity.
 
+The confirmed runner-security projection SHALL bind the SSH identity and fixed
+security options, helper path/protocol and each configured `sha256` and/or
+`code_signing_identity` selector, and all other fields named by the code-owned
+runner-security projection registry. Only local private-key path/content and
+connection timeout are operational exclusions.
+
 #### Scenario: Host key mismatch stops before protocol
 - **WHEN** the server host key differs from the confirmed fingerprint
 - **THEN** SSH fails with `EXEC_TRUST_MISMATCH` and sends no secret frame
@@ -159,11 +165,15 @@ state, or cleanup SHALL be labeled `unverified-self-report`.
 Source identity modes SHALL be exactly `none`, `direct-interface`, and
 `attested-egress`. `direct-interface` SHALL prove only an address directly
 assigned to the execution node. `attested-egress` SHALL require a confirmed,
-pinned adapter identity and a signed observation bound to run ID, nonce,
-execution digest, observed address, and observation time.
+pinned adapter absolute path, adapter binary SHA-256, signer public-key
+fingerprint, and maximum 60-second observation-age bound. A signed observation
+SHALL bind run ID, nonce, execution digest, observed address, and observation
+time.
 
 The egress observation SHALL use the same Ed25519 signed-envelope format as a
 privilege permit and SHALL be valid for at most 60 seconds from observation.
+The complete configured egress-attestation trust tuple and the source-identity
+mode/address SHALL be part of the confirmed runner-security projection.
 
 An interface address SHALL NOT satisfy a required NAT/public egress claim.
 Missing, stale, mismatched, or self-reported egress evidence MUST fail with
