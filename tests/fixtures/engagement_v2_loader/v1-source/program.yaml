@@ -1,0 +1,9 @@
+schema_version: 1
+program:
+  name: example-internal
+  platform: private
+testing_rules:
+  max_requests_per_second: 10
+  concurrency: 4
+  automated_scanning_allowed: true
+  denial_of_service_allowed: false

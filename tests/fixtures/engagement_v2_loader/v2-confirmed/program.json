@@ -1,0 +1,24 @@
+{
+  "profile": "private-pentest",
+  "program": {
+    "name": "example.internal",
+    "platform": "private",
+    "source": "operator"
+  },
+  "reporting": {
+    "duplicate_policy": "first-wins"
+  },
+  "schema_version": 2,
+  "testing_rules": {
+    "authenticated_testing_allowed": true,
+    "concurrency": 4,
+    "destructive_testing_allowed": false,
+    "max_requests_per_second": 10,
+    "max_targets_per_action": 256,
+    "output_cap_bytes": 2097152,
+    "prohibited_tools": [
+      "metasploit"
+    ],
+    "timeout_seconds": 60
+  }
+}
