@@ -53,6 +53,14 @@ its exact P0 reason code.
 - **WHEN** `scope.yaml` contains a YAML alias, merge key, or explicit tag
 - **THEN** decoding fails with `INVALID_DOCUMENT_STRUCTURE` and no snapshot is produced
 
+#### Scenario: Unknown nested field rejected
+- **WHEN** a scope section contains an unrecognized scope kind, or `testing_rules` contains an unrecognized field
+- **THEN** validation fails with `INVALID_UNKNOWN_FIELD` and no snapshot is produced
+
+#### Scenario: Structurally malformed value stays inside the reason-code contract
+- **WHEN** a scope kind holds a scalar instead of a list, or a scope section is not a mapping
+- **THEN** validation fails with `INVALID_DOCUMENT_STRUCTURE` (never an uncaught error) and no snapshot is produced
+
 ### Requirement: Confirmed-authority verification
 After building a candidate snapshot the loader SHALL recompute the P0
 `authority_digest` over the canonical security-relevant projection of that

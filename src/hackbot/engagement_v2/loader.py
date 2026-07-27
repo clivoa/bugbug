@@ -26,6 +26,7 @@ from hackbot.engagement_v2.constants import (
     MAX_PROGRAM_DOCUMENT_BYTES,
     MAX_RUNNER_DOCUMENT_BYTES,
     MAX_SCOPE_DOCUMENT_BYTES,
+    POLICY_BOOLEAN_FIELDS,
     PROGRAM_SCHEMA_VERSION,
     RUNNER_SCHEMA_VERSION,
     SCOPE_SCHEMA_VERSION,
@@ -248,6 +249,55 @@ def _reject_unknown_fields(document: Mapping[str, object], allowed: frozenset[st
             raise ContractError(ReasonCode.INVALID_UNKNOWN_FIELD)
 
 
+_SCOPE_KINDS = frozenset(
+    {
+        "domains",
+        "wildcard_domains",
+        "urls",
+        "hosts",
+        "cidrs",
+        "network_endpoints",
+        "mobile_apps",
+        "repositories",
+        "contracts",
+    }
+)
+_TESTING_RULES_FIELDS = frozenset(
+    POLICY_BOOLEAN_FIELDS
+    | {
+        "max_requests_per_second",
+        "concurrency",
+        "timeout_seconds",
+        "output_cap_bytes",
+        "max_targets_per_action",
+        "excluded_impacts",
+        "prohibited_tools",
+        "prohibited_vulnerability_types",
+        "required_headers",
+        "source_ip_requirements",
+        "restricted_hours",
+    }
+)
+
+
+def _validate_nested_fields(program: Mapping[str, object], scope: Mapping[str, object]) -> None:
+    """Reject unknown nested keys and non-mapping sections with exact codes."""
+
+    testing_rules = program.get("testing_rules")
+    if not isinstance(testing_rules, Mapping):
+        raise ContractError(ReasonCode.INVALID_DOCUMENT_STRUCTURE)
+    for key in testing_rules:
+        if key not in _TESTING_RULES_FIELDS:
+            raise ContractError(ReasonCode.INVALID_UNKNOWN_FIELD)
+    for section_key in ("in_scope", "out_of_scope"):
+        section = scope.get(section_key)
+        if not isinstance(section, Mapping):
+            raise ContractError(ReasonCode.INVALID_DOCUMENT_STRUCTURE)
+        for key in section:
+            if key not in _SCOPE_KINDS:
+                raise ContractError(ReasonCode.INVALID_UNKNOWN_FIELD)
+
+
 def _resolve(engagement_dir: Path, stem: str, suffixes: tuple[str, ...]) -> Path | None:
     for suffix in suffixes:
         candidate = engagement_dir / f"{stem}{suffix}"
@@ -333,8 +383,16 @@ def load_engagement(engagement_dir: str | os.PathLike[str]) -> EngagementSnapsho
     )
     assert program is not None and scope is not None and authorization is not None
 
-    projection = security_projection(program=program, scope=scope, runner=runner)
-    computed_digest = projection_digest(projection)
+    _validate_nested_fields(program, scope)
+    try:
+        projection = security_projection(program=program, scope=scope, runner=runner)
+        computed_digest = projection_digest(projection)
+    except ContractError:
+        raise
+    except (TypeError, ValueError) as exc:
+        # A structurally malformed authority value (e.g. a scalar where a scope
+        # kind expects a list) stays inside the closed reason-code contract.
+        raise ContractError(ReasonCode.INVALID_DOCUMENT_STRUCTURE) from exc
     _verify_confirmation(authorization, computed_digest)
 
     identity = engagement_identity(computed_digest)

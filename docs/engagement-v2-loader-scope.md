@@ -98,6 +98,9 @@ incompatible kind:
 - `domains`/`wildcard_domains` authorize domain operations and HTTP(S) URLs on
   matching names only; a wildcard matches strict subdomains, not the apex.
 - `urls` authorize the matching HTTP(S) host with segment-aware path matching.
+  The target path is percent-decoded and dot-segment normalized before the
+  prefix comparison, so `/admin/../secret` (or `%2e%2e`) cannot inherit a scoped
+  prefix's authorization.
 - `hosts` authorize the exact host (no suffix matching) and network endpoints on
   that exact hostname.
 - `network_endpoints` authorize only the exact scheme, host, and port.
@@ -105,6 +108,11 @@ incompatible kind:
   a hostname that would merely resolve into the CIDR is denied
   `dns-resolution-not-authoritative`. Exclusions deny on network overlap and win
   over any in-scope match; IPv4 and IPv6 are compared within their own family.
+
+Exclusions are **kind-agnostic** (deny-wins): any out-of-scope rule naming a
+host — `domains`, `wildcard_domains`, `hosts`, `urls`, or `network_endpoints` —
+removes that host for every protocol, not only for the rule kind that would
+authorize it.
 
 Discovered targets are hypotheses: they are authorized only if they
 independently match an in-scope rule and no exclusion. Mutable DNS/PTR/cert data

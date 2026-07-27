@@ -146,6 +146,47 @@ def test_unknown_top_level_field_rejected(tmp_path: Path) -> None:
     assert _reason(excinfo) is ReasonCode.INVALID_UNKNOWN_FIELD
 
 
+def test_unknown_scope_kind_rejected(tmp_path: Path) -> None:
+    scope = scope_doc()
+    scope["in_scope"]["subdomains"] = ["x.corp.example"]
+    write_engagement(tmp_path, scope=scope)
+    with pytest.raises(ContractError) as excinfo:
+        load_engagement(tmp_path)
+    assert _reason(excinfo) is ReasonCode.INVALID_UNKNOWN_FIELD
+
+
+def test_unknown_testing_rules_field_rejected(tmp_path: Path) -> None:
+    program = program_doc()
+    program["testing_rules"]["bogus_rule"] = True
+    write_engagement(tmp_path, program=program)
+    with pytest.raises(ContractError) as excinfo:
+        load_engagement(tmp_path)
+    assert _reason(excinfo) is ReasonCode.INVALID_UNKNOWN_FIELD
+
+
+def test_scalar_scope_kind_maps_to_contract_error(tmp_path: Path) -> None:
+    write_engagement(tmp_path)
+    # A scalar where a scope kind expects a list must stay inside the closed
+    # reason-code contract (not a bare TypeError).
+    (tmp_path / "scope.json").write_text(
+        '{"schema_version": 2, "in_scope": {"domains": "app.corp.example"}, "out_of_scope": {}}',
+        encoding="utf-8",
+    )
+    with pytest.raises(ContractError) as excinfo:
+        load_engagement(tmp_path)
+    assert _reason(excinfo) is ReasonCode.INVALID_DOCUMENT_STRUCTURE
+
+
+def test_non_mapping_scope_section_rejected(tmp_path: Path) -> None:
+    write_engagement(tmp_path)
+    (tmp_path / "scope.json").write_text(
+        '{"schema_version": 2, "in_scope": [], "out_of_scope": {}}', encoding="utf-8"
+    )
+    with pytest.raises(ContractError) as excinfo:
+        load_engagement(tmp_path)
+    assert _reason(excinfo) is ReasonCode.INVALID_DOCUMENT_STRUCTURE
+
+
 def test_float_rejected(tmp_path: Path) -> None:
     write_engagement(tmp_path)
     (tmp_path / "scope.json").write_text(

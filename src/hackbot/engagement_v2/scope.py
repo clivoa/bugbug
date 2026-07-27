@@ -10,10 +10,11 @@ machine-readable reason. The engine performs no network or DNS resolution.
 from __future__ import annotations
 
 import ipaddress
+import posixpath
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 _HTTP_SCHEMES = frozenset({"http", "https"})
 _HOSTNAME_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_")
@@ -47,6 +48,18 @@ class _Target:
     ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None = None
 
 
+def _normalize_path(path: str) -> str:
+    """Return a dot-segment-normalized, percent-decoded, root-anchored path.
+
+    Percent-encoding is decoded and ``.``/``..`` segments are collapsed before
+    any prefix comparison, so a traversal such as ``/admin/../secret`` (or its
+    ``%2e%2e`` encoding) cannot inherit a scoped prefix's authorization.
+    """
+
+    decoded = unquote(path or "/")
+    return posixpath.normpath("/" + decoded.lstrip("/"))
+
+
 def _parse_target(target: str) -> _Target | None:
     if not target or any(character.isspace() for character in target):
         return None
@@ -61,7 +74,7 @@ def _parse_target(target: str) -> _Target | None:
         except ValueError:
             return None
         if scheme in _HTTP_SCHEMES:
-            return _Target(kind="url", host=host, scheme=scheme, path=parts.path or "/")
+            return _Target(kind="url", host=host, scheme=scheme, path=_normalize_path(parts.path))
         if port is None:
             # Network endpoints require an explicit port.
             return None
@@ -112,10 +125,32 @@ def _url_matches(host: str, path: str, section: Mapping[str, object]) -> bool:
         parts = urlsplit(rule)
         if (parts.hostname or "").lower() != host:
             continue
-        rule_path = parts.path or "/"
+        rule_path = _normalize_path(parts.path)
         if path == rule_path or path.startswith(rule_path.rstrip("/") + "/"):
             return True
     return False
+
+
+def _rule_host(rule: str) -> str:
+    return (urlsplit(rule).hostname or "").lower()
+
+
+def _host_excluded(host: str, section: Mapping[str, object]) -> bool:
+    """Deny-wins: any out-of-scope rule naming this host excludes it.
+
+    Exclusions are kind-agnostic so an operator's ``hosts``/``urls``/
+    ``network_endpoints``/``domains`` exclusion for a host blocks every protocol
+    to that host, not only the same rule kind that would authorize it.
+    """
+
+    if _domain_matches(host, section) or _host_matches(host, section):
+        return True
+    host = host.lower()
+    return any(
+        _rule_host(rule) == host
+        for kind in ("urls", "network_endpoints")
+        for rule in _entries(section, kind)
+    )
 
 
 def _endpoint_matches(target: _Target, section: Mapping[str, object]) -> bool:
@@ -172,14 +207,11 @@ class ScopeV2:
         if target.kind == "ip":
             assert target.ip is not None
             return _ip_in_section_cidrs(target.ip, section)
-        if target.kind == "name":
-            return _domain_matches(target.host, section) or _host_matches(target.host, section)
-        if target.kind == "url":
-            return _domain_matches(target.host, section) or _url_matches(
-                target.host, target.path, section
-            )
-        # endpoint
-        return _endpoint_matches(target, section) or _host_matches(target.host, section)
+        # Deny-wins across kinds: any out-of-scope rule naming this host, plus an
+        # exact endpoint exclusion, removes the target.
+        return _host_excluded(target.host, section) or (
+            target.kind == "endpoint" and _endpoint_matches(target, section)
+        )
 
     def _included(self, raw: str, target: _Target) -> ScopeV2Decision:
         section = self._in_scope
