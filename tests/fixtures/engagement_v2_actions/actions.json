@@ -1,0 +1,58 @@
+{
+  "actions": [
+    {
+      "architectures": [
+        "x86_64"
+      ],
+      "argv": [
+        "--rate",
+        "{value:rate}",
+        "--target",
+        "{target:url}"
+      ],
+      "capabilities": [
+        "automated-scanning"
+      ],
+      "characteristics": {},
+      "evidence_policy": {
+        "mode": "metadata-only"
+      },
+      "executables": {
+        "linux": "/usr/bin/curl"
+      },
+      "id": "operator.http-probe",
+      "impacts": [],
+      "parameters": {
+        "concurrency": {
+          "maximum": 16,
+          "minimum": 1,
+          "required": true,
+          "type": "integer"
+        },
+        "rate": {
+          "maximum": 100,
+          "minimum": 1,
+          "required": true,
+          "type": "integer"
+        }
+      },
+      "platforms": [
+        "linux"
+      ],
+      "rate_control": {
+        "concurrency_parameter": "concurrency",
+        "kind": "argv-placeholder",
+        "rate_parameter": "rate"
+      },
+      "required_privileges": [],
+      "risk": "L1",
+      "secrets": {},
+      "targets": [
+        "url"
+      ],
+      "title": "HTTP probe",
+      "vulnerability_types": []
+    }
+  ],
+  "schema_version": 1
+}
