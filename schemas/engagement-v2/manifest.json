@@ -1,0 +1,40 @@
+{
+  "contract": "hackbot-engagement-v2-schemas-v1",
+  "files": [
+    {
+      "name": "action-request.schema.json",
+      "schema_id": "urn:hackbot:schema:engagement-v2:action-request:2",
+      "sha256": "a59ab764fd88e743c25ff6475def27e050a5be06799560cb2d3faf807a92f4b4"
+    },
+    {
+      "name": "actions.schema.json",
+      "schema_id": "urn:hackbot:schema:engagement-v2:actions:1",
+      "sha256": "cc00fc9e98509a38dc20d3609181eaf2de604af4dbff945f1b08f036e9d49b8f"
+    },
+    {
+      "name": "authorization.schema.json",
+      "schema_id": "urn:hackbot:schema:engagement-v2:authorization:2",
+      "sha256": "77a640f7cd5bf9468dfc26536dc00fdfe478afa922ab02343e83e41c2fc70df5"
+    },
+    {
+      "name": "program.schema.json",
+      "schema_id": "urn:hackbot:schema:engagement-v2:program:2",
+      "sha256": "dc145a424dce14f295b1756eaeef2ea5518f0f67bfc96828bcd6b28dc4978c7d"
+    },
+    {
+      "name": "remote-header.schema.json",
+      "schema_id": "urn:hackbot:schema:engagement-v2:remote-header:1",
+      "sha256": "4bd1620cf11b9f5f22dc999aa59b805453b1839fc813424d14f475b84b4baa32"
+    },
+    {
+      "name": "runner.schema.json",
+      "schema_id": "urn:hackbot:schema:engagement-v2:runner:2",
+      "sha256": "f04cc4f35fa23494e4745a2686f47dec8a3337d3eb2b874f7c195de722904d16"
+    },
+    {
+      "name": "scope.schema.json",
+      "schema_id": "urn:hackbot:schema:engagement-v2:scope:2",
+      "sha256": "3204a3ad7395813989b856d0d49f0174aa07de98d0a4199c1f4e40ed39d625cf"
+    }
+  ]
+}

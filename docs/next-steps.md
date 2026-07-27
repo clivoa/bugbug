@@ -1,12 +1,13 @@
 # Next steps
 
-Status snapshot after the SSH remote runner. Use this as the starting point for
-the next phase.
+Status snapshot after P0 engagement-v2 security contracts. Use the current P0
+status below for the next phase.
 
-## Where the project stands
+## Historical v1 verification snapshot
 
-Implemented and verified (912 tests passing; 913 collected with 1 known nmap
-skip; Ruff/format/mypy clean; offline smoke pass):
+The following is the recorded v1 snapshot: 912 tests passing, 913 collected
+with 1 known nmap skip, Ruff/format/mypy clean, and an offline smoke pass. It
+predates P0 and is not a current P0 full-verification claim.
 
 - **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
 - **Programs / engagements** (`src/hackbot/programs/`) — strict local
@@ -43,6 +44,18 @@ skip; Ruff/format/mypy clean; offline smoke pass):
   allowlisted placeholders, and fail-before-output validation; see
   [`findings-and-reporting.md`](findings-and-reporting.md).
 - **Secrets** (OS keychain), **doctor**, wheel build + offline smoke test.
+
+## Current P0 status
+
+- **P0 engagement v2 security contracts** (`src/hackbot/engagement_v2/`) —
+  active **Ready** OpenSpec change with isolated constants, canonical values and
+  digests, safe patterns, generated schemas, fixtures, and bounded framing;
+  see [`engagement-v2-contracts.md`](engagement-v2-contracts.md). P0 does not
+  enable engagement v2 execution: schema v1 remains current. P1–P7 remain
+  dependent on this contract boundary.
+
+Task 8 full verification and delivery remain pending. Do not publish a new
+full-suite count until that task records fresh results.
 
 The only executing path is the gate-bound substrate above; there is still no
 provider call or MCP.

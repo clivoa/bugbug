@@ -1,0 +1,67 @@
+{
+  "$defs": {
+    "digest": {
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 71
+    },
+    "identifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 128
+    },
+    "strict_boolean": {
+      "type": "boolean"
+    },
+    "target": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 2048
+    }
+  },
+  "$id": "urn:hackbot:schema:engagement-v2:authorization:2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "confirmation_timestamp": {
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$",
+      "type": "string"
+    },
+    "confirmed": {
+      "$ref": "#/$defs/strict_boolean"
+    },
+    "confirmed_authority_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "confirmed_by": {
+      "$ref": "#/$defs/identifier"
+    },
+    "note": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 8192
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "confirmed",
+    "confirmation_timestamp",
+    "confirmed_by",
+    "confirmed_authority_digest",
+    "note"
+  ],
+  "type": "object",
+  "x-hackbot-canonical-format": "hackbot-canonical-json-v1",
+  "x-hackbot-max-document-bytes": 1048576,
+  "x-hackbot-max-document-nesting-depth": 32
+}

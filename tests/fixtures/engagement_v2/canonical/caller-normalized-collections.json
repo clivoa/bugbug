@@ -1,0 +1,18 @@
+{
+  "set_like_input": [
+    "packet-capture",
+    "network-raw",
+    "packet-capture"
+  ],
+  "canonical_projection": {
+    "permitted_privileges": [
+      "network-raw",
+      "packet-capture"
+    ],
+    "argv": [
+      "/opt/example.invalid/bin/tool",
+      "--second",
+      "--first"
+    ]
+  }
+}

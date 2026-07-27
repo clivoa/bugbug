@@ -1,0 +1,137 @@
+{
+  "$defs": {
+    "digest": {
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 71
+    },
+    "identifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 128
+    },
+    "scope_section": {
+      "additionalProperties": false,
+      "maxProperties": 9,
+      "properties": {
+        "cidrs": {
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "contracts": {
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "domains": {
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "hosts": {
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "mobile_apps": {
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "network_endpoints": {
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "repositories": {
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "urls": {
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "wildcard_domains": {
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "strict_boolean": {
+      "type": "boolean"
+    },
+    "target": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 2048
+    }
+  },
+  "$id": "urn:hackbot:schema:engagement-v2:scope:2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "in_scope": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/scope_section"
+        },
+        {
+          "minProperties": 1
+        }
+      ]
+    },
+    "out_of_scope": {
+      "$ref": "#/$defs/scope_section"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "in_scope",
+    "out_of_scope"
+  ],
+  "type": "object",
+  "x-hackbot-canonical-format": "hackbot-canonical-json-v1",
+  "x-hackbot-max-document-bytes": 1048576,
+  "x-hackbot-max-document-nesting-depth": 32
+}

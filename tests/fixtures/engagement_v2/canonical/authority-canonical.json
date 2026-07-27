@@ -1,0 +1,1 @@
+{"action":{"argv":["--target","https://scanner.example.invalid/health","--format","json"],"artifact_hash":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","endpoint":"https://scanner.example.invalid/health"},"profile":"private-pentest","schema_version":1}
