@@ -44,6 +44,9 @@ addopts = "-q"
 line-length = 100
 target-version = "py311"
 src = ["src", "tests"]
+# Historical review evidence is retained byte-for-byte; Ruff would otherwise
+# rewrite fenced examples inside the preserved Markdown reports.
+extend-exclude = ["docs/reviews/engagement-v2-p0"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S"]
