@@ -19,6 +19,14 @@ V1_ROOTS = (
 _SOURCE_ROOT = Path("src")
 _V2_MODULE = "hackbot.engagement_v2"
 
+# P1 introduces the first declared v2 consumers reachable from the CLI. Only
+# these modules may import hackbot.engagement_v2; every other v1 module must not.
+_V2_ENTRY_ALLOWLIST = frozenset(
+    {
+        Path("src/hackbot/cli/engagement_cmd.py"),
+    }
+)
+
 
 def _importing_package(path: Path) -> tuple[str, ...]:
     return path.relative_to(_SOURCE_ROOT).with_suffix("").parts[:-1]
@@ -148,14 +156,40 @@ def test_ast_resolves_relative_import_from_a_package_initializer(
     ]
 
 
-def test_v1_source_does_not_import_engagement_v2() -> None:
-    offenders = []
+def _v2_importers() -> set[Path]:
+    importers: set[Path] = set()
     for root in V1_ROOTS:
         for path in root.rglob("*.py"):
-            for line, module in _imported_modules(path):
+            for _line, module in _imported_modules(path):
                 if module == _V2_MODULE or module.startswith(f"{_V2_MODULE}."):
-                    offenders.append(f"{path.as_posix()}:{line} imports {module}")
+                    importers.add(path)
+    return importers
+
+
+def test_v1_source_does_not_import_engagement_v2_outside_allowlist() -> None:
+    offenders = []
+    for path in _v2_importers():
+        if path in _V2_ENTRY_ALLOWLIST:
+            continue
+        for line, module in _imported_modules(path):
+            if module == _V2_MODULE or module.startswith(f"{_V2_MODULE}."):
+                offenders.append(f"{path.as_posix()}:{line} imports {module}")
     assert offenders == []
+
+
+def test_only_declared_v2_entry_points_import_engagement_v2() -> None:
+    # The set of v1-root files importing the contract package must be exactly the
+    # declared allowlist: no accidental new consumer, and the allowlist stays live.
+    assert _v2_importers() == set(_V2_ENTRY_ALLOWLIST)
+
+
+def test_default_cli_module_does_not_import_engagement_v2() -> None:
+    # cli/main.py reaches the v2 entry point lazily inside the command handler,
+    # so importing the CLI never loads the contract package.
+    for line, module in _imported_modules(Path("src/hackbot/cli/main.py")):
+        assert not (module == _V2_MODULE or module.startswith(f"{_V2_MODULE}.")), (
+            f"cli/main.py:{line} imports {module}"
+        )
 
 
 def test_v1_runtime_does_not_activate_engagement_v2() -> None:
@@ -245,6 +279,26 @@ def test_current_runtime_schema_remains_v1() -> None:
     from hackbot.programs.schema import SCHEMA_VERSION
 
     assert SCHEMA_VERSION == 1
+
+
+def test_v2_loader_rejects_a_v1_engagement(tmp_path: Path) -> None:
+    # A schema v1 engagement is never silently upgraded: the v2 loader refuses it
+    # with INVALID_SCHEMA_VERSION, so v1 engagements stay on the v1 path.
+    import json
+
+    from hackbot.engagement_v2.errors import ContractError, ReasonCode
+    from hackbot.engagement_v2.loader import load_engagement
+
+    (tmp_path / "program.json").write_text(
+        json.dumps({"schema_version": 1, "program": {"name": "acme"}}), encoding="utf-8"
+    )
+    (tmp_path / "scope.json").write_text(
+        json.dumps({"schema_version": 1, "in_scope": {}, "out_of_scope": {}}), encoding="utf-8"
+    )
+    (tmp_path / "authorization.json").write_text(json.dumps({"confirmed": False}), encoding="utf-8")
+    with pytest.raises(ContractError) as excinfo:
+        load_engagement(tmp_path)
+    assert excinfo.value.reason_code is ReasonCode.INVALID_SCHEMA_VERSION
 
 
 def test_contract_document_declares_v2_unavailable() -> None:

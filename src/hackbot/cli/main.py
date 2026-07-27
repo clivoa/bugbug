@@ -358,6 +358,15 @@ def _cmd_finding(args: argparse.Namespace) -> int:
     return 2
 
 
+def _cmd_engagement(args: argparse.Namespace) -> int:
+    from hackbot.cli.engagement_cmd import run_migrate
+
+    if args.eaction == "migrate":
+        return run_migrate(args)
+    print(f"error: unknown engagement action {args.eaction!r}", file=sys.stderr)
+    return 2
+
+
 def _cmd_version(_args: argparse.Namespace) -> int:
     print(f"hackbot {VERSION}")
     return 0
@@ -500,6 +509,24 @@ def build_parser() -> argparse.ArgumentParser:
     wl_list.add_argument("--runner", default="remote", help="remote-only (reads the host)")
     wl_list.add_argument("--json", action="store_true")
     wl.set_defaults(func=_cmd_wordlists)
+
+    eng = sub.add_parser("engagement", help="read-only engagement v2 helpers (no network)")
+    eng_sub = eng.add_subparsers(dest="eaction", required=True)
+    eng_migrate = eng_sub.add_parser(
+        "migrate", help="analyze a v1->v2 migration (dry-run only; writes nothing)"
+    )
+    eng_migrate.add_argument("--engagement", required=True, help="v1 engagement directory")
+    eng_migrate.add_argument("--to", type=int, required=True, help="target schema version (2)")
+    eng_migrate.add_argument(
+        "--profile",
+        choices=["bug-bounty", "local-lab", "private-pentest"],
+        help="explicit v2 profile (required)",
+    )
+    eng_migrate.add_argument(
+        "--dry-run", action="store_true", help="analysis only; the only supported mode"
+    )
+    eng_migrate.add_argument("--json", action="store_true")
+    eng.set_defaults(func=_cmd_engagement)
 
     v = sub.add_parser("version", help="print version")
     v.set_defaults(func=_cmd_version)

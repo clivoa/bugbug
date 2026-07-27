@@ -1,0 +1,8 @@
+{
+  "confirmation_timestamp": "2026-07-01T00:00:00Z",
+  "confirmed": true,
+  "confirmed_authority_digest": "sha256:a1172dc6462255298792fc579e8b9e98e4cb4af2daffd03a75b2c84b43ab8e94",
+  "confirmed_by": "operator",
+  "note": "engagement reviewed",
+  "schema_version": 2
+}
