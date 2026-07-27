@@ -15,8 +15,8 @@ redistribution. The raw bundle HTML is never read.
 
 | Action | Category | Level | Capabilities | Tool (argv subset) |
 |---|---|---|---|---|
-| `operator.internal.netstate.interfaces` | local network state | L0 | — | `ip addr show` |
-| `operator.internal.netstate.routes` | local network state | L0 | — | `ip route show` |
+| `operator.internal.netstate.interfaces` | local network state | L1 | — | `ip addr show` |
+| `operator.internal.netstate.routes` | local network state | L1 | — | `ip route show` |
 | `operator.internal.netstate.neighbors` | local network state | L1 | — | `ip neigh show` |
 | `operator.internal.netstate.listeners` | local network state | L1 | — | `ss -tulpn` |
 | `operator.internal.discovery.arp-sweep` | host discovery | L2 | automated-scanning | `nmap -sn -PR --max-rate {} --min-parallelism {} {subnet}` |
@@ -28,13 +28,13 @@ redistribution. The raw bundle HTML is never read.
 ## Classification rules
 
 - **Local network state** is read-only local inspection (interfaces, routes,
-  neighbor cache, listening sockets) → L0/L1, no capability. It performs no active
+  neighbor cache, listening sockets) → L1, no capability. It performs no active
   target interaction.
 - **Host discovery** and **service enumeration** (nmap host discovery, version
   scan) are active and volume-bearing → L2 with `automated-scanning`, rate/
   parallelism bound by whole-token argv parameters.
 - **Anonymous LDAP** is the **unauthenticated** naming-context / user-listing read
-  → L2 with `automated-scanning`. Anything reading sensitive directory data or
+  → L2 with `automated-scanning`; its rate is bound by a code-owned `native-adapter` (ldapsearch has no argv rate flag). Anything reading sensitive directory data or
   credential material (authenticated enumeration, ADCS, SPNs, AS-REP,
   Kerberoasting, LAPS/gMSA) is **excluded** and belongs to P5b (L3,
   `credential-access`/`sensitive-data-access`).
