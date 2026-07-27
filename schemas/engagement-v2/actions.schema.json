@@ -1,0 +1,799 @@
+{
+  "$defs": {
+    "action": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "required_privileges": {
+                "contains": {
+                  "const": "superuser"
+                }
+              }
+            },
+            "required": [
+              "required_privileges"
+            ]
+          },
+          "then": {
+            "x-hackbot-derived-minimum-risk": "L3",
+            "x-hackbot-required-policy-field": "privileged_execution_allowed"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "evidence_policy": {
+                "properties": {
+                  "mode": {
+                    "const": "structured"
+                  }
+                },
+                "required": [
+                  "mode"
+                ]
+              }
+            },
+            "required": [
+              "evidence_policy"
+            ]
+          },
+          "then": false
+        },
+        {
+          "if": {
+            "properties": {
+              "rate_control": {
+                "properties": {
+                  "kind": {
+                    "const": "not-applicable"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              }
+            },
+            "required": [
+              "rate_control"
+            ]
+          },
+          "then": {
+            "properties": {
+              "characteristics": {
+                "properties": {
+                  "high_volume": {
+                    "const": false
+                  },
+                  "recursive_discovery": {
+                    "const": false
+                  }
+                }
+              },
+              "targets": {
+                "maxItems": 1,
+                "minItems": 1
+              }
+            },
+            "x-hackbot-requires-no-fan-out": true
+          }
+        }
+      ],
+      "properties": {
+        "architectures": {
+          "items": {
+            "$ref": "#/$defs/architecture"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "argv": {
+          "items": {
+            "$ref": "#/$defs/argv_token",
+            "maxLength": 4096,
+            "minLength": 1
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "type": "array"
+        },
+        "capabilities": {
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "characteristics": {
+          "additionalProperties": false,
+          "properties": {
+            "creates_account": {
+              "$ref": "#/$defs/strict_boolean"
+            },
+            "follows_redirects": {
+              "$ref": "#/$defs/strict_boolean"
+            },
+            "high_volume": {
+              "$ref": "#/$defs/strict_boolean"
+            },
+            "honors_required_headers": {
+              "$ref": "#/$defs/strict_boolean"
+            },
+            "network_access": {
+              "$ref": "#/$defs/strict_boolean"
+            },
+            "out_of_band": {
+              "$ref": "#/$defs/strict_boolean"
+            },
+            "recursive_discovery": {
+              "$ref": "#/$defs/strict_boolean"
+            },
+            "state_changing": {
+              "$ref": "#/$defs/strict_boolean"
+            },
+            "touches_third_party": {
+              "$ref": "#/$defs/strict_boolean"
+            },
+            "uses_multiple_accounts": {
+              "$ref": "#/$defs/strict_boolean"
+            }
+          },
+          "required": [
+            "network_access",
+            "high_volume",
+            "touches_third_party",
+            "follows_redirects",
+            "recursive_discovery",
+            "state_changing",
+            "creates_account",
+            "uses_multiple_accounts",
+            "out_of_band",
+            "honors_required_headers"
+          ],
+          "type": "object"
+        },
+        "evidence_policy": {
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "$ref": "#/$defs/evidence_mode"
+            },
+            "sensitivity": {
+              "$ref": "#/$defs/identifier"
+            }
+          },
+          "required": [
+            "mode",
+            "sensitivity"
+          ],
+          "type": "object"
+        },
+        "executable_digests": {
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": [
+                "local"
+              ]
+            },
+            {
+              "required": [
+                "remote"
+              ]
+            }
+          ],
+          "properties": {
+            "local": {
+              "$ref": "#/$defs/digest"
+            },
+            "remote": {
+              "$ref": "#/$defs/digest"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "executables": {
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": [
+                "local"
+              ]
+            },
+            {
+              "required": [
+                "remote"
+              ]
+            }
+          ],
+          "properties": {
+            "local": {
+              "maxLength": 2048,
+              "minLength": 2,
+              "pattern": "^(?:/|[A-Za-z]:[\\\\/]).+$",
+              "type": "string"
+            },
+            "remote": {
+              "maxLength": 2048,
+              "minLength": 2,
+              "pattern": "^(?:/|[A-Za-z]:[\\\\/]).+$",
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "id": {
+          "$ref": "#/$defs/operator_action_id"
+        },
+        "impacts": {
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "parameters": {
+          "additionalProperties": false,
+          "maxProperties": 128,
+          "patternProperties": {
+            "^[a-z][a-z0-9_]{0,63}$": {
+              "$ref": "#/$defs/parameter"
+            }
+          },
+          "type": "object"
+        },
+        "platforms": {
+          "items": {
+            "$ref": "#/$defs/platform"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "rate_control": {
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "argv-placeholder"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "required": [
+                  "rate_parameter",
+                  "concurrency_parameter"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "kind": {
+                    "const": "native-adapter"
+                  }
+                },
+                "required": [
+                  "kind"
+                ]
+              },
+              "then": {
+                "required": [
+                  "adapter_id"
+                ]
+              }
+            }
+          ],
+          "properties": {
+            "adapter_id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "concurrency_parameter": {
+              "$ref": "#/$defs/identifier"
+            },
+            "kind": {
+              "$ref": "#/$defs/rate_control_mode"
+            },
+            "rate_parameter": {
+              "$ref": "#/$defs/identifier"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        "required_privileges": {
+          "items": {
+            "$ref": "#/$defs/privilege"
+          },
+          "maxItems": 5,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "retained_outputs": {
+          "items": {
+            "$ref": "#/$defs/retained_output"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "risk": {
+          "$ref": "#/$defs/risk_level"
+        },
+        "secrets": {
+          "additionalProperties": false,
+          "maxProperties": 32,
+          "patternProperties": {
+            "^[a-z][a-z0-9_]{0,63}$": {
+              "additionalProperties": false,
+              "properties": {
+                "reference": {
+                  "$ref": "#/$defs/secret_reference"
+                },
+                "transport": {
+                  "$ref": "#/$defs/secret_transport"
+                }
+              },
+              "required": [
+                "reference",
+                "transport"
+              ],
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
+        "targets": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "$ref": "#/$defs/target_kind"
+              },
+              "parameter": {
+                "$ref": "#/$defs/identifier"
+              }
+            },
+            "required": [
+              "parameter",
+              "kind"
+            ],
+            "type": "object"
+          },
+          "maxItems": 32,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "title": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        },
+        "vulnerability_types": {
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "risk",
+        "platforms",
+        "architectures",
+        "executables",
+        "required_privileges",
+        "parameters",
+        "secrets",
+        "targets",
+        "characteristics",
+        "rate_control",
+        "capabilities",
+        "vulnerability_types",
+        "impacts",
+        "evidence_policy",
+        "argv"
+      ],
+      "type": "object"
+    },
+    "architecture": {
+      "enum": [
+        "x86_64",
+        "arm64"
+      ],
+      "type": "string"
+    },
+    "argv_token": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "pattern": "^(?:[^{}]+|\\{(?:value|target|targets_file|artifact_file|secret_file):[a-z0-9]+(?:[._-][a-z0-9]+)*\\})$",
+      "type": "string"
+    },
+    "digest": {
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "evidence_mode": {
+      "enum": [
+        "metadata-only",
+        "redacted-output",
+        "structured"
+      ],
+      "type": "string"
+    },
+    "identifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "operator_action_id": {
+      "maxLength": 128,
+      "pattern": "^operator\\.[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "parameter": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "string"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "max_length"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "enum"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "enum_values"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "target-list"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "item_type"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "artifact-ref"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "artifact_sha256"
+            ]
+          }
+        }
+      ],
+      "properties": {
+        "artifact_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "default": {
+          "oneOf": [
+            {
+              "maxLength": 8192,
+              "type": "string"
+            },
+            {
+              "maximum": 9223372036854775807,
+              "minimum": -9223372036854775808,
+              "type": "integer"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "$ref": "#/$defs/target_list"
+            }
+          ]
+        },
+        "enum_values": {
+          "items": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 256,
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "item_type": {
+          "$ref": "#/$defs/target_kind"
+        },
+        "max_length": {
+          "maximum": 8192,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maximum": {
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "type": "integer"
+        },
+        "minimum": {
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "type": "integer"
+        },
+        "pattern": {
+          "maxLength": 256,
+          "minLength": 1,
+          "type": "string"
+        },
+        "pattern_format": {
+          "const": "hackbot-safe-fullmatch-v1",
+          "type": "string"
+        },
+        "required": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "type": {
+          "$ref": "#/$defs/parameter_type"
+        }
+      },
+      "required": [
+        "type",
+        "required"
+      ],
+      "type": "object"
+    },
+    "parameter_type": {
+      "enum": [
+        "string",
+        "integer",
+        "boolean",
+        "enum",
+        "port",
+        "domain",
+        "host",
+        "ip",
+        "cidr",
+        "url",
+        "network-endpoint",
+        "repository",
+        "contract",
+        "target-list",
+        "artifact-ref"
+      ],
+      "type": "string"
+    },
+    "placeholder_kind": {
+      "enum": [
+        "value",
+        "target",
+        "targets_file",
+        "artifact_file",
+        "secret_file"
+      ],
+      "type": "string"
+    },
+    "platform": {
+      "enum": [
+        "linux",
+        "darwin",
+        "windows"
+      ],
+      "type": "string"
+    },
+    "port": {
+      "maximum": 65535,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "privilege": {
+      "enum": [
+        "network-raw",
+        "network-admin",
+        "packet-capture",
+        "filesystem-protected-read",
+        "superuser"
+      ],
+      "type": "string"
+    },
+    "profile": {
+      "enum": [
+        "bug-bounty",
+        "local-lab",
+        "private-pentest"
+      ],
+      "type": "string"
+    },
+    "rate_control_mode": {
+      "enum": [
+        "argv-placeholder",
+        "native-adapter",
+        "not-applicable"
+      ],
+      "type": "string"
+    },
+    "retained_output": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_mode": {
+          "$ref": "#/$defs/evidence_mode"
+        },
+        "max_item_bytes": {
+          "maximum": 33554432,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_items": {
+          "maximum": 64,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "path": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//).+$",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/retained_output_type"
+        }
+      },
+      "required": [
+        "path",
+        "type",
+        "max_items",
+        "max_item_bytes",
+        "evidence_mode"
+      ],
+      "type": "object"
+    },
+    "retained_output_type": {
+      "enum": [
+        "file",
+        "directory"
+      ],
+      "type": "string"
+    },
+    "risk_level": {
+      "enum": [
+        "L0",
+        "L1",
+        "L2",
+        "L3"
+      ],
+      "type": "string"
+    },
+    "secret_reference": {
+      "maxLength": 135,
+      "pattern": "^secret:[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "secret_transport": {
+      "enum": [
+        "stdin",
+        "file"
+      ],
+      "type": "string"
+    },
+    "strict_boolean": {
+      "type": "boolean"
+    },
+    "target": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "type": "string"
+    },
+    "target_kind": {
+      "enum": [
+        "domain",
+        "host",
+        "ip",
+        "cidr",
+        "url",
+        "network-endpoint",
+        "repository",
+        "contract"
+      ],
+      "type": "string"
+    },
+    "target_list": {
+      "items": {
+        "$ref": "#/$defs/target"
+      },
+      "maxItems": 65536,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "$id": "urn:hackbot:schema:engagement-v2:actions:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "actions": {
+      "items": {
+        "$ref": "#/$defs/action"
+      },
+      "maxItems": 256,
+      "minItems": 0,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "actions"
+  ],
+  "type": "object",
+  "x-hackbot-argv-token-terminator-bytes": 1,
+  "x-hackbot-max-argv-bytes": 65536,
+  "x-hackbot-max-document-bytes": 4194304,
+  "x-hackbot-max-document-nesting-depth": 32,
+  "x-hackbot-max-prepared-input-bytes": 67108864,
+  "x-hackbot-max-retained-output-bytes": 67108864,
+  "x-hackbot-max-secret-bytes": 1048576,
+  "x-hackbot-max-secrets-bytes": 4194304
+}

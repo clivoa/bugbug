@@ -1,0 +1,256 @@
+{
+  "$defs": {
+    "digest": {
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "identifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "profile": {
+      "enum": [
+        "bug-bounty",
+        "local-lab",
+        "private-pentest"
+      ],
+      "type": "string"
+    },
+    "strict_boolean": {
+      "type": "boolean"
+    },
+    "target": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "$id": "urn:hackbot:schema:engagement-v2:program:2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "profile": {
+      "$ref": "#/$defs/profile"
+    },
+    "program": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/identifier"
+        },
+        "platform": {
+          "$ref": "#/$defs/identifier"
+        },
+        "source": {
+          "$ref": "#/$defs/identifier"
+        }
+      },
+      "required": [
+        "name",
+        "platform",
+        "source"
+      ],
+      "type": "object"
+    },
+    "reporting": {
+      "additionalProperties": false,
+      "properties": {
+        "duplicate_policy": {
+          "$ref": "#/$defs/identifier"
+        }
+      },
+      "required": [
+        "duplicate_policy"
+      ],
+      "type": "object"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "testing_rules": {
+      "additionalProperties": false,
+      "properties": {
+        "account_creation_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "authenticated_testing_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "automated_scanning_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "autonomous_progression_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "concurrency": {
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "credential_access_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "credential_capture_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "data_exfiltration_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "denial_of_service_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "destructive_testing_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "excluded_impacts": {
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "exploit_execution_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "lateral_movement_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "max_requests_per_second": {
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_targets_per_action": {
+          "maximum": 65536,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "multiple_accounts_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "operator_output_persistence_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "out_of_band_testing_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "output_cap_bytes": {
+          "maximum": 16777216,
+          "minimum": 4096,
+          "type": "integer"
+        },
+        "payload_execution_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "persistence_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "privileged_execution_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "prohibited_tools": {
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "prohibited_vulnerability_types": {
+          "items": {
+            "$ref": "#/$defs/identifier"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "required_headers": {
+          "items": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "restricted_hours": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "timezone": {
+                  "maxLength": 2048,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "windows": {
+                  "items": {
+                    "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]-(?:[01][0-9]|2[0-3]):[0-5][0-9]$",
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "type": "array",
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "timezone",
+                "windows"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "sensitive_data_access_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "social_engineering_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "source_ip_requirements": {
+          "items": {
+            "$ref": "#/$defs/target"
+          },
+          "minItems": 0,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "state_changing_allowed": {
+          "$ref": "#/$defs/strict_boolean"
+        },
+        "timeout_seconds": {
+          "maximum": 86400,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_requests_per_second",
+        "concurrency",
+        "timeout_seconds",
+        "output_cap_bytes",
+        "max_targets_per_action"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "program",
+    "profile",
+    "testing_rules",
+    "reporting"
+  ],
+  "type": "object",
+  "x-hackbot-max-document-bytes": 1048576,
+  "x-hackbot-max-document-nesting-depth": 32
+}

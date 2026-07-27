@@ -1,0 +1,353 @@
+{
+  "$defs": {
+    "absolute_path": {
+      "maxLength": 2048,
+      "minLength": 2,
+      "pattern": "^(?:/|[A-Za-z]:[\\\\/]).+$",
+      "type": "string"
+    },
+    "architecture": {
+      "enum": [
+        "x86_64",
+        "arm64"
+      ],
+      "type": "string"
+    },
+    "digest": {
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "identifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "platform": {
+      "enum": [
+        "linux",
+        "darwin",
+        "windows"
+      ],
+      "type": "string"
+    },
+    "privilege": {
+      "enum": [
+        "network-raw",
+        "network-admin",
+        "packet-capture",
+        "filesystem-protected-read",
+        "superuser"
+      ],
+      "type": "string"
+    },
+    "runner_role": {
+      "enum": [
+        "execution-node",
+        "in-scope-target"
+      ],
+      "type": "string"
+    },
+    "source_identity_mode": {
+      "enum": [
+        "none",
+        "direct-interface",
+        "attested-egress"
+      ],
+      "type": "string"
+    },
+    "strict_boolean": {
+      "type": "boolean"
+    },
+    "target": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "$id": "urn:hackbot:schema:engagement-v2:runner:2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source_identity": {
+            "properties": {
+              "mode": {
+                "const": "direct-interface"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          }
+        },
+        "required": [
+          "source_identity"
+        ]
+      },
+      "then": {
+        "properties": {
+          "source_identity": {
+            "properties": {
+              "address": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "address"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source_identity": {
+            "properties": {
+              "mode": {
+                "const": "attested-egress"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          }
+        },
+        "required": [
+          "source_identity"
+        ]
+      },
+      "then": {
+        "properties": {
+          "egress_attestation": {
+            "not": {
+              "type": "null"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "architecture": {
+      "$ref": "#/$defs/architecture"
+    },
+    "egress_attestation": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "adapter_identity": {
+              "$ref": "#/$defs/identifier"
+            },
+            "adapter_sha256": {
+              "$ref": "#/$defs/digest"
+            },
+            "signer_public_key_sha256": {
+              "$ref": "#/$defs/digest"
+            }
+          },
+          "required": [
+            "adapter_identity",
+            "adapter_sha256",
+            "signer_public_key_sha256"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "helper": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "sha256"
+          ]
+        },
+        {
+          "required": [
+            "code_signing_identity"
+          ]
+        }
+      ],
+      "properties": {
+        "code_signing_identity": {
+          "$ref": "#/$defs/identifier"
+        },
+        "path": {
+          "$ref": "#/$defs/absolute_path"
+        },
+        "protocol_version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "path",
+        "protocol_version"
+      ],
+      "type": "object"
+    },
+    "node_identity": {
+      "$ref": "#/$defs/identifier"
+    },
+    "operating_system": {
+      "$ref": "#/$defs/platform"
+    },
+    "permitted_privileges": {
+      "items": {
+        "$ref": "#/$defs/privilege"
+      },
+      "maxItems": 5,
+      "minItems": 0,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "privilege_signer_public_key_fingerprint": {
+      "$ref": "#/$defs/digest"
+    },
+    "role": {
+      "$ref": "#/$defs/runner_role"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "source_identity": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/target"
+            }
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/source_identity_mode"
+        }
+      },
+      "required": [
+        "mode",
+        "address"
+      ],
+      "type": "object"
+    },
+    "ssh": {
+      "additionalProperties": false,
+      "properties": {
+        "connection_timeout_seconds": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "host": {
+          "$ref": "#/$defs/target"
+        },
+        "host_key_sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "identity": {
+          "$ref": "#/$defs/identifier"
+        },
+        "known_hosts_path": {
+          "$ref": "#/$defs/absolute_path"
+        },
+        "options": {
+          "additionalProperties": false,
+          "properties": {
+            "agent_forwarding": {
+              "const": false,
+              "type": "boolean"
+            },
+            "batch_mode": {
+              "const": true,
+              "type": "boolean"
+            },
+            "identities_only": {
+              "const": true,
+              "type": "boolean"
+            },
+            "port_forwarding": {
+              "const": false,
+              "type": "boolean"
+            },
+            "strict_host_key_checking": {
+              "const": true,
+              "type": "boolean"
+            },
+            "tty": {
+              "const": false,
+              "type": "boolean"
+            },
+            "x11_forwarding": {
+              "const": false,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "batch_mode",
+            "identities_only",
+            "strict_host_key_checking",
+            "agent_forwarding",
+            "x11_forwarding",
+            "port_forwarding",
+            "tty"
+          ],
+          "type": "object"
+        },
+        "port": {
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "private_key_path": {
+          "$ref": "#/$defs/absolute_path"
+        },
+        "user": {
+          "$ref": "#/$defs/identifier"
+        }
+      },
+      "required": [
+        "host",
+        "port",
+        "user",
+        "identity",
+        "private_key_path",
+        "known_hosts_path",
+        "host_key_sha256",
+        "connection_timeout_seconds",
+        "options"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "role",
+    "node_identity",
+    "ssh",
+    "helper",
+    "operating_system",
+    "architecture",
+    "permitted_privileges",
+    "source_identity",
+    "egress_attestation",
+    "privilege_signer_public_key_fingerprint"
+  ],
+  "type": "object",
+  "x-hackbot-max-document-bytes": 1048576,
+  "x-hackbot-max-document-nesting-depth": 32
+}

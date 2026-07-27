@@ -1,0 +1,241 @@
+{
+  "$defs": {
+    "architecture": {
+      "enum": [
+        "x86_64",
+        "arm64"
+      ],
+      "type": "string"
+    },
+    "argv_token": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "pattern": "^(?:[^{}]+|\\{(?:value|target|targets_file|artifact_file|secret_file):[a-z0-9]+(?:[._-][a-z0-9]+)*\\})$",
+      "type": "string"
+    },
+    "digest": {
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "executable": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "maxLength": 2048,
+          "minLength": 2,
+          "pattern": "^(?:/|[A-Za-z]:[\\\\/]).+$",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "frame_descriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "frame_type": {
+          "enum": [
+            1,
+            2,
+            3
+          ],
+          "type": "integer"
+        },
+        "index": {
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "length": {
+          "maximum": 67108864,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "index",
+        "frame_type",
+        "length",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "identifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "nonce": {
+      "maxLength": 43,
+      "minLength": 43,
+      "pattern": "^[A-Za-z0-9_-]{43}$",
+      "type": "string"
+    },
+    "platform": {
+      "enum": [
+        "linux",
+        "darwin",
+        "windows"
+      ],
+      "type": "string"
+    },
+    "privilege": {
+      "enum": [
+        "network-raw",
+        "network-admin",
+        "packet-capture",
+        "filesystem-protected-read",
+        "superuser"
+      ],
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "type": "string"
+    },
+    "strict_boolean": {
+      "type": "boolean"
+    },
+    "target": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "type": "string"
+    },
+    "timestamp": {
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$",
+      "type": "string"
+    }
+  },
+  "$id": "urn:hackbot:schema:engagement-v2:remote-header:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "architecture": {
+      "$ref": "#/$defs/architecture"
+    },
+    "argv": {
+      "items": {
+        "$ref": "#/$defs/argv_token",
+        "maxLength": 4096,
+        "minLength": 1
+      },
+      "maxItems": 128,
+      "minItems": 1,
+      "type": "array"
+    },
+    "authority_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "executable": {
+      "$ref": "#/$defs/executable"
+    },
+    "execution_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "expires_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "frames": {
+      "items": {
+        "$ref": "#/$defs/frame_descriptor"
+      },
+      "maxItems": 256,
+      "minItems": 0,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "issued_at": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "nonce": {
+      "$ref": "#/$defs/nonce"
+    },
+    "operating_system": {
+      "$ref": "#/$defs/platform"
+    },
+    "protocol_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "required_privileges": {
+      "items": {
+        "$ref": "#/$defs/privilege"
+      },
+      "maxItems": 5,
+      "minItems": 0,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "run_id": {
+      "$ref": "#/$defs/run_id"
+    },
+    "runner_identity": {
+      "$ref": "#/$defs/identifier"
+    },
+    "stderr_cap_bytes": {
+      "maximum": 16777216,
+      "minimum": 4096,
+      "type": "integer"
+    },
+    "stdout_cap_bytes": {
+      "maximum": 16777216,
+      "minimum": 4096,
+      "type": "integer"
+    },
+    "timeout_seconds": {
+      "maximum": 86400,
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "protocol_version",
+    "run_id",
+    "nonce",
+    "issued_at",
+    "expires_at",
+    "authority_digest",
+    "execution_digest",
+    "action_id",
+    "argv",
+    "executable",
+    "runner_identity",
+    "operating_system",
+    "architecture",
+    "required_privileges",
+    "frames",
+    "timeout_seconds",
+    "stdout_cap_bytes",
+    "stderr_cap_bytes"
+  ],
+  "type": "object",
+  "x-hackbot-ed25519-public-key-bytes": 32,
+  "x-hackbot-ed25519-signature-bytes": 64,
+  "x-hackbot-max-clock-skew-seconds": 30,
+  "x-hackbot-max-document-nesting-depth": 32,
+  "x-hackbot-max-egress-observation-age-seconds": 60,
+  "x-hackbot-max-frame-bytes": 67108864,
+  "x-hackbot-max-frame-count": 256,
+  "x-hackbot-max-header-bytes": 1048576,
+  "x-hackbot-max-request-bytes": 75497472,
+  "x-hackbot-max-request-lifetime-seconds": 300,
+  "x-hackbot-max-response-bytes": 41943040,
+  "x-hackbot-min-request-lifetime-seconds": 1,
+  "x-hackbot-nonce-bytes": 32,
+  "x-hackbot-replay-reservation-seconds": 600
+}
