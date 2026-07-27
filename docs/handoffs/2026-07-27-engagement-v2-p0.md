@@ -148,7 +148,10 @@ Fresh verification at reviewed implementation SHA `4173929` recorded:
 Documentation-only changes after `4173929` must also pass the full repository
 gates before publication. Do not reinterpret earlier evidence as proof of a
 later HEAD. The byte-preserved historical archive is intentionally excluded
-from Ruff formatting because Ruff would rewrite fenced code examples; all
+from Ruff formatting because Ruff would rewrite fenced code examples. It is
+also marked `-whitespace` in `.gitattributes` because three source reports
+contain historical trailing whitespace/final blank lines. This makes
+range-wide diff validation compatible with exact evidence preservation; all
 non-archived files remain covered.
 
 The complete gate set was rerun after creating this handoff: 1157 tests passed
@@ -156,7 +159,9 @@ and 1 skipped; all 4 publication-guard tests passed; Ruff check was clean and
 Ruff format covered 209 non-archived files; mypy reported 0 issues in 58 source
 files; schema and fixture checks were exact; OpenSpec strict validation was
 valid; the handoff/archive secret scan had no matches; and
-`git diff --check` was clean.
+`git diff --check` was clean. Before merge, the full
+`4173929b550ecb60eb8d6e1fda0d0f68933cf015..HEAD` documentation range was also
+checked under that explicit evidence policy.
 
 ## Review history
 

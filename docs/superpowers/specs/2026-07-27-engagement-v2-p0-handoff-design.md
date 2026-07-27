@@ -71,6 +71,13 @@ Only filenames may be normalized for the durable directory. Report bodies,
 findings, rulings, test evidence, and commit identifiers must not be summarized
 away or silently rewritten.
 
+Historical report bytes may include whitespace that current formatters would
+rewrite. The evidence directory is therefore excluded from Ruff formatting and
+marked `-whitespace` in `.gitattributes`. This is a narrow data-preservation
+policy: byte comparison remains authoritative for the archive, while
+range-wide `git diff --check` and normal formatting continue to cover every
+non-archived path.
+
 The consolidated handoff is a new synthesis. It must distinguish:
 
 - verified facts from planned future actions;
@@ -107,7 +114,9 @@ Before commit and push:
 3. verify recorded base/head SHAs exist;
 4. run the publication guard and repository secret-pattern scan over the new
    documentation;
-5. run Ruff formatting validation, `git diff --check`, and the full test suite;
+5. run Ruff formatting validation, working-tree and range-wide
+   `git diff --check` under the explicit evidence policy, and the full test
+   suite;
 6. confirm `.venv` remains untracked;
 7. update draft PR #11 and Issue #1 with the handoff paths and new HEAD.
 

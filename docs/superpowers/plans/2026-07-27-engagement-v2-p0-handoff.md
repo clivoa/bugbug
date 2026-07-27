@@ -12,6 +12,8 @@
 
 - Do not change runtime code, schemas, fixtures, OpenSpec requirements, or P0 behavior.
 - Preserve report bodies byte-for-byte; normalize only their durable filenames.
+- Mark the historical archive as formatter-excluded and `-whitespace` data so
+  byte preservation and range-wide whitespace validation are both explicit.
 - Exclude every `review-*.diff` package because Git reconstructs those ranges.
 - Exclude `.venv`, transient agent state, credentials, secrets, keys, and real target data.
 - Keep OpenSpec task 8.2 unchecked until merge, remote-SHA verification, archive, Issue/Project completion, and P1 promotion.
@@ -153,6 +155,7 @@ test "$(find docs/reviews/engagement-v2-p0 -maxdepth 1 -type f | wc -l | tr -d '
 test -z "$(find docs/reviews/engagement-v2-p0 -name 'review-*.diff' -print -quit)"
 test -z "$(git ls-files docs/reviews/engagement-v2-p0 | rg 'review-.*\\.diff$' || true)"
 git diff --check
+git diff --check 4173929b550ecb60eb8d6e1fda0d0f68933cf015..HEAD
 ```
 
 Expected: every command exits 0.
@@ -274,6 +277,7 @@ Expected: both commits and all ten sections exist.
 .venv/bin/python -m pytest tests/publication_guard -q
 OPENSPEC_TELEMETRY=0 openspec validate engagement-v2-security-contracts --type change --strict --no-interactive
 git diff --check
+git diff --check 4173929b550ecb60eb8d6e1fda0d0f68933cf015..HEAD
 ```
 
 Run the secret scan over the new handoff/archive and require the underlying
@@ -283,7 +287,7 @@ Run the secret scan over the new handoff/archive and require the underlying
 rg -n '(gh[opsu]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{20,}|sk-[A-Za-z0-9]{32,})' docs/handoffs/2026-07-27-engagement-v2-p0.md docs/reviews/engagement-v2-p0
 ```
 
-Expected: Ruff, pytest, publication guard, OpenSpec, and diff check exit 0;
+Expected: Ruff, pytest, publication guard, OpenSpec, and both diff checks exit 0;
 secret scan emits no match and exits 1.
 
 - [ ] **Step 6: Commit the consolidated handoff**
