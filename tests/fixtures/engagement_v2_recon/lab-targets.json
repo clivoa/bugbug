@@ -1,0 +1,6 @@
+{
+  "note": "Synthetic disposable-lab targets. No real target or credential material.",
+  "subnets": ["10.20.0.0/24", "192.0.2.0/24"],
+  "hosts": ["dc01.lab.example", "fileserver.lab.example"],
+  "ldap_endpoints": ["ldap://dc01.lab.example:389"]
+}
