@@ -20,7 +20,8 @@ from hackbot.engagement_v2.manifest import ActionDefinition, validate_manifest
 
 _ATTRIBUTION = "@reeshasx (CyberNeon Recon Bundle), reviewed generic subset"
 
-# Capabilities that must never appear in the non-credential catalog.
+# Capabilities that must never appear in the non-credential catalog: every
+# capability whose policy risk floor is L3, plus sensitive-data access.
 FORBIDDEN_CAPABILITIES = frozenset(
     {
         "credential-access",
@@ -28,9 +29,11 @@ FORBIDDEN_CAPABILITIES = frozenset(
         "sensitive-data-access",
         "exploit-execution",
         "payload-execution",
+        "privileged-execution",
         "lateral-movement",
         "persistence",
         "data-exfiltration",
+        "social-engineering",
         "destructive-testing",
         "denial-of-service",
     }
@@ -94,6 +97,10 @@ _SCAN_PARAMS: dict[str, object] = {
     "max_rate": {"type": "integer", "required": True, "minimum": 1, "maximum": 1000},
     "min_parallelism": {"type": "integer", "required": True, "minimum": 1, "maximum": 100},
 }
+# ldapsearch has no argv rate flag, so its rate is bound by a code-owned native
+# adapter (never `not-applicable`, which policy would treat as unenforceable for
+# a network-rated capability).
+_LDAP_ADAPTER: dict[str, object] = {"kind": "native-adapter", "adapter_id": "internal-ldap-query"}
 
 
 def _catalog_actions() -> list[dict[str, object]]:
@@ -102,7 +109,7 @@ def _catalog_actions() -> list[dict[str, object]]:
         _action(
             action_id="operator.internal.netstate.interfaces",
             title="Local interface inventory",
-            risk="L0",
+            risk="L1",
             executable="/usr/bin/ip",
             argv=["addr", "show"],
             targets=[],
@@ -113,7 +120,7 @@ def _catalog_actions() -> list[dict[str, object]]:
         _action(
             action_id="operator.internal.netstate.routes",
             title="Local route table",
-            risk="L0",
+            risk="L1",
             executable="/usr/bin/ip",
             argv=["route", "show"],
             targets=[],
@@ -230,7 +237,7 @@ def _catalog_actions() -> list[dict[str, object]]:
             targets=["endpoint"],
             parameters={"base_dn": {"type": "string", "required": True, "max_length": 512}},
             capabilities=["automated-scanning"],
-            rate_control=_NOT_APPLICABLE,
+            rate_control=_LDAP_ADAPTER,
         ),
         _action(
             action_id="operator.internal.ldap.anonymous-users",
@@ -250,12 +257,12 @@ def _catalog_actions() -> list[dict[str, object]]:
             targets=["endpoint"],
             parameters={"base_dn": {"type": "string", "required": True, "max_length": 512}},
             capabilities=["automated-scanning"],
-            rate_control=_NOT_APPLICABLE,
+            rate_control=_LDAP_ADAPTER,
         ),
     ]
 
 
-def catalog_manifest() -> dict[str, object]:
+def _catalog_manifest() -> dict[str, object]:
     """Return the code-owned non-credential internal-recon manifest document."""
 
     return {"schema_version": ACTIONS_SCHEMA_VERSION, "actions": _catalog_actions()}
@@ -267,7 +274,7 @@ _PROVENANCE: Mapping[str, ReconProvenance] = MappingProxyType(
             "operator.internal.netstate.interfaces",
             "local-network-state",
             "internal-recon/local-network-state",
-            "L0",
+            "L1",
             frozenset(),
             _ATTRIBUTION,
         ),
@@ -275,7 +282,7 @@ _PROVENANCE: Mapping[str, ReconProvenance] = MappingProxyType(
             "operator.internal.netstate.routes",
             "local-network-state",
             "internal-recon/local-network-state",
-            "L0",
+            "L1",
             frozenset(),
             _ATTRIBUTION,
         ),
@@ -357,4 +364,4 @@ def load_catalog(
 
     if active_profile not in _INTERNAL_PROFILES or not internal_recon_confirmed:
         raise ContractError(ReasonCode.DENY_CAPABILITY_NOT_ALLOWED)
-    return validate_manifest(catalog_manifest())
+    return validate_manifest(_catalog_manifest())

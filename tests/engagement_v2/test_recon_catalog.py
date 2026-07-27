@@ -8,9 +8,10 @@ import pytest
 
 from hackbot.engagement_v2.errors import ContractError, ReasonCode
 from hackbot.engagement_v2.manifest import validate_manifest
+from hackbot.engagement_v2.policy import _CAPABILITY_RISK_FLOOR
 from hackbot.engagement_v2.recon_catalog import (
     FORBIDDEN_CAPABILITIES,
-    catalog_manifest,
+    _catalog_manifest,
     load_catalog,
     provenance,
 )
@@ -29,7 +30,7 @@ _EXPECTED_IDS = {
 
 
 def _registry():
-    return validate_manifest(catalog_manifest())
+    return load_catalog(active_profile="local-lab", internal_recon_confirmed=True)
 
 
 # ------------------------------------------------------- manifest validity ---
@@ -41,7 +42,7 @@ def test_catalog_validates_as_a_manifest() -> None:
 def test_every_action_is_non_credential() -> None:
     registry = _registry()
     for action in registry.values():
-        assert action.risk in {"L0", "L1", "L2"}
+        assert action.risk in {"L1", "L2"}
         assert not (action.capabilities & FORBIDDEN_CAPABILITIES)
 
 
@@ -54,13 +55,20 @@ def test_scanning_actions_declare_automated_scanning() -> None:
 
 def test_a_credential_action_is_caught_by_disjointness() -> None:
     # Simulate adding a credential action; the guard set must flag it.
-    document = catalog_manifest()
+    document = _catalog_manifest()
     document["actions"][0]["capabilities"] = ["credential-access"]
     registry = validate_manifest(document)
     offending = {
         aid for aid, action in registry.items() if action.capabilities & FORBIDDEN_CAPABILITIES
     }
     assert offending  # the classification guard would fail on this
+
+
+def test_forbidden_set_covers_policy_l3_floor() -> None:
+    # The non-credential guard must exclude every capability whose policy risk
+    # floor is L3, so a mis-declared L2 action carrying an L3 capability is caught.
+    l3_capabilities = {cap for cap, floor in _CAPABILITY_RISK_FLOOR.items() if floor == "L3"}
+    assert l3_capabilities <= FORBIDDEN_CAPABILITIES
 
 
 # ------------------------------------------------------------- provenance ---
@@ -94,9 +102,9 @@ def test_catalog_loads_under_authorized_internal_profile() -> None:
 
 
 def test_manifest_document_is_not_mutated_by_load(monkeypatch: pytest.MonkeyPatch) -> None:
-    before = copy.deepcopy(catalog_manifest())
+    before = copy.deepcopy(_catalog_manifest())
     load_catalog(active_profile="private-pentest", internal_recon_confirmed=True)
-    assert catalog_manifest() == before
+    assert _catalog_manifest() == before
 
 
 # ------------------------------------------------- no live scanning ---
