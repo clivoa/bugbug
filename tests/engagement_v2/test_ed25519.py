@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
+from hackbot.engagement_v2 import _ed25519
 from hackbot.engagement_v2._ed25519 import verify
+
+
+def test_noncanonical_x_zero_encoding_rejected() -> None:
+    # x**2 == 0 (y == 1) is canonical only with a clear sign bit (RFC 8032).
+    assert _ed25519._recover_x(1, 1) is None
+    assert _ed25519._recover_x(1, 0) == 0
+
 
 # RFC 8032, Section 7.1.
 _VECTORS = [

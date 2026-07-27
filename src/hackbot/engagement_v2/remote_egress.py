@@ -16,6 +16,7 @@ from hackbot.engagement_v2._ed25519 import verify
 from hackbot.engagement_v2.canonical import canonical_bytes
 from hackbot.engagement_v2.constants import (
     ED25519_PUBLIC_KEY_BYTES,
+    MAX_CLOCK_SKEW_SECONDS,
     MAX_EGRESS_OBSERVATION_AGE_SECONDS,
 )
 from hackbot.engagement_v2.errors import ContractError, ReasonCode
@@ -43,11 +44,18 @@ def verify_egress(
     source_identity: Mapping[str, object],
     egress_attestation: Mapping[str, object] | None,
     *,
+    run_id: str | None = None,
+    nonce: str | None = None,
+    execution_digest: str | None = None,
     signer_public_key: bytes | None = None,
     pinned_signer_fingerprint: str | None = None,
     now: datetime,
 ) -> str:
-    """Return the verified egress claim (`none`/`direct-interface`/`attested-egress`)."""
+    """Return the verified egress claim (`none`/`direct-interface`/`attested-egress`).
+
+    An `attested-egress` claim is bound to this run: the signed observation must
+    carry the run ID, nonce, and execution digest matching the request.
+    """
 
     mode = source_identity.get("mode")
     if mode == "none":
@@ -59,11 +67,14 @@ def verify_egress(
     if mode != "attested-egress":
         raise _trust_mismatch()
 
-    # Observed egress requires a pinned, signed, fresh attestation.
+    # Observed egress requires a pinned, signed, fresh, run-bound attestation.
     if (
         egress_attestation is None
         or signer_public_key is None
         or pinned_signer_fingerprint is None
+        or run_id is None
+        or nonce is None
+        or execution_digest is None
         or len(signer_public_key) != ED25519_PUBLIC_KEY_BYTES
     ):
         raise _trust_mismatch()
@@ -75,8 +86,17 @@ def verify_egress(
     if not isinstance(body, Mapping) or not isinstance(signature, (bytes, bytearray)):
         raise _trust_mismatch()
 
+    # The observation must bind this exact run.
+    if (
+        body.get("run_id") != run_id
+        or body.get("nonce") != nonce
+        or body.get("execution_digest") != execution_digest
+    ):
+        raise _trust_mismatch()
+
     observed_at = _parse_utc(body.get("observed_at"))
-    if (now - observed_at).total_seconds() > MAX_EGRESS_OBSERVATION_AGE_SECONDS:
+    age = (now - observed_at).total_seconds()
+    if age > MAX_EGRESS_OBSERVATION_AGE_SECONDS or age < -MAX_CLOCK_SKEW_SECONDS:
         raise _trust_mismatch()
 
     message = canonical_bytes({"contract": _EGRESS_DOMAIN, "attestation": dict(body)})
