@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 from typing import BinaryIO, cast
 
-from hackbot.engagement_v2.canonical import canonical_bytes
+from hackbot.engagement_v2.canonical import canonical_bytes, execution_digest
 from hackbot.engagement_v2.constants import (
     AUTHORITY_DIGEST_PATTERN,
     FRAME_TYPE_BY_DIRECTION,
@@ -392,11 +392,18 @@ def _validate_request_header(
         MIN_OUTPUT_CAP_BYTES,
         MAX_OUTPUT_CAP_BYTES,
     )
-    return _validated_descriptor_list(
+    descriptors = _validated_descriptor_list(
         header,
         expected_count=expected_count,
         response=False,
     )
+    request = {key: value for key, value in header.items() if key != "execution_digest"}
+    expected_execution_digest = execution_digest(
+        {"schema_version": 1, "request": request}
+    )
+    if header["execution_digest"] != expected_execution_digest:
+        raise _invalid()
+    return descriptors
 
 
 def _validate_response_header(
@@ -649,6 +656,14 @@ def read_message(stream: BinaryIO, response: bool = False) -> FramedMessage:
         expected_count=frame_count,
         response=response,
     )
+    declared_message_bytes = (
+        _PREFIX.size
+        + header_length
+        + frame_count * _FRAME_PREFIX.size
+        + sum(cast(int, descriptor["length"]) for descriptor in descriptors)
+    )
+    if declared_message_bytes > cap:
+        raise _invalid()
 
     frames: list[Frame] = []
     allowed = FRAME_TYPE_BY_DIRECTION["response" if response else "request"]

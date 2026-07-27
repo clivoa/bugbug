@@ -40,14 +40,13 @@ _FRAME_PREFIX = struct.Struct("!HQ32s")
 _RUN_ID = "123e4567-e89b-42d3-a456-426614174000"
 _NONCE = base64.urlsafe_b64encode(b"\x00" * 32).decode("ascii").rstrip("=")
 _AUTHORITY_DIGEST = "sha256:" + "1" * 64
-_EXECUTION_DIGEST = execution_digest({"fixture": "protocol-request"})
 _FIXTURE_DIRECTORY = (
     Path(__file__).parents[1] / "fixtures" / "engagement_v2" / "protocol"
 )
 _FIXTURE_HASHES = {
     "request-frame.bin": "4bb15f8f8b9731fe3169e4f948263c5c3ce8b33b3106d828adbae091b0e4064b",
-    "request-header.json": "2601565df2807994c7867d3cf59b7adf0b481d8e49f89efb65c8c5e54a609786",
-    "request-message.bin": "c364a6b70086e544c123dd7e50450aefdd8cba9db30b17492802dd996c657854",
+    "request-header.json": "50ec1ad9750fdc919b0ce8358d0bfe47425dacf417ec5271fbf21de9f4b7e096",
+    "request-message.bin": "332d44b38bb1730f4ce6fe11f671b62f95b0309e16fd0f7b98e90c9c1080fdd9",
 }
 
 
@@ -87,41 +86,6 @@ class _GuardedReadStream:
         return chunk
 
 
-class _ZeroPayloadGuardStream:
-    """Serve one zero payload without materializing the forged input message."""
-
-    def __init__(self, prefix: bytes, zero_count: int, suffix: bytes) -> None:
-        self._prefix = prefix
-        self._zero_count = zero_count
-        self._suffix = suffix
-        self._offset = 0
-        self.forbidden_offset = len(prefix) + zero_count + len(suffix)
-        self.zero_bytes_returned = 0
-        self.reads: list[tuple[int, int]] = []
-
-    def read(self, size: int = -1, /) -> bytes:
-        self.reads.append((self._offset, size))
-        if self._offset >= self.forbidden_offset:
-            raise AssertionError("decoder attempted to read the second payload")
-        if size < 0:
-            size = self.forbidden_offset - self._offset
-        if self._offset < len(self._prefix):
-            start = self._offset
-            end = min(start + size, len(self._prefix))
-            self._offset = end
-            return self._prefix[start:end]
-        zero_end = len(self._prefix) + self._zero_count
-        if self._offset < zero_end:
-            count = min(size, zero_end - self._offset)
-            self._offset += count
-            self.zero_bytes_returned += count
-            return b"\x00" * count
-        suffix_offset = self._offset - zero_end
-        end = min(suffix_offset + size, len(self._suffix))
-        self._offset += end - suffix_offset
-        return self._suffix[suffix_offset:end]
-
-
 class _BytesSubclass(bytes):
     """A bytes subclass which exact frame payloads must reject."""
 
@@ -139,20 +103,26 @@ def _descriptor(index: int, frame_type: FrameType, payload: bytes) -> dict[str, 
     }
 
 
+def _bind_request_header(header: dict[str, object]) -> None:
+    request = {key: value for key, value in header.items() if key != "execution_digest"}
+    header["execution_digest"] = execution_digest(
+        {"schema_version": 1, "request": request}
+    )
+
+
 def _request_header(
     frames: tuple[tuple[FrameType, bytes], ...] = (),
     *,
     issued_at: str = "2026-07-26T12:00:00Z",
     expires_at: str = "2026-07-26T12:05:00Z",
 ) -> dict[str, object]:
-    return {
+    header: dict[str, object] = {
         "protocol_version": PROTOCOL_VERSION,
         "run_id": _RUN_ID,
         "nonce": _NONCE,
         "issued_at": issued_at,
         "expires_at": expires_at,
         "authority_digest": _AUTHORITY_DIGEST,
-        "execution_digest": _EXECUTION_DIGEST,
         "action_id": "operator.fixture",
         "argv": ["/usr/bin/true"],
         "executable": {
@@ -171,17 +141,20 @@ def _request_header(
         "stdout_cap_bytes": 4096,
         "stderr_cap_bytes": 4096,
     }
+    _bind_request_header(header)
+    return header
 
 
 def _response_header(
     frames: tuple[tuple[FrameType, bytes], ...] = (),
 ) -> dict[str, object]:
+    execution_digest_value = _request_header()["execution_digest"]
     return {
         "protocol_version": PROTOCOL_VERSION,
         "run_id": _RUN_ID,
         "nonce": _NONCE,
         "authority_digest": _AUTHORITY_DIGEST,
-        "execution_digest": _EXECUTION_DIGEST,
+        "execution_digest": execution_digest_value,
         "frames": [
             _descriptor(index, frame_type, payload)
             for index, (frame_type, payload) in enumerate(frames)
@@ -352,7 +325,7 @@ def test_oversized_declared_frame_fails_before_frame_payload_read() -> None:
     assert all(offset < stream.forbidden_offset for offset, _ in stream.reads)
 
 
-def test_response_aggregate_cap_fails_before_frame_payload_read() -> None:
+def test_response_aggregate_cap_fails_before_any_frame_read() -> None:
     declared_length = MAX_RESPONSE_BYTES
     header = _response_header()
     header["frames"] = [
@@ -365,25 +338,17 @@ def test_response_aggregate_cap_fails_before_frame_payload_read() -> None:
     ]
     raw_header = canonical_bytes(header)
     fixed = _PREFIX.pack(PROTOCOL_MAGIC, PROTOCOL_VERSION, len(raw_header), 1) + raw_header
-    frame_prefix = _FRAME_PREFIX.pack(
-        FrameType.STDOUT.value,
-        declared_length,
-        b"\x00" * 32,
-    )
-    stream = _GuardedReadStream(
-        fixed + frame_prefix,
-        forbidden_offset=len(fixed) + len(frame_prefix),
-    )
+    stream = _GuardedReadStream(fixed, forbidden_offset=len(fixed))
 
     _assert_reason(
         ReasonCode.EXEC_PROTOCOL_INVALID,
         lambda: read_message(stream, response=True),
     )
 
-    assert stream.reads[-1][0] < stream.forbidden_offset
+    assert all(offset < stream.forbidden_offset for offset, _ in stream.reads)
 
 
-def test_request_aggregate_cap_fails_before_second_frame_payload_read() -> None:
+def test_request_aggregate_cap_fails_before_any_frame_read() -> None:
     zero_digest = bytes.fromhex(
         "3b6a07d0d404fab4e23b6d34bc6696a6a312dd92821332385e5af7c01c421351"
     )
@@ -402,28 +367,14 @@ def test_request_aggregate_cap_fails_before_second_frame_payload_read() -> None:
             "sha256": "sha256:" + zero_digest.hex(),
         },
     ]
+    _bind_request_header(header)
     raw_header = canonical_bytes(header)
-    first_prefix = _FRAME_PREFIX.pack(
-        FrameType.ARTIFACT.value,
-        MAX_FRAME_BYTES,
-        zero_digest,
-    )
-    second_prefix = _FRAME_PREFIX.pack(
-        FrameType.SECRET.value,
-        MAX_FRAME_BYTES,
-        zero_digest,
-    )
-    fixed = (
-        _PREFIX.pack(PROTOCOL_MAGIC, PROTOCOL_VERSION, len(raw_header), 2)
-        + raw_header
-        + first_prefix
-    )
-    stream = _ZeroPayloadGuardStream(fixed, MAX_FRAME_BYTES, second_prefix)
+    fixed = _PREFIX.pack(PROTOCOL_MAGIC, PROTOCOL_VERSION, len(raw_header), 2) + raw_header
+    stream = _GuardedReadStream(fixed, forbidden_offset=len(fixed))
 
     _assert_reason(ReasonCode.EXEC_PROTOCOL_INVALID, lambda: read_message(stream))
 
-    assert stream.zero_bytes_returned == MAX_FRAME_BYTES
-    assert stream.reads[-1][0] < stream.forbidden_offset
+    assert all(offset < stream.forbidden_offset for offset, _ in stream.reads)
 
 
 def test_truncated_frame_prefix_and_payload_fail() -> None:
@@ -520,6 +471,41 @@ def test_payload_digest_descriptor_mismatch_and_trailing_bytes_fail() -> None:
             ReasonCode.EXEC_PROTOCOL_INVALID,
             lambda encoded=encoded: read_message(BytesIO(encoded)),
         )
+
+
+def test_consistent_frame_substitution_retaining_execution_digest_fails() -> None:
+    original_payload = b"original-artifact"
+    substituted_payload = b"substitute-artifact"
+    header = _request_header(((FrameType.ARTIFACT, original_payload),))
+    original_execution_digest = header["execution_digest"]
+    header["frames"] = [
+        _descriptor(0, FrameType.ARTIFACT, substituted_payload)
+    ]
+    assert original_execution_digest != execution_digest(
+        {
+            "schema_version": 1,
+            "request": {
+                key: value for key, value in header.items() if key != "execution_digest"
+            },
+        }
+    )
+
+    _assert_reason(
+        ReasonCode.EXEC_PROTOCOL_INVALID,
+        lambda: FramedMessage(
+            header=header,
+            frames=(Frame(FrameType.ARTIFACT, substituted_payload),),
+        ),
+    )
+
+    forged = _wire_bytes(
+        header,
+        ((FrameType.ARTIFACT.value, substituted_payload),),
+    )
+    _assert_reason(
+        ReasonCode.EXEC_PROTOCOL_INVALID,
+        lambda: read_message(BytesIO(forged)),
+    )
 
 
 def test_frame_descriptors_require_exact_order_unique_indexes_and_hashes() -> None:
@@ -657,6 +643,7 @@ def test_empty_response_direction_is_inferred_from_its_echo_header() -> None:
 def test_request_argv_accepts_only_generated_schema_placeholder_grammar() -> None:
     valid_header = _request_header()
     valid_header["argv"] = ["/usr/bin/tool", "{target:primary}"]
+    _bind_request_header(valid_header)
     message = FramedMessage(header=valid_header, frames=())
     stream = BytesIO()
     write_message(stream, message)
@@ -665,6 +652,7 @@ def test_request_argv_accepts_only_generated_schema_placeholder_grammar() -> Non
     for invalid_token in ("prefix{target:primary}", "{unknown:primary}", "{target:Bad}"):
         invalid_header = _request_header()
         invalid_header["argv"] = [invalid_token]
+        _bind_request_header(invalid_header)
         _assert_reason(
             ReasonCode.EXEC_PROTOCOL_INVALID,
             lambda invalid_header=invalid_header: FramedMessage(
@@ -717,7 +705,10 @@ def _binding_header(**changes: object) -> dict[str, object]:
 
 
 def test_run_binding_parses_exact_header_values() -> None:
-    binding = RunBinding.from_header(_request_header())
+    header = _request_header()
+    binding = RunBinding.from_header(header)
+    execution_digest_value = header["execution_digest"]
+    assert type(execution_digest_value) is str
 
     assert binding == RunBinding(
         run_id=_RUN_ID,
@@ -725,7 +716,7 @@ def test_run_binding_parses_exact_header_values() -> None:
         issued_at=datetime(2026, 7, 26, 12, tzinfo=UTC),
         expires_at=datetime(2026, 7, 26, 12, 5, tzinfo=UTC),
         authority_digest=_AUTHORITY_DIGEST,
-        execution_digest=_EXECUTION_DIGEST,
+        execution_digest=execution_digest_value,
     )
 
 
@@ -888,6 +879,19 @@ def test_response_echo_must_match_request_binding(field: str) -> None:
     )
 
 
+def test_response_execution_digest_is_echo_only_not_a_request_projection() -> None:
+    response_payload = b"stdout"
+    header = _response_header(((FrameType.STDOUT, response_payload),))
+    header["execution_digest"] = "sha256:" + "4" * 64
+
+    message = FramedMessage(
+        header=header,
+        frames=(Frame(FrameType.STDOUT, response_payload),),
+    )
+
+    assert message.header["execution_digest"] == "sha256:" + "4" * 64
+
+
 def test_response_chain_uses_exact_network_order_bytes() -> None:
     frames = (
         Frame(FrameType.STDOUT, b"out"),
@@ -931,7 +935,30 @@ def test_deterministic_protocol_fixtures_have_exact_bytes_and_hashes() -> None:
     assert header["run_id"] == _RUN_ID
     assert header["nonce"] == _NONCE
     assert header["execution_digest"] == (
-        "sha256:5012021e9f1b0f2e960ee0ff09e06c61fc6ad0f7df274a420ff78f0905be18a8"
+        "sha256:02e262e0114492b8078130e3b9f8c18244cb8d12c7f05224ff4b1012b411ac7c"
+    )
+    request = {key: value for key, value in header.items() if key != "execution_digest"}
+    assert set(request) == {
+        "protocol_version",
+        "run_id",
+        "nonce",
+        "issued_at",
+        "expires_at",
+        "authority_digest",
+        "action_id",
+        "argv",
+        "executable",
+        "runner_identity",
+        "operating_system",
+        "architecture",
+        "required_privileges",
+        "frames",
+        "timeout_seconds",
+        "stdout_cap_bytes",
+        "stderr_cap_bytes",
+    }
+    assert header["execution_digest"] == execution_digest(
+        {"schema_version": 1, "request": request}
     )
 
     payload = b"synthetic-artifact"

@@ -155,6 +155,13 @@ timestamps, expiry/skew, digest syntax, and response echo fields. Replay cache,
 SSH pinning, helper verification, and privilege permits are P4 consumers of
 these contract values.
 
+Execution projection v1 is exactly
+`{"schema_version":1,"request":<request>}`. The request value retains every
+canonical request-header field and nested value unchanged except for removing
+the top-level `execution_digest`; request acceptance recomputes and compares
+the domain-separated digest over that literal shape. Responses only echo and
+compare the already validated request execution digest.
+
 Alternative considered: newline-delimited JSON or shell-safe text. Rejected
 because arbitrary artifact/secret bytes, exact length enforcement, and
 truncation detection require binary framing.
