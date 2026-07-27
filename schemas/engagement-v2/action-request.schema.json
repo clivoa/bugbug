@@ -1,0 +1,120 @@
+{
+  "$defs": {
+    "digest": {
+      "maxLength": 71,
+      "minLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "identifier": {
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "parameter_value": {
+      "oneOf": [
+        {
+          "maxLength": 8192,
+          "type": "string"
+        },
+        {
+          "maximum": 9223372036854775807,
+          "minimum": -9223372036854775808,
+          "type": "integer"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "$ref": "#/$defs/target_list"
+        }
+      ]
+    },
+    "risk_level": {
+      "enum": [
+        "L0",
+        "L1",
+        "L2",
+        "L3"
+      ],
+      "type": "string"
+    },
+    "strict_boolean": {
+      "type": "boolean"
+    },
+    "target": {
+      "maxLength": 2048,
+      "minLength": 1,
+      "type": "string"
+    },
+    "target_list": {
+      "items": {
+        "$ref": "#/$defs/target"
+      },
+      "maxItems": 65536,
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    }
+  },
+  "$id": "urn:hackbot:schema:engagement-v2:action-request:2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "cleanup_plan": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "type": "string"
+    },
+    "expected_impact": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "type": "string"
+    },
+    "hypothesis_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "parameters": {
+      "additionalProperties": false,
+      "maxProperties": 128,
+      "patternProperties": {
+        "^[a-z][a-z0-9_]{0,63}$": {
+          "$ref": "#/$defs/parameter_value"
+        }
+      },
+      "type": "object"
+    },
+    "rationale": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "type": "string"
+    },
+    "requested_risk": {
+      "$ref": "#/$defs/risk_level"
+    },
+    "schema_version": {
+      "const": 2,
+      "type": "integer"
+    },
+    "stop_condition": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "action_id",
+    "parameters",
+    "hypothesis_id",
+    "rationale",
+    "expected_impact",
+    "stop_condition",
+    "cleanup_plan"
+  ],
+  "type": "object",
+  "x-hackbot-max-document-nesting-depth": 32
+}
