@@ -36,4 +36,4 @@
 ## 8. Verification and delivery
 
 - [x] 8.1 Run focused P0 tests, the full pytest suite, Ruff check/format, mypy, schema drift, OpenSpec strict validation, secret scan, and `git diff --check`; record fresh outputs.
-- [x] 8.2 Request independent review, resolve findings, update Issue #1/Project fields, and archive the OpenSpec change only after implementation, verification, and merge. Independent review verdict "solid" with only informational notes; disposition in `docs/reviews/2026-07-27-engagement-v2-p0-contracts-review-disposition.md` (forward-carry N2: consumer binds `argv[0]` to executable path in P2/P4).
+- [ ] 8.2 Request independent review, resolve findings, update Issue #1/Project fields, and archive the OpenSpec change only after implementation, verification, and merge. Independent review is complete with only informational notes; merge verification, archive, Issue/Project completion, and P1 promotion remain. Disposition: `docs/reviews/2026-07-27-engagement-v2-p0-contracts-review-disposition.md` (forward-carry N2: P2/P4 consumers bind `argv[0]` to the canonical executable path).
