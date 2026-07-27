@@ -22,8 +22,11 @@ def _inv(x: int) -> int:
 def _recover_x(y: int, sign: int) -> int | None:
     if y >= _P:
         return None
-    xx = (y * y - 1) * _inv(_D * y * y + 1)
-    x = pow(xx % _P, (_P + 3) // 8, _P)
+    xx = ((y * y - 1) * _inv(_D * y * y + 1)) % _P
+    if xx == 0:
+        # x == 0 is canonical only with a clear sign bit (RFC 8032 decode).
+        return None if sign else 0
+    x = pow(xx, (_P + 3) // 8, _P)
     if (x * x - xx) % _P != 0:
         x = (x * _I) % _P
     if (x * x - xx) % _P != 0:

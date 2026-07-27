@@ -32,7 +32,9 @@ _PERMIT_FIELDS = frozenset(
         "action_id",
         "runner_identity",
         "executable_sha256",
+        "execution_digest",
         "privileges",
+        "run_id",
         "nonce",
         "issued_at",
         "expires_at",
@@ -47,7 +49,10 @@ class PermitContext:
     action_id: str
     runner_identity: str
     executable_sha256: str
+    execution_digest: str
     required_privileges: frozenset[str]
+    run_id: str
+    nonce: str
 
 
 def _mismatch() -> ContractError:
@@ -96,7 +101,8 @@ def verify_permit(
     if not verify(signer_public_key, message, signature):
         raise _mismatch()
 
-    # 4. The permit must bind exactly this engagement/authority/action/runner/exe.
+    # 4. The permit must bind exactly this run: engagement, authority, action,
+    # runner, executable, execution digest, and the replay tuple (run_id, nonce).
     if permit["engagement_id"] != context.engagement_id:
         raise _mismatch()
     if permit["authority_digest"] != context.authority_digest:
@@ -106,6 +112,10 @@ def verify_permit(
     if permit["runner_identity"] != context.runner_identity:
         raise _mismatch()
     if permit["executable_sha256"] != context.executable_sha256:
+        raise _mismatch()
+    if permit["execution_digest"] != context.execution_digest:
+        raise _mismatch()
+    if permit["run_id"] != context.run_id or permit["nonce"] != context.nonce:
         raise _mismatch()
 
     # 5. The privilege set must match exactly.
@@ -123,7 +133,7 @@ def verify_permit(
     lifetime = (expires - issued).total_seconds()
     if not MIN_REQUEST_LIFETIME_SECONDS <= lifetime <= MAX_REQUEST_LIFETIME_SECONDS:
         raise ContractError(ReasonCode.EXEC_PROTOCOL_EXPIRED)
-    if now >= expires:
+    if now >= expires or now < issued:
         raise ContractError(ReasonCode.EXEC_PROTOCOL_EXPIRED)
 
 

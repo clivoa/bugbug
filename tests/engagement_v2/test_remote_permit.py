@@ -30,6 +30,9 @@ def _fingerprint(pub: bytes) -> str:
     return "sha256:" + hashlib.sha256(pub).hexdigest()
 
 
+_RUN_ID = "11111111-1111-4111-8111-111111111111"
+
+
 def _permit() -> dict:
     return {
         "engagement_id": "engv2.alpha",
@@ -37,7 +40,9 @@ def _permit() -> dict:
         "action_id": "operator.capture",
         "runner_identity": "kali.node",
         "executable_sha256": "sha256:" + "b" * 64,
+        "execution_digest": "sha256:" + "c" * 64,
         "privileges": ["network-raw"],
+        "run_id": _RUN_ID,
         "nonce": "n" * 43,
         "issued_at": "2026-07-27T12:00:00Z",
         "expires_at": "2026-07-27T12:05:00Z",
@@ -51,7 +56,10 @@ def _context() -> PermitContext:
         action_id="operator.capture",
         runner_identity="kali.node",
         executable_sha256="sha256:" + "b" * 64,
+        execution_digest="sha256:" + "c" * 64,
         required_privileges=frozenset({"network-raw"}),
+        run_id=_RUN_ID,
+        nonce="n" * 43,
     )
 
 
@@ -133,3 +141,34 @@ def test_expired_permit_rejected() -> None:
             now=late,
         )
     assert excinfo.value.reason_code is ReasonCode.EXEC_PROTOCOL_EXPIRED
+
+
+def test_not_yet_valid_permit_rejected() -> None:
+    permit = _permit()
+    early = datetime(2026, 7, 27, 11, 59, tzinfo=UTC)
+    with pytest.raises(ContractError) as excinfo:
+        verify_permit(
+            permit,
+            _signed(permit),
+            public_key(_SEED),
+            pinned_signer_fingerprint=_fingerprint(public_key(_SEED)),
+            context=_context(),
+            now=early,
+        )
+    assert excinfo.value.reason_code is ReasonCode.EXEC_PROTOCOL_EXPIRED
+
+
+def test_permit_for_another_run_rejected() -> None:
+    # A permit signed for a different execution digest must not verify for this run.
+    permit = _permit()
+    permit["execution_digest"] = "sha256:" + "d" * 64
+    with pytest.raises(ContractError) as excinfo:
+        verify_permit(
+            permit,
+            _signed(permit),
+            public_key(_SEED),
+            pinned_signer_fingerprint=_fingerprint(public_key(_SEED)),
+            context=_context(),
+            now=_NOW,
+        )
+    assert excinfo.value.reason_code is ReasonCode.EXEC_PRIVILEGE_MISMATCH
