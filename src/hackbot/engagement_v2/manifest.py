@@ -16,11 +16,24 @@ from types import MappingProxyType
 from hackbot.engagement_v2.constants import (
     ACTIONS_SCHEMA_VERSION,
     ELEVATION_BASENAMES,
+    INLINE_MODE_FLAGS_BY_BASENAME,
     INTERPRETER_BASENAMES,
+    MAX_ACTION_CAPABILITIES,
     MAX_ACTION_MANIFEST_BYTES,
+    MAX_ACTION_PARAMETERS,
+    MAX_ACTION_SECRETS,
     MAX_ACTIONS,
     MAX_ARGV_TOKENS,
+    MAX_ENUM_VALUES,
+    MAX_IDENTIFIER_BYTES,
+    MAX_SIGNED_INT64,
+    MAX_TARGET_BINDINGS,
+    MAX_UTF8_STRING_BYTES,
+    MIN_ENUM_VALUES,
+    MIN_SIGNED_INT64,
+    MIN_UTF8_STRING_BYTES,
     OPERATOR_ACTION_ID_PREFIX,
+    SAFE_FULLMATCH_FORMAT,
     SHELL_BASENAMES,
     Architecture,
     EvidenceMode,
@@ -32,6 +45,7 @@ from hackbot.engagement_v2.constants import (
 )
 from hackbot.engagement_v2.errors import ContractError, ReasonCode
 from hackbot.engagement_v2.loader import read_hardened_document
+from hackbot.engagement_v2.patterns import SafePattern, compile_safe_pattern
 
 # Canonical action-capability -> testing_rules field mapping (P2 consumes it).
 CAPABILITY_TO_FIELD: Mapping[str, str] = MappingProxyType(
@@ -65,6 +79,42 @@ _PLACEHOLDER = re.compile(
 )
 _ACTION_ID = re.compile(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", re.ASCII)
 _PARAMETER_TYPES = frozenset(member.value for member in ParameterType)
+# Target-shaped parameter types must be supplied through scope-checked target
+# bindings, never as inline {value:...} tokens (which bypass scope).
+_TARGET_PARAMETER_TYPES = frozenset(
+    {
+        ParameterType.DOMAIN.value,
+        ParameterType.HOST.value,
+        ParameterType.IP.value,
+        ParameterType.CIDR.value,
+        ParameterType.URL.value,
+        ParameterType.NETWORK_ENDPOINT.value,
+        ParameterType.TARGET_LIST.value,
+    }
+)
+_ACTION_FIELDS = frozenset(
+    {
+        "id",
+        "title",
+        "risk",
+        "platforms",
+        "architectures",
+        "executables",
+        "executable_digests",
+        "required_privileges",
+        "parameters",
+        "secrets",
+        "targets",
+        "characteristics",
+        "rate_control",
+        "capabilities",
+        "vulnerability_types",
+        "impacts",
+        "evidence_policy",
+        "retained_outputs",
+        "argv",
+    }
+)
 
 
 def _fail() -> ContractError:
@@ -80,6 +130,7 @@ class ParameterDef:
     minimum: int | None = None
     maximum: int | None = None
     max_length: int | None = None
+    pattern: SafePattern | None = None
 
 
 @dataclass(frozen=True)
@@ -96,12 +147,15 @@ class ActionDefinition:
     risk: str
     platforms: frozenset[str]
     executables: Mapping[str, str]
+    executable_basenames: frozenset[str]
     required_privileges: frozenset[str]
     parameters: Mapping[str, ParameterDef]
     target_bindings: frozenset[str]
     secret_bindings: frozenset[str]
     artifact_bindings: frozenset[str]
     capabilities: frozenset[str]
+    vulnerability_types: frozenset[str]
+    impacts: frozenset[str]
     rate_control: RateControl
     evidence_mode: str
     argv_template: tuple[str, ...]
@@ -131,28 +185,33 @@ def _list(value: object) -> Sequence[object]:
 
 
 def _basename(path: str) -> str:
-    return posixpath.basename(path)
+    return posixpath.basename(path.replace("\\", "/")).lower()
 
 
-def _validate_executables(raw: object, platforms: frozenset[str], risk: str) -> dict[str, str]:
+def _validate_executables(
+    raw: object, platforms: frozenset[str], risk: str
+) -> tuple[dict[str, str], frozenset[str]]:
     executables = _mapping(raw)
     resolved: dict[str, str] = {}
+    basenames: set[str] = set()
     _require(bool(executables))
     for platform, path in executables.items():
         _require(platform in platforms)
         path_str = _str(path)
         _require(path_str.startswith("/") or bool(re.match(r"[A-Za-z]:\\", path_str)))
-        basename = _basename(path_str.replace("\\", "/")).lower()
+        basename = _basename(path_str)
         _require(basename not in ELEVATION_BASENAMES)
         if basename in SHELL_BASENAMES or basename in INTERPRETER_BASENAMES:
             # Shells/interpreters are only acceptable for a declared L3 action.
             _require(risk == RiskLevel.L3.value)
         resolved[platform] = path_str
-    return resolved
+        basenames.add(basename)
+    return resolved, frozenset(basenames)
 
 
 def _validate_parameters(raw: object) -> dict[str, ParameterDef]:
     parameters = _mapping(raw)
+    _require(len(parameters) <= MAX_ACTION_PARAMETERS)
     resolved: dict[str, ParameterDef] = {}
     for name, definition in parameters.items():
         _require(bool(_BINDING_ID.fullmatch(name)))
@@ -165,24 +224,46 @@ def _validate_parameters(raw: object) -> dict[str, ParameterDef]:
         enum_values: tuple[str, ...] = ()
         if type_value == ParameterType.ENUM.value:
             raw_values = _list(body.get("enum_values"))
-            _require(bool(raw_values))
+            _require(MIN_ENUM_VALUES <= len(raw_values) <= MAX_ENUM_VALUES)
             enum_values = tuple(_str(value) for value in raw_values)
-        minimum = body.get("minimum")
-        maximum = body.get("maximum")
-        max_length = body.get("max_length")
-        _require(minimum is None or type(minimum) is int)
-        _require(maximum is None or type(maximum) is int)
-        _require(max_length is None or type(max_length) is int)
+            _require(len(set(enum_values)) == len(enum_values))
+        minimum = _int_or_none(body.get("minimum"))
+        maximum = _int_or_none(body.get("maximum"))
+        max_length = _int_or_none(body.get("max_length"))
+        if minimum is not None:
+            _require(MIN_SIGNED_INT64 <= minimum <= MAX_SIGNED_INT64)
+        if maximum is not None:
+            _require(MIN_SIGNED_INT64 <= maximum <= MAX_SIGNED_INT64)
+        if minimum is not None and maximum is not None:
+            _require(minimum <= maximum)
+        if max_length is not None:
+            _require(MIN_UTF8_STRING_BYTES <= max_length <= MAX_UTF8_STRING_BYTES)
+        pattern = None
+        if "pattern" in body:
+            _require(_str(body.get("pattern_format")) == SAFE_FULLMATCH_FORMAT)
+            try:
+                pattern = compile_safe_pattern(_str(body.get("pattern")))
+            except ContractError as exc:
+                raise _fail() from exc
         resolved[name] = ParameterDef(
             name=name,
             type=type_value,
             required=required,
             enum_values=enum_values,
-            minimum=minimum if isinstance(minimum, int) else None,
-            maximum=maximum if isinstance(maximum, int) else None,
-            max_length=max_length if isinstance(max_length, int) else None,
+            minimum=minimum,
+            maximum=maximum,
+            max_length=max_length,
+            pattern=pattern,
         )
     return resolved
+
+
+def _int_or_none(value: object) -> int | None:
+    if value is None:
+        return None
+    _require(type(value) is int)
+    assert isinstance(value, int)
+    return value
 
 
 def _validate_rate_control(raw: object, parameters: Mapping[str, ParameterDef]) -> RateControl:
@@ -200,30 +281,46 @@ def _validate_rate_control(raw: object, parameters: Mapping[str, ParameterDef]) 
     return RateControl(kind, rate_parameter, concurrency_parameter, adapter_id)
 
 
+def _inline_flags_for(basenames: frozenset[str]) -> frozenset[str]:
+    flags: set[str] = set()
+    for basename in basenames:
+        flags |= {flag.lower() for flag in INLINE_MODE_FLAGS_BY_BASENAME.get(basename, frozenset())}
+    return frozenset(flags)
+
+
 def _validate_argv(
     raw: object,
     parameters: Mapping[str, ParameterDef],
     target_bindings: frozenset[str],
     secret_bindings: frozenset[str],
     artifact_bindings: frozenset[str],
+    executable_basenames: frozenset[str],
 ) -> tuple[str, ...]:
     tokens = _list(raw)
     _require(1 <= len(tokens) <= MAX_ARGV_TOKENS)
+    inline_flags = _inline_flags_for(executable_basenames)
     rendered: list[str] = []
     for token in tokens:
         text = _str(token)
-        encoded = text.encode("utf-8")
-        _require(1 <= len(encoded) <= 4096)
+        _require(1 <= len(text.encode("utf-8")) <= 4096)
         match = _PLACEHOLDER.fullmatch(text)
         if match is None:
-            # A literal token must contain no placeholder-looking fragment.
+            # A literal token must contain no placeholder-looking fragment,
+            # no inline-eval flag for a shell/interpreter executable, and no
+            # elevation basename.
             if "{" in text or "}" in text:
                 raise ContractError(ReasonCode.INVALID_PLACEHOLDER)
+            _require(text.lower() not in inline_flags)
+            _require(_basename(text) not in ELEVATION_BASENAMES)
             rendered.append(text)
             continue
         kind, name = match.group(1), match.group(2)
         if kind == "value":
-            _require(name in parameters)
+            param = parameters.get(name)
+            _require(param is not None)
+            assert param is not None
+            # Target-shaped values must go through scope-checked target bindings.
+            _require(param.type not in _TARGET_PARAMETER_TYPES)
         elif kind in {"target", "targets_file"}:
             _require(name in target_bindings)
         elif kind == "artifact_file":
@@ -236,9 +333,13 @@ def _validate_argv(
 
 def _validate_action(raw: object, seen_ids: set[str]) -> ActionDefinition:
     action = _mapping(raw)
+    for key in action:
+        _require(key in _ACTION_FIELDS)
+
     action_id = _str(action.get("id"))
     _require(action_id.startswith(OPERATOR_ACTION_ID_PREFIX))
     _require(bool(_ACTION_ID.fullmatch(action_id)))
+    _require(len(action_id.encode("utf-8")) <= MAX_IDENTIFIER_BYTES)
     _require(action_id not in seen_ids)
 
     risk = _str(action.get("risk"))
@@ -252,23 +353,36 @@ def _validate_action(raw: object, seen_ids: set[str]) -> ActionDefinition:
     _require(privileges <= {member.value for member in Privilege})
 
     parameters = _validate_parameters(action.get("parameters"))
+    artifact_bindings = frozenset(
+        name for name, param in parameters.items() if param.type == ParameterType.ARTIFACT_REF.value
+    )
     target_bindings = frozenset(_str(t) for t in _list(action.get("targets")))
+    _require(len(target_bindings) <= MAX_TARGET_BINDINGS)
     for name in target_bindings:
         _require(bool(_BINDING_ID.fullmatch(name)))
-    secret_bindings = frozenset(_mapping(action.get("secrets")).keys())
-    artifact_bindings: frozenset[str] = frozenset()
+    secrets = _mapping(action.get("secrets"))
+    _require(len(secrets) <= MAX_ACTION_SECRETS)
+    secret_bindings = frozenset(secrets.keys())
 
     capabilities = frozenset(_str(c) for c in _list(action.get("capabilities")))
+    _require(len(capabilities) <= MAX_ACTION_CAPABILITIES)
     _require(capabilities <= set(CAPABILITY_TO_FIELD))
+    vulnerability_types = frozenset(_str(v) for v in _list(action.get("vulnerability_types")))
+    impacts = frozenset(_str(i) for i in _list(action.get("impacts")))
 
     evidence_policy = _mapping(action.get("evidence_policy"))
     evidence_mode = _str(evidence_policy.get("mode"))
     _require(evidence_mode in {member.value for member in EvidenceMode})
 
-    executables = _validate_executables(action.get("executables"), platforms, risk)
+    executables, basenames = _validate_executables(action.get("executables"), platforms, risk)
     rate_control = _validate_rate_control(action.get("rate_control"), parameters)
     argv_template = _validate_argv(
-        action.get("argv"), parameters, target_bindings, secret_bindings, artifact_bindings
+        action.get("argv"),
+        parameters,
+        target_bindings,
+        secret_bindings,
+        artifact_bindings,
+        basenames,
     )
 
     seen_ids.add(action_id)
@@ -277,12 +391,15 @@ def _validate_action(raw: object, seen_ids: set[str]) -> ActionDefinition:
         risk=risk,
         platforms=platforms,
         executables=MappingProxyType(executables),
+        executable_basenames=basenames,
         required_privileges=privileges,
         parameters=MappingProxyType(parameters),
         target_bindings=target_bindings,
         secret_bindings=secret_bindings,
         artifact_bindings=artifact_bindings,
         capabilities=capabilities,
+        vulnerability_types=vulnerability_types,
+        impacts=impacts,
         rate_control=rate_control,
         evidence_mode=evidence_mode,
         argv_template=argv_template,

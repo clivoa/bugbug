@@ -9,6 +9,7 @@ returns the bound command produced by the binder.
 
 from __future__ import annotations
 
+import posixpath
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -27,7 +28,30 @@ _RISK_ORDER = {
 }
 # Capabilities that imply finite-rate network volume; a not-applicable rate
 # control cannot enforce them.
-_NETWORK_RATED_CAPABILITIES = frozenset({"automated-scanning"})
+_NETWORK_RATED_CAPABILITIES = frozenset({"automated-scanning", "authenticated-testing"})
+
+# Inferred risk floor per capability. The effective level is never below this.
+_CAPABILITY_RISK_FLOOR: dict[str, str] = {
+    "authenticated-testing": "L1",
+    "automated-scanning": "L2",
+    "state-changing": "L2",
+    "account-creation": "L2",
+    "multiple-accounts": "L2",
+    "out-of-band": "L2",
+    "sensitive-data-access": "L2",
+    "autonomous-progression": "L2",
+    "exploit-execution": "L3",
+    "payload-execution": "L3",
+    "credential-access": "L3",
+    "credential-capture": "L3",
+    "privileged-execution": "L3",
+    "lateral-movement": "L3",
+    "persistence": "L3",
+    "data-exfiltration": "L3",
+    "social-engineering": "L3",
+    "denial-of-service": "L3",
+    "destructive-testing": "L3",
+}
 
 
 class DecisionKind(str, Enum):
@@ -64,12 +88,35 @@ def _request_targets(request: Mapping[str, object], name: str) -> tuple[str, ...
 
 def _effective_risk(action: ActionDefinition, request: Mapping[str, object]) -> str:
     level = action.risk
+    # Inferred floor from declared capabilities; a request can only raise, never
+    # lower, the effective level.
+    for capability in action.capabilities:
+        floor = _CAPABILITY_RISK_FLOOR.get(capability)
+        if floor is not None and _RISK_ORDER[floor] > _RISK_ORDER[level]:
+            level = floor
     requested = request.get("requested_risk")
-    # A request can only raise, never lower, the level.
     if isinstance(requested, str) and requested in _RISK_ORDER:
         if _RISK_ORDER[requested] > _RISK_ORDER[level]:
             level = requested
     return level
+
+
+def _int_param(request: Mapping[str, object], name: str | None) -> int | None:
+    if name is None:
+        return None
+    parameters = request.get("parameters")
+    if not isinstance(parameters, Mapping):
+        return None
+    value = parameters.get(name)
+    if type(value) is int:
+        return value
+    return None
+
+
+def _string_set(value: object) -> frozenset[str]:
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes):
+        return frozenset(item for item in value if isinstance(item, str))
+    return frozenset()
 
 
 def decide(
@@ -126,20 +173,43 @@ def decide(
         resolved[name] = targets
         total_targets += len(targets)
 
-    # 4. Numeric limits: target count.
-    max_targets = testing_rules.get("max_targets_per_action")
-    if isinstance(max_targets, int) and not isinstance(max_targets, bool):
-        if total_targets > max_targets:
+    # 4. Prohibited tools, vulnerability types, and excluded impacts.
+    executable = action.executables.get(platform)
+    if executable is not None:
+        basename = posixpath.basename(executable.replace("\\", "/")).lower()
+        if basename in {
+            tool.lower() for tool in _string_set(testing_rules.get("prohibited_tools"))
+        }:
             return _deny(ReasonCode.DENY_POLICY_LIMIT.value, effective_risk)
-
-    # 5. Rate enforceability.
-    if action.rate_control.kind == "not-applicable" and (
-        action.capabilities & _NETWORK_RATED_CAPABILITIES
+    if action.vulnerability_types & _string_set(
+        testing_rules.get("prohibited_vulnerability_types")
     ):
-        max_rate = testing_rules.get("max_requests_per_second")
-        if isinstance(max_rate, int) and not isinstance(max_rate, bool):
+        return _deny(ReasonCode.DENY_POLICY_LIMIT.value, effective_risk)
+    if action.impacts & _string_set(testing_rules.get("excluded_impacts")):
+        return _deny(ReasonCode.DENY_POLICY_LIMIT.value, effective_risk)
+
+    # 5. Numeric limits: target count, concurrency, and rate.
+    max_targets = testing_rules.get("max_targets_per_action")
+    if type(max_targets) is int and total_targets > max_targets:
+        return _deny(ReasonCode.DENY_POLICY_LIMIT.value, effective_risk)
+    concurrency = _int_param(request, action.rate_control.concurrency_parameter)
+    max_concurrency = testing_rules.get("concurrency")
+    if concurrency is not None and type(max_concurrency) is int and concurrency > max_concurrency:
+        return _deny(ReasonCode.DENY_POLICY_LIMIT.value, effective_risk)
+    rate = _int_param(request, action.rate_control.rate_parameter)
+    max_rate = testing_rules.get("max_requests_per_second")
+    if rate is not None and type(max_rate) is int and rate > max_rate:
+        return _deny(ReasonCode.DENY_POLICY_LIMIT.value, effective_risk)
+
+    # 6. Rate enforceability: a not-applicable rate control cannot bound a
+    # network-rated or fan-out action under a finite request rate.
+    has_fanout = any(token.startswith("{targets_file:") for token in action.argv_template)
+    if action.rate_control.kind == "not-applicable" and (
+        bool(action.capabilities & _NETWORK_RATED_CAPABILITIES) or has_fanout
+    ):
+        if type(max_rate) is int:
             return _deny(ReasonCode.DENY_RATE_UNENFORCEABLE.value, effective_risk)
 
-    # 6. Bind and allow. Binding resolves no secret and creates no resource.
+    # 7. Bind and allow. Binding resolves no secret and creates no resource.
     bound = bind(action, request, resolved, platform=platform)
     return PolicyDecision(DecisionKind.ALLOW, "ALLOW", effective_risk, bound)

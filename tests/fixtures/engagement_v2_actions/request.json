@@ -5,7 +5,7 @@
   "hypothesis_id": "h1",
   "parameters": {
     "concurrency": 2,
-    "rate": 10,
+    "rate": 5,
     "url": "https://app.corp.example/admin"
   },
   "rationale": "probe the admin endpoint",

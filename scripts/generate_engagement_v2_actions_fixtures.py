@@ -49,7 +49,7 @@ _MANIFEST: Final = {
 _REQUEST: Final = {
     "schema_version": 2,
     "action_id": "operator.http-probe",
-    "parameters": {"rate": 10, "concurrency": 2, "url": "https://app.corp.example/admin"},
+    "parameters": {"rate": 5, "concurrency": 2, "url": "https://app.corp.example/admin"},
     "hypothesis_id": "h1",
     "rationale": "probe the admin endpoint",
     "expected_impact": "none demonstrated",

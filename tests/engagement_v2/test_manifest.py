@@ -99,6 +99,50 @@ def test_too_many_actions_rejected() -> None:
         validate_manifest(document)
 
 
+def test_interpreter_inline_eval_rejected_even_at_l3() -> None:
+    action = action_doc()
+    action["risk"] = "L3"
+    action["executables"] = {"linux": "/bin/bash"}
+    action["parameters"] = {"cmd": {"type": "string", "required": True}}
+    action["rate_control"] = {"kind": "not-applicable"}
+    action["capabilities"] = ["payload-execution"]
+    action["argv"] = ["-c", "{value:cmd}"]
+    with pytest.raises(ContractError) as excinfo:
+        validate_manifest(manifest_doc(action))
+    assert _reason(excinfo) is ReasonCode.INVALID_ACTION_MANIFEST
+
+
+def test_target_typed_value_parameter_rejected() -> None:
+    action = action_doc()
+    action["parameters"] = {
+        "rate": {"type": "integer", "required": True},
+        "concurrency": {"type": "integer", "required": True},
+        "host": {"type": "url", "required": True},
+    }
+    action["targets"] = []
+    action["argv"] = ["{value:host}"]
+    with pytest.raises(ContractError) as excinfo:
+        validate_manifest(manifest_doc(action))
+    assert _reason(excinfo) is ReasonCode.INVALID_ACTION_MANIFEST
+
+
+def test_elevation_argv_token_rejected() -> None:
+    action = action_doc()
+    action["executables"] = {"linux": "/usr/bin/timeout"}
+    action["argv"] = ["sudo", "{target:url}"]
+    with pytest.raises(ContractError) as excinfo:
+        validate_manifest(manifest_doc(action))
+    assert _reason(excinfo) is ReasonCode.INVALID_ACTION_MANIFEST
+
+
+def test_unknown_action_field_rejected() -> None:
+    action = action_doc()
+    action["backdoor"] = True
+    with pytest.raises(ContractError) as excinfo:
+        validate_manifest(manifest_doc(action))
+    assert _reason(excinfo) is ReasonCode.INVALID_ACTION_MANIFEST
+
+
 def test_load_manifest_from_disk(tmp_path: Path) -> None:
     path = tmp_path / "actions.json"
     path.write_text(json.dumps(manifest_doc()), encoding="utf-8")

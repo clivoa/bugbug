@@ -24,7 +24,7 @@ def test_bind_produces_argv() -> None:
     assert command.argv == (
         "/usr/bin/curl",
         "--rate",
-        "10",
+        "5",
         "--target",
         "https://app.corp.example/admin",
     )
@@ -87,3 +87,33 @@ def test_targets_file_placeholder_is_a_reference() -> None:
     action["argv"] = ["--list", "{targets_file:url}"]
     command = bind(_action(action), request_doc(), _TARGET, platform="linux")
     assert FileReference("targets_file", "url") in command.argv
+
+
+def test_unbounded_string_hits_default_scalar_cap() -> None:
+    action = action_doc()
+    action["parameters"]["note"] = {"type": "string", "required": True}
+    action["argv"] = ["--note", "{value:note}", "--target", "{target:url}"]
+    request = request_doc()
+    request["parameters"]["note"] = "A" * 200_000
+    with pytest.raises(ContractError) as excinfo:
+        bind(_action(action), request, _TARGET, platform="linux")
+    assert excinfo.value.reason_code is ReasonCode.INVALID_REQUEST
+
+
+def test_safe_pattern_is_enforced() -> None:
+    action = action_doc()
+    action["parameters"]["label"] = {
+        "type": "string",
+        "required": True,
+        "pattern": "[a-z]{1,8}",
+        "pattern_format": "hackbot-safe-fullmatch-v1",
+    }
+    action["argv"] = ["--label", "{value:label}", "--target", "{target:url}"]
+    good = request_doc()
+    good["parameters"]["label"] = "abc"
+    assert bind(_action(action), good, _TARGET, platform="linux").argv[2] == "abc"
+    bad = request_doc()
+    bad["parameters"]["label"] = "NOT-lower"
+    with pytest.raises(ContractError) as excinfo:
+        bind(_action(action), bad, _TARGET, platform="linux")
+    assert excinfo.value.reason_code is ReasonCode.INVALID_REQUEST

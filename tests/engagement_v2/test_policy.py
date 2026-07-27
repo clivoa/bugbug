@@ -121,3 +121,46 @@ def test_request_cannot_lower_inferred_level() -> None:
 def test_decision_is_only_allow_or_deny() -> None:
     decision = decide(request_doc(), _snapshot(), _registry(), platform="linux")
     assert decision.kind in {DecisionKind.ALLOW, DecisionKind.DENY}
+
+
+def test_prohibited_tool_denies() -> None:
+    program = program_doc()
+    program["testing_rules"]["prohibited_tools"] = ["curl"]
+    decision = decide(request_doc(), _snapshot(program=program), _registry(), platform="linux")
+    assert decision.reason == "DENY_POLICY_LIMIT"
+
+
+def test_concurrency_over_program_limit_denies() -> None:
+    action = action_doc()
+    action["parameters"]["concurrency"]["maximum"] = 64
+    request = request_doc()
+    request["parameters"]["concurrency"] = 16  # program allows 2
+    decision = decide(request, _snapshot(), _registry(action), platform="linux")
+    assert decision.reason == "DENY_POLICY_LIMIT"
+
+
+def test_rate_over_program_limit_denies() -> None:
+    request = request_doc()
+    request["parameters"]["rate"] = 100  # program allows 5
+    decision = decide(request, _snapshot(), _registry(), platform="linux")
+    assert decision.reason == "DENY_POLICY_LIMIT"
+
+
+def test_fanout_not_applicable_rate_denies() -> None:
+    action = action_doc()
+    action["rate_control"] = {"kind": "not-applicable"}
+    action["capabilities"] = []
+    action["argv"] = ["--list", "{targets_file:url}"]
+    request = request_doc()
+    request["parameters"]["url"] = ["app.corp.example"]
+    decision = decide(request, _snapshot(), _registry(action), platform="linux")
+    assert decision.reason == "DENY_RATE_UNENFORCEABLE"
+
+
+def test_capability_inference_raises_effective_level() -> None:
+    action = action_doc()
+    action["risk"] = "L0"
+    action["capabilities"] = ["exploit-execution"]
+    # Capability gate denies (field absent), but the effective level is inferred L3.
+    decision = decide(request_doc(), _snapshot(), _registry(action), platform="linux")
+    assert decision.effective_risk == "L3"
