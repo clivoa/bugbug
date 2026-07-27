@@ -1,7 +1,7 @@
 # Next steps
 
-Status snapshot after the SSH remote runner. Use this as the starting point for
-the next phase.
+Status snapshot after P0 engagement-v2 security contracts. Use this as the
+starting point for the next phase.
 
 ## Where the project stands
 
@@ -43,6 +43,12 @@ skip; Ruff/format/mypy clean; offline smoke pass):
   allowlisted placeholders, and fail-before-output validation; see
   [`findings-and-reporting.md`](findings-and-reporting.md).
 - **Secrets** (OS keychain), **doctor**, wheel build + offline smoke test.
+- **P0 engagement v2 security contracts** (`src/hackbot/engagement_v2/`) —
+  active **Ready** OpenSpec change with isolated constants, canonical values and
+  digests, safe patterns, generated schemas, fixtures, and bounded framing;
+  see [`engagement-v2-contracts.md`](engagement-v2-contracts.md). P0 does not
+  enable engagement v2 execution: schema v1 remains current. P1–P7 remain
+  dependent on this contract boundary.
 
 The only executing path is the gate-bound substrate above; there is still no
 provider call or MCP.
