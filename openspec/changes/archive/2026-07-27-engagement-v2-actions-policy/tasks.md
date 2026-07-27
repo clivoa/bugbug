@@ -30,4 +30,4 @@
 ## 5. Verification and delivery
 
 - [x] 5.1 Run focused P2 tests, the full pytest suite, Ruff check/format, mypy, schema/fixture drift, OpenSpec strict validation, the secret-scan regex over new paths, and `git diff --check`; record fresh outputs.
-- [ ] 5.2 Request independent review, resolve findings, update Issue #3/Project fields, and archive the OpenSpec change only after implementation, verification, and merge. Independent review complete; all nine findings resolved with tests and spec scenarios — disposition in `docs/reviews/2026-07-27-engagement-v2-p2-actions-policy-review-disposition.md`. Remaining: P1 merge, then rebase, PR, merge, archive.
+- [x] 5.2 Request independent review, resolve findings, update Issue #3/Project fields, and archive the OpenSpec change only after implementation, verification, and merge. Independent review complete; all nine findings resolved with tests and spec scenarios — disposition in `docs/reviews/2026-07-27-engagement-v2-p2-actions-policy-review-disposition.md`. Remaining: P1 merge, then rebase, PR, merge, archive.
