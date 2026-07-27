@@ -32,6 +32,14 @@ def _before_replace(_name: str) -> None:
     """Provide a deterministic race-injection seam for the test suite."""
 
 
+def _before_temporary_verify(_temporary_name: str, _name: str) -> None:
+    """Provide a deterministic temporary-substitution seam for the test suite."""
+
+
+def _after_replace(_name: str) -> None:
+    """Provide a deterministic publication-substitution seam for the test suite."""
+
+
 def _require_descriptor_safe_primitives() -> None:
     required_flags = ("O_DIRECTORY", "O_NOFOLLOW")
     required_functions = (os.open, os.mkdir, os.unlink)
@@ -50,7 +58,12 @@ def _directory_flags() -> int:
 
 
 def _entry_flags() -> int:
-    return os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    return (
+        os.O_RDONLY
+        | os.O_NOFOLLOW
+        | getattr(os, "O_NONBLOCK", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+    )
 
 
 def _raise_unsafe_path(path: Path, error: OSError) -> None:
@@ -107,11 +120,22 @@ def _open_existing_entry(directory_descriptor: int, name: str) -> int:
         raise
 
 
-def _read_entry(directory_descriptor: int, name: str) -> bytes:
+def _open_regular_entry(directory_descriptor: int, name: str) -> int:
     descriptor = _open_existing_entry(directory_descriptor, name)
     try:
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise RuntimeError(f"schema destination entry is not a regular file: {name}")
+        result = descriptor
+        descriptor = -1
+        return result
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _read_entry(directory_descriptor: int, name: str) -> bytes:
+    descriptor = _open_regular_entry(directory_descriptor, name)
+    try:
         with os.fdopen(descriptor, "rb") as stream:
             descriptor = -1
             return stream.read()
@@ -120,15 +144,12 @@ def _read_entry(directory_descriptor: int, name: str) -> bytes:
             os.close(descriptor)
 
 
-def _reject_symlink_entry(directory_descriptor: int, name: str) -> None:
+def _preflight_existing_entry(directory_descriptor: int, name: str) -> None:
     try:
-        descriptor = _open_existing_entry(directory_descriptor, name)
+        descriptor = _open_regular_entry(directory_descriptor, name)
     except FileNotFoundError:
         return
-    try:
-        pass
-    finally:
-        os.close(descriptor)
+    os.close(descriptor)
 
 
 def _drifted_files(directory_descriptor: int, rendered: dict[str, bytes]) -> tuple[str, ...]:
@@ -137,7 +158,7 @@ def _drifted_files(directory_descriptor: int, rendered: dict[str, bytes]) -> tup
     drifted = actual_names ^ expected_names
 
     for name in sorted(actual_names - expected_names):
-        _reject_symlink_entry(directory_descriptor, name)
+        _preflight_existing_entry(directory_descriptor, name)
 
     for name in sorted(actual_names & expected_names):
         try:
@@ -154,8 +175,55 @@ def _temporary_name(name: str) -> str:
     return f".{name}.{secrets.token_hex(16)}.tmp"
 
 
+def _same_file(left: os.stat_result, right: os.stat_result) -> bool:
+    return left.st_dev == right.st_dev and left.st_ino == right.st_ino
+
+
+def _verify_temporary_entry(
+    directory_descriptor: int,
+    temporary_name: str,
+    temporary_descriptor: int,
+    name: str,
+) -> None:
+    _before_temporary_verify(temporary_name, name)
+    descriptor = _open_regular_entry(directory_descriptor, temporary_name)
+    try:
+        if not _same_file(os.fstat(temporary_descriptor), os.fstat(descriptor)):
+            raise RuntimeError(f"temporary schema entry changed before publication: {name}")
+    finally:
+        os.close(descriptor)
+
+
+def _verify_published_entry(
+    directory_descriptor: int,
+    name: str,
+    temporary_descriptor: int,
+) -> None:
+    try:
+        descriptor = _open_regular_entry(directory_descriptor, name)
+    except RuntimeError:
+        try:
+            os.unlink(name, dir_fd=directory_descriptor)
+        except FileNotFoundError:
+            pass
+        raise
+    try:
+        if not _same_file(os.fstat(temporary_descriptor), os.fstat(descriptor)):
+            os.unlink(name, dir_fd=directory_descriptor)
+            raise RuntimeError(f"published schema entry changed during publication: {name}")
+    finally:
+        os.close(descriptor)
+
+
+def _write_bytes(descriptor: int, content: bytes) -> None:
+    remaining = memoryview(content)
+    while remaining:
+        written = os.write(descriptor, remaining)
+        remaining = remaining[written:]
+
+
 def _write_one(directory_descriptor: int, name: str, content: bytes) -> None:
-    _reject_symlink_entry(directory_descriptor, name)
+    _preflight_existing_entry(directory_descriptor, name)
     temporary_name = ""
     descriptor = -1
     for _ in range(_TEMPORARY_ATTEMPTS):
@@ -179,18 +247,19 @@ def _write_one(directory_descriptor: int, name: str, content: bytes) -> None:
 
     try:
         os.fchmod(descriptor, _PRIVATE_FILE_MODE)
-        with os.fdopen(descriptor, "wb") as stream:
-            descriptor = -1
-            stream.write(content)
-            stream.flush()
-            os.fsync(stream.fileno())
+        _write_bytes(descriptor, content)
+        os.fsync(descriptor)
         _before_replace(name)
+        _preflight_existing_entry(directory_descriptor, name)
+        _verify_temporary_entry(directory_descriptor, temporary_name, descriptor, name)
         os.replace(
             temporary_name,
             name,
             src_dir_fd=directory_descriptor,
             dst_dir_fd=directory_descriptor,
         )
+        _after_replace(name)
+        _verify_published_entry(directory_descriptor, name, descriptor)
     finally:
         if descriptor >= 0:
             os.close(descriptor)

@@ -788,6 +788,126 @@ def test_exporter_fails_closed_without_nofollow_directory_support(
         exporter.main(["--check"])
 
 
+def test_exporter_rejects_substituted_temporary_entry_before_publish(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "engagement-v2"
+    destination.mkdir()
+
+    def substitute_temporary(temporary_name: str, _name: str) -> None:
+        temporary = destination / temporary_name
+        temporary.unlink()
+        temporary.write_bytes(b"attacker replacement\n")
+
+    monkeypatch.setattr(
+        exporter,
+        "_before_temporary_verify",
+        substitute_temporary,
+        raising=False,
+    )
+    monkeypatch.setattr(exporter, "SCHEMA_ROOT", destination)
+
+    with pytest.raises(RuntimeError, match="temporary schema entry changed"):
+        exporter.main([])
+
+    assert list(destination.glob(".*.tmp")) == []
+    assert not (destination / "action-request.schema.json").exists()
+
+
+def test_exporter_rejects_final_name_symlink_injected_before_replace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "engagement-v2"
+    destination.mkdir()
+    external = tmp_path / "external"
+    external.write_bytes(b"do not replace\n")
+
+    def inject_symlink(name: str) -> None:
+        (destination / name).symlink_to(external)
+
+    monkeypatch.setattr(exporter, "_before_replace", inject_symlink)
+    monkeypatch.setattr(exporter, "SCHEMA_ROOT", destination)
+
+    with pytest.raises(RuntimeError, match="symlink destination rejected"):
+        exporter.main([])
+
+    assert external.read_bytes() == b"do not replace\n"
+    assert (destination / "action-request.schema.json").is_symlink()
+    assert list(destination.glob(".*.tmp")) == []
+
+
+def test_exporter_removes_a_substituted_published_entry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "engagement-v2"
+    destination.mkdir()
+
+    def substitute_published(name: str) -> None:
+        published = destination / name
+        published.unlink()
+        published.write_bytes(b"attacker replacement\n")
+
+    monkeypatch.setattr(
+        exporter,
+        "_after_replace",
+        substitute_published,
+        raising=False,
+    )
+    monkeypatch.setattr(exporter, "SCHEMA_ROOT", destination)
+
+    with pytest.raises(RuntimeError, match="published schema entry changed"):
+        exporter.main([])
+
+    assert not (destination / "action-request.schema.json").exists()
+    assert list(destination.glob(".*.tmp")) == []
+
+
+@pytest.mark.parametrize(
+    ("arguments", "entry_name"),
+    [
+        (["--check"], "program.schema.json"),
+        (["--check"], "unexpected.fifo"),
+        ([], "program.schema.json"),
+    ],
+)
+def test_exporter_rejects_fifo_entries_without_blocking(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    arguments: list[str],
+    entry_name: str,
+) -> None:
+    destination = tmp_path / "engagement-v2"
+    destination.mkdir()
+    if arguments:
+        for name, content in render_schema_files().items():
+            (destination / name).write_bytes(content)
+        if entry_name in render_schema_files():
+            (destination / entry_name).unlink()
+    os.mkfifo(destination / entry_name)
+    real_open = os.open
+
+    def guarded_open(
+        path: str | Path,
+        flags: int,
+        mode: int = 0o777,
+        *,
+        dir_fd: int | None = None,
+    ) -> int:
+        if path == entry_name and not flags & os.O_NONBLOCK:
+            raise AssertionError(f"would block opening FIFO {entry_name}")
+        return real_open(path, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(exporter, "_require_descriptor_safe_primitives", lambda: None)
+    monkeypatch.setattr(exporter.os, "open", guarded_open)
+    monkeypatch.setattr(exporter, "SCHEMA_ROOT", destination)
+
+    with pytest.raises(RuntimeError, match="not a regular file"):
+        exporter.main(arguments)
+
+
 def test_exporter_check_does_not_create_a_missing_destination(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
