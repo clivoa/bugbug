@@ -237,6 +237,18 @@ def _decode(path: Path, data: bytes) -> dict[str, object]:
     return value
 
 
+def read_hardened_document(path: str | os.PathLike[str], max_bytes: int) -> dict[str, object]:
+    """Read a bounded, symlink-free document through the hardened decode path.
+
+    Public entry for other v2 consumers (e.g. the action manifest) that need the
+    same descriptor safety and P0 strict-primitive model as the engagement loader.
+    """
+
+    resolved = Path(path)
+    data = _read_bounded(resolved, max_bytes)
+    return _decode(resolved, data)
+
+
 def _require_version(document: Mapping[str, object], expected: int) -> None:
     version = document.get("schema_version")
     if type(version) is not int or version != expected:
