@@ -13,6 +13,10 @@ frame at most 67,108,864 bytes, complete request at most 75,497,472 bytes, and
 complete response at most 41,943,040 bytes. Lengths MUST be validated before
 allocation. Trailing bytes, missing frames, duplicate frame indexes, unknown
 frame types, or digest mismatch MUST fail with `EXEC_PROTOCOL_INVALID`.
+Immediately after canonical header and descriptor validation, the complete
+declared wire size SHALL be computed from the fixed prefix, header length, all
+frame-prefix widths, and all descriptor lengths; aggregate overflow MUST be
+rejected before reading any frame prefix or payload.
 
 Frame types SHALL be exactly `1=target-list`, `2=artifact`, `3=secret`,
 `4=stdout`, `5=stderr`, `6=structured-result`, and `7=cleanup-receipt`.
@@ -47,6 +51,17 @@ The execution digest SHALL be lowercase `sha256:` plus 64 hex characters over
 the canonical execution projection, including the authority digest, action,
 argv projection, all input frame digests, executable identity, runner security
 identity, run ID, and nonce.
+
+Execution projection v1 SHALL be exactly
+`{"schema_version":1,"request":<request>}`, where `<request>` is the complete
+canonical request-header mapping with only its top-level `execution_digest`
+field removed. Every other approved request-header field and nested value SHALL
+remain unchanged, including protocol version, run ID, nonce, issue and expiry
+times, authority digest, action, argv, executable identity, runner identity,
+operating system, architecture, required privileges, ordered frame
+descriptors, timeout, stdout cap, and stderr cap. A request SHALL be rejected
+with `EXEC_PROTOCOL_INVALID` when recomputing `execution_digest` over that exact
+projection does not equal the request header's `execution_digest`.
 
 #### Scenario: Frame substitution changes execution identity
 - **WHEN** one input payload or descriptor changes
