@@ -1,0 +1,44 @@
+{
+  "role": "execution-node",
+  "node_identity": "runner.example.invalid",
+  "ssh": {
+    "host": "runner.example.invalid",
+    "port": 22,
+    "user": "fixture_runner",
+    "identity": "fixture_runner_identity",
+    "known_hosts_path": "/opt/example.invalid/config/known_hosts",
+    "host_key_sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+    "options": {
+      "batch_mode": true,
+      "identities_only": true,
+      "strict_host_key_checking": true,
+      "agent_forwarding": false,
+      "x11_forwarding": false,
+      "port_forwarding": false,
+      "tty": false
+    }
+  },
+  "helper": {
+    "path": "/opt/example.invalid/bin/hackbot-helper",
+    "protocol_version": 1,
+    "sha256": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "code_signing_identity": "example.helper-fixture"
+  },
+  "operating_system": "linux",
+  "architecture": "x86_64",
+  "permitted_privileges": [
+    "network-raw",
+    "packet-capture"
+  ],
+  "source_identity": {
+    "mode": "attested-egress",
+    "address": "203.0.113.10"
+  },
+  "egress_attestation": {
+    "adapter_path": "/opt/example.invalid/bin/egress-attestor",
+    "adapter_sha256": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+    "signer_public_key_fingerprint": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+    "max_observation_age_seconds": 60
+  },
+  "privilege_signer_public_key_fingerprint": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+}

@@ -9,3 +9,7 @@ docs/recon-bundle-macos-compatibility.md   export-ignore
 # Normalize line endings for shell/python
 *.sh   text eol=lf
 *.py   text eol=lf
+
+# Historical review evidence is intentionally byte-preserved. Treat whitespace
+# inside this archive as data so range-wide diff checks do not request rewrites.
+docs/reviews/engagement-v2-p0/** -whitespace
