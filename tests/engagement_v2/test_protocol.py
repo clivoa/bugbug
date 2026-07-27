@@ -40,9 +40,7 @@ _FRAME_PREFIX = struct.Struct("!HQ32s")
 _RUN_ID = "123e4567-e89b-42d3-a456-426614174000"
 _NONCE = base64.urlsafe_b64encode(b"\x00" * 32).decode("ascii").rstrip("=")
 _AUTHORITY_DIGEST = "sha256:" + "1" * 64
-_FIXTURE_DIRECTORY = (
-    Path(__file__).parents[1] / "fixtures" / "engagement_v2" / "protocol"
-)
+_FIXTURE_DIRECTORY = Path(__file__).parents[1] / "fixtures" / "engagement_v2" / "protocol"
 _FIXTURE_HASHES = {
     "request-frame.bin": "4bb15f8f8b9731fe3169e4f948263c5c3ce8b33b3106d828adbae091b0e4064b",
     "request-header.json": "50ec1ad9750fdc919b0ce8358d0bfe47425dacf417ec5271fbf21de9f4b7e096",
@@ -105,9 +103,7 @@ def _descriptor(index: int, frame_type: FrameType, payload: bytes) -> dict[str, 
 
 def _bind_request_header(header: dict[str, object]) -> None:
     request = {key: value for key, value in header.items() if key != "execution_digest"}
-    header["execution_digest"] = execution_digest(
-        {"schema_version": 1, "request": request}
-    )
+    header["execution_digest"] = execution_digest({"schema_version": 1, "request": request})
 
 
 def _request_header(
@@ -173,8 +169,7 @@ def _wire_bytes(
 ) -> bytes:
     encoded_header = canonical_bytes(header) if raw_header is None else raw_header
     encoded_frames = b"".join(
-        _FRAME_PREFIX.pack(frame_type, len(payload), hashlib.sha256(payload).digest())
-        + payload
+        _FRAME_PREFIX.pack(frame_type, len(payload), hashlib.sha256(payload).digest()) + payload
         for frame_type, payload in frames
     )
     return (
@@ -349,9 +344,7 @@ def test_response_aggregate_cap_fails_before_any_frame_read() -> None:
 
 
 def test_request_aggregate_cap_fails_before_any_frame_read() -> None:
-    zero_digest = bytes.fromhex(
-        "3b6a07d0d404fab4e23b6d34bc6696a6a312dd92821332385e5af7c01c421351"
-    )
+    zero_digest = bytes.fromhex("3b6a07d0d404fab4e23b6d34bc6696a6a312dd92821332385e5af7c01c421351")
     header = _request_header()
     header["frames"] = [
         {
@@ -451,9 +444,7 @@ def test_payload_digest_descriptor_mismatch_and_trailing_bytes_fail() -> None:
     raw_header = canonical_bytes(header)
     fixed_length = _PREFIX.size + len(raw_header)
     digest_offset = fixed_length + 2 + 8
-    corrupt_digest = (
-        valid[:digest_offset] + b"\xff" * 32 + valid[digest_offset + 32 :]
-    )
+    corrupt_digest = valid[:digest_offset] + b"\xff" * 32 + valid[digest_offset + 32 :]
 
     mismatched_descriptor = _request_header(((FrameType.ARTIFACT, payload),))
     descriptors = mismatched_descriptor["frames"]
@@ -478,15 +469,11 @@ def test_consistent_frame_substitution_retaining_execution_digest_fails() -> Non
     substituted_payload = b"substitute-artifact"
     header = _request_header(((FrameType.ARTIFACT, original_payload),))
     original_execution_digest = header["execution_digest"]
-    header["frames"] = [
-        _descriptor(0, FrameType.ARTIFACT, substituted_payload)
-    ]
+    header["frames"] = [_descriptor(0, FrameType.ARTIFACT, substituted_payload)]
     assert original_execution_digest != execution_digest(
         {
             "schema_version": 1,
-            "request": {
-                key: value for key, value in header.items() if key != "execution_digest"
-            },
+            "request": {key: value for key, value in header.items() if key != "execution_digest"},
         }
     )
 
@@ -599,10 +586,7 @@ def test_write_rejects_short_write_and_aggregate_overflow_without_partial_output
         _response_header(((FrameType.STDOUT, response_payload),))
     )
     encoded_size = (
-        _PREFIX.size
-        + len(response_header_bytes)
-        + _FRAME_PREFIX.size
-        + len(response_payload)
+        _PREFIX.size + len(response_header_bytes) + _FRAME_PREFIX.size + len(response_payload)
     )
     monkeypatch.setattr(protocol, "MAX_RESPONSE_BYTES", encoded_size - 1)
     output = BytesIO()
@@ -768,9 +752,7 @@ def test_run_binding_rejects_noncanonical_utc_second_timestamps(
 ) -> None:
     _assert_reason(
         ReasonCode.EXEC_PROTOCOL_INVALID,
-        lambda: RunBinding.from_header(
-            _binding_header(issued_at=issued_at, expires_at=expires_at)
-        ),
+        lambda: RunBinding.from_header(_binding_header(issued_at=issued_at, expires_at=expires_at)),
     )
 
 
@@ -920,13 +902,10 @@ def test_response_chain_rejects_invalid_digest_and_non_tuple_frames() -> None:
 
 
 def test_deterministic_protocol_fixtures_have_exact_bytes_and_hashes() -> None:
-    fixture_bytes = {
-        path.name: path.read_bytes() for path in sorted(_FIXTURE_DIRECTORY.iterdir())
-    }
+    fixture_bytes = {path.name: path.read_bytes() for path in sorted(_FIXTURE_DIRECTORY.iterdir())}
     assert set(fixture_bytes) == set(_FIXTURE_HASHES)
     assert {
-        name: hashlib.sha256(value).hexdigest()
-        for name, value in fixture_bytes.items()
+        name: hashlib.sha256(value).hexdigest() for name, value in fixture_bytes.items()
     } == _FIXTURE_HASHES
 
     raw_header = fixture_bytes["request-header.json"]
@@ -957,9 +936,7 @@ def test_deterministic_protocol_fixtures_have_exact_bytes_and_hashes() -> None:
         "stdout_cap_bytes",
         "stderr_cap_bytes",
     }
-    assert header["execution_digest"] == execution_digest(
-        {"schema_version": 1, "request": request}
-    )
+    assert header["execution_digest"] == execution_digest({"schema_version": 1, "request": request})
 
     payload = b"synthetic-artifact"
     message = FramedMessage(

@@ -311,9 +311,7 @@ from hackbot.engagement_v2.errors import ContractError, ReasonCode
 
 def test_canonical_bytes_sort_keys_and_preserve_ordered_lists() -> None:
     value = {"z": ["second", "first"], "a": {"enabled": True, "count": 2}}
-    assert canonical_bytes(value) == (
-        b'{"a":{"count":2,"enabled":true},"z":["second","first"]}'
-    )
+    assert canonical_bytes(value) == (b'{"a":{"count":2,"enabled":true},"z":["second","first"]}')
 
 
 @pytest.mark.parametrize(
@@ -369,10 +367,7 @@ def _validated(value: object, *, depth: int = 0) -> object:
         if unicodedata.normalize("NFC", value) != value:
             raise ContractError(ReasonCode.INVALID_CANONICAL_VALUE)
         if any(
-            0xD800 <= ord(c) <= 0xDFFF
-            or ord(c) <= 0x1F
-            or 0x7F <= ord(c) <= 0x9F
-            for c in value
+            0xD800 <= ord(c) <= 0xDFFF or ord(c) <= 0x1F or 0x7F <= ord(c) <= 0x9F for c in value
         ):
             raise ContractError(ReasonCode.INVALID_CANONICAL_VALUE)
         return value

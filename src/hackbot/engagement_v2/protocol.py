@@ -219,11 +219,7 @@ def _validated_uuid(value: object) -> str:
 
 
 def _validated_nonce(value: object) -> str:
-    if (
-        type(value) is not str
-        or len(value) != NONCE_BASE64URL_LENGTH
-        or not value.isascii()
-    ):
+    if type(value) is not str or len(value) != NONCE_BASE64URL_LENGTH or not value.isascii():
         raise _invalid()
     try:
         decoded = base64.urlsafe_b64decode(value + "=")
@@ -240,11 +236,7 @@ def _validated_nonce(value: object) -> str:
 def _validated_utc_second(value: object) -> datetime:
     if type(value) is not datetime:
         raise _invalid()
-    if (
-        value.tzinfo is None
-        or value.utcoffset() != timedelta(0)
-        or value.microsecond != 0
-    ):
+    if value.tzinfo is None or value.utcoffset() != timedelta(0) or value.microsecond != 0:
         raise _invalid()
     return value
 
@@ -398,9 +390,7 @@ def _validate_request_header(
         response=False,
     )
     request = {key: value for key, value in header.items() if key != "execution_digest"}
-    expected_execution_digest = execution_digest(
-        {"schema_version": 1, "request": request}
-    )
+    expected_execution_digest = execution_digest({"schema_version": 1, "request": request})
     if header["execution_digest"] != expected_execution_digest:
         raise _invalid()
     return descriptors
@@ -524,9 +514,7 @@ class RunBinding:
         _validated_nonce(self.nonce)
         _validated_utc_second(self.issued_at)
         _validated_utc_second(self.expires_at)
-        if not _valid_digest(self.authority_digest) or not _valid_digest(
-            self.execution_digest
-        ):
+        if not _valid_digest(self.authority_digest) or not _valid_digest(self.execution_digest):
             raise _invalid()
         lifetime = self.expires_at - self.issued_at
         if not (
@@ -672,9 +660,7 @@ def read_message(stream: BinaryIO, response: bool = False) -> FramedMessage:
             raise _invalid()
         raw_frame_prefix = _read_exact(stream, _FRAME_PREFIX.size)
         total_bytes += _FRAME_PREFIX.size
-        frame_type_value, payload_length, declared_digest = _FRAME_PREFIX.unpack(
-            raw_frame_prefix
-        )
+        frame_type_value, payload_length, declared_digest = _FRAME_PREFIX.unpack(raw_frame_prefix)
         if payload_length > MAX_FRAME_BYTES or total_bytes + payload_length > cap:
             raise _invalid()
         try:
