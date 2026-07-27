@@ -13,7 +13,7 @@
 ## 3. Helper identity and executable digest
 
 - [x] 3.1 Add failing tests: a helper self-report never satisfies identity; wrong protocol version rejected; an exact-digest action verifies the remote executable as a regular file before spawn and binds `argv[0]` to it; digest mismatch fails closed (`EXEC_TRUST_MISMATCH`).
-- [ ] 3.2 Implement `engagement_v2.remote_helper` identity/executable verification and the fixed `hackbot-remote-runner` helper skeleton until 3.1 passes.
+- [x] 3.2 Implement `engagement_v2.remote_helper` identity/executable verification and the fixed `hackbot-remote-runner` helper skeleton until 3.1 passes.
 
 ## 4. Replay reservation and privilege permit
 

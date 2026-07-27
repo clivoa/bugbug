@@ -63,14 +63,31 @@ permitted privileges are upper bounds; a privileged action additionally requires
 a machine-signed Ed25519 permit. A target's own state, privileges, egress, and
 cleanup remain unverified self-reports.
 
+`hackbot.engagement_v2.remote_runner_helper`
+
+- The fixed `hackbot-remote-runner` helper (remote side): reads one P0 framed
+  request from stdin, runs the bound argv with `shell=False` under the request's
+  timeout and output caps, and writes one P0 framed response (stdout/stderr
+  frames plus a structured result carrying the response hash chain and exit
+  code), echoing the request's run binding. Runnable as
+  `python -m hackbot.engagement_v2.remote_runner_helper`.
+
+## Real-host verification
+
+The framed data path was exercised end-to-end against an operator-authorized Kali
+VM (Linux aarch64, Python 3.13): a P0 framed request was sent over a real SSH
+channel to the helper, which ran the bound argv on the VM and returned a P0
+framed response; the client verified the echoed run binding and the response hash
+chain. See `docs/reviews/2026-07-27-engagement-v2-p4-remote-review-disposition.md`.
+A deterministic loopback version is committed as `test_remote_runner_helper.py`.
+
 ## Follow-ups (not yet implemented)
 
-- The **framed request/response driver**: building the full P0 request header
-  (via `hackbot.engagement_v2.protocol`), sending request frames, and verifying
-  the response echo and hash-chain over a real transport. The P0 protocol module
-  it will call is already implemented and tested; P4 will wire the request
-  builder, the loopback test harness, and the response verifier.
-- The **fixed `hackbot-remote-runner` helper process** and the **real SSH
-  subprocess** transport, plus the **v2 remote CLI entry**. These need a real
-  execution node to exercise end-to-end and reuse the P3 executor semantics for
-  the remote run.
+- The production **client-side driver** that builds the request, wires the SSH
+  transport (`build_ssh_argv`) to the helper, and reuses the P3 executor
+  semantics (secret handling, evidence redaction, lifecycle, independent
+  fail-closed cleanup) plus crash reconciliation, and the **v2 remote CLI entry**.
+  The framed protocol, helper, and trust primitives it composes are implemented
+  and (for the framed path) real-host verified.
+- A durable, cross-process replay reservation on the helper side (the in-process
+  `ReplayCache` is the building block).
