@@ -71,10 +71,11 @@ The umbrella design is decomposed into:
 - P6 autonomous workflow contract;
 - P7 effective migration, documentation, and release.
 
-P0 is the first OpenSpec change. Dependent code changes cannot begin until its
-normative constants and scenarios are approved. P6 remains unavailable until
-its own schema and state machine are approved and implemented. Effective
-migration remains P7.
+P0 is the active OpenSpec change at
+`openspec/changes/engagement-v2-security-contracts/`. Dependent code changes
+cannot begin until its normative constants and scenarios are approved. P6
+remains unavailable until its own schema and state machine are approved and
+implemented. Effective migration remains P7.
 
 ## GitHub Project fields
 
@@ -93,18 +94,18 @@ Project is the operational view and OpenSpec is the behavioral record.
 
 ## Initial Project inventory
 
-| Phase | Issue | Initial delivery status |
-|---|---|---|
-| P0 | [#1 — normative security contracts](https://github.com/clivoa/bugbug/issues/1) | Ready |
-| P1 | [#2 — loader, authority digest, scope v2](https://github.com/clivoa/bugbug/issues/2) | Backlog |
-| P2 | [#3 — manifest, binder, policy](https://github.com/clivoa/bugbug/issues/3) | Backlog |
-| P3 | [#5 — local executor, secrets, evidence, cleanup](https://github.com/clivoa/bugbug/issues/5) | Backlog |
-| P4 | [#4 — remote helper and trust protocol](https://github.com/clivoa/bugbug/issues/4) | Backlog |
-| P5a | [#6 — non-credential internal recon](https://github.com/clivoa/bugbug/issues/6) | Backlog |
-| P5b | [#10 — credential/L3 catalog](https://github.com/clivoa/bugbug/issues/10) | Backlog |
-| P6 | [#8 — autonomous workflows](https://github.com/clivoa/bugbug/issues/8) | Backlog |
-| P7 | [#7 — migration, docs, release](https://github.com/clivoa/bugbug/issues/7) | Backlog |
-| Program | [#9 — OpenSpec adoption and reviews](https://github.com/clivoa/bugbug/issues/9) | Done/closed |
+| Phase | Issue | Initial delivery status | OpenSpec change |
+|---|---|---|---|
+| P0 | [#1 — normative security contracts](https://github.com/clivoa/bugbug/issues/1) | Ready | `openspec/changes/engagement-v2-security-contracts/` |
+| P1 | [#2 — loader, authority digest, scope v2](https://github.com/clivoa/bugbug/issues/2) | Backlog | — |
+| P2 | [#3 — manifest, binder, policy](https://github.com/clivoa/bugbug/issues/3) | Backlog | — |
+| P3 | [#5 — local executor, secrets, evidence, cleanup](https://github.com/clivoa/bugbug/issues/5) | Backlog | — |
+| P4 | [#4 — remote helper and trust protocol](https://github.com/clivoa/bugbug/issues/4) | Backlog | — |
+| P5a | [#6 — non-credential internal recon](https://github.com/clivoa/bugbug/issues/6) | Backlog | — |
+| P5b | [#10 — credential/L3 catalog](https://github.com/clivoa/bugbug/issues/10) | Backlog | — |
+| P6 | [#8 — autonomous workflows](https://github.com/clivoa/bugbug/issues/8) | Backlog | — |
+| P7 | [#7 — migration, docs, release](https://github.com/clivoa/bugbug/issues/7) | Backlog | — |
+| Program | [#9 — OpenSpec adoption and reviews](https://github.com/clivoa/bugbug/issues/9) | Done/closed | — |
 
 ## Agent use
 
