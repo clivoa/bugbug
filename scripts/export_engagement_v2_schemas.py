@@ -58,12 +58,7 @@ def _directory_flags() -> int:
 
 
 def _entry_flags() -> int:
-    return (
-        os.O_RDONLY
-        | os.O_NOFOLLOW
-        | getattr(os, "O_NONBLOCK", 0)
-        | getattr(os, "O_CLOEXEC", 0)
-    )
+    return os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_CLOEXEC", 0)
 
 
 def _raise_unsafe_path(path: Path, error: OSError) -> None:
@@ -231,11 +226,7 @@ def _write_one(directory_descriptor: int, name: str, content: bytes) -> None:
         try:
             descriptor = os.open(
                 temporary_name,
-                os.O_WRONLY
-                | os.O_CREAT
-                | os.O_EXCL
-                | os.O_NOFOLLOW
-                | getattr(os, "O_CLOEXEC", 0),
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
                 _PRIVATE_FILE_MODE,
                 dir_fd=directory_descriptor,
             )

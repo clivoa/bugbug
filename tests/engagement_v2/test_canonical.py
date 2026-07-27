@@ -42,9 +42,7 @@ class DictSubclass(dict[str, object]):
 def test_canonical_bytes_sort_keys_and_preserve_ordered_lists() -> None:
     value = {"z": ["second", "first"], "a": {"enabled": True, "count": 2}}
 
-    assert canonical_bytes(value) == (
-        b'{"a":{"count":2,"enabled":true},"z":["second","first"]}'
-    )
+    assert canonical_bytes(value) == (b'{"a":{"count":2,"enabled":true},"z":["second","first"]}')
 
 
 @pytest.mark.parametrize(
