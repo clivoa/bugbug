@@ -12,10 +12,11 @@ from hackbot.engagement_v2.constants import (
     ACTIONS_SCHEMA_VERSION,
     ARGV_TOKEN_TERMINATOR_BYTES,
     AUTHORIZATION_SCHEMA_VERSION,
+    BINDING_NAME_PATTERN,
+    CANONICAL_JSON_FORMAT,
     ED25519_PUBLIC_KEY_BYTES,
     ED25519_SIGNATURE_BYTES,
     IDENTIFIER_PATTERN,
-    MAPPING_KEY_PATTERN,
     MAX_ACTION_CAPABILITIES,
     MAX_ACTION_IMPACTS,
     MAX_ACTION_MANIFEST_BYTES,
@@ -27,6 +28,7 @@ from hackbot.engagement_v2.constants import (
     MAX_ARGV_TOKEN_BYTES,
     MAX_ARGV_TOKENS,
     MAX_AUTHORIZATION_DOCUMENT_BYTES,
+    MAX_BINDING_NAME_BYTES,
     MAX_CLOCK_SKEW_SECONDS,
     MAX_DOCUMENT_NESTING_DEPTH,
     MAX_EGRESS_OBSERVATION_AGE_SECONDS,
@@ -115,7 +117,7 @@ _OPERATOR_ACTION_PREFIX_PATTERN = OPERATOR_ACTION_ID_PREFIX[:-1] + r"\."
 _PLACEHOLDER_KINDS_PATTERN = "|".join(member.value for member in PlaceholderKind)
 _ARGV_TOKEN_PATTERN = (
     rf"^(?:[^{{}}]+|\{{(?:{_PLACEHOLDER_KINDS_PATTERN}):"
-    rf"{IDENTIFIER_PATTERN.pattern}\}})$"
+    rf"{BINDING_NAME_PATTERN.pattern}\}})$"
 )
 
 
@@ -191,8 +193,16 @@ def _identifier() -> dict[str, object]:
     }
 
 
-def _mapping_identifier_pattern() -> str:
-    return _anchored(MAPPING_KEY_PATTERN.pattern)
+def _binding_name() -> dict[str, object]:
+    return {
+        "type": "string",
+        "pattern": _anchored(BINDING_NAME_PATTERN.pattern),
+        "maxLength": MAX_BINDING_NAME_BYTES,
+    }
+
+
+def _binding_name_pattern() -> str:
+    return _anchored(BINDING_NAME_PATTERN.pattern)
 
 
 def _digest() -> dict[str, object]:
@@ -221,6 +231,7 @@ def _document(
     }
     if annotations is not None:
         document.update(annotations)
+    document["x-hackbot-canonical-format"] = CANONICAL_JSON_FORMAT
     document["x-hackbot-max-document-nesting-depth"] = MAX_DOCUMENT_NESTING_DEPTH
     _annotate_utf8_string_limits(document)
     return document
@@ -486,8 +497,8 @@ def _rate_control_schema() -> dict[str, object]:
     result = _object(
         {
             "kind": _ref("rate_control_mode"),
-            "rate_parameter": _ref("identifier"),
-            "concurrency_parameter": _ref("identifier"),
+            "rate_parameter": _ref("binding_name"),
+            "concurrency_parameter": _ref("binding_name"),
             "adapter_id": _ref("identifier"),
         },
         ("kind",),
@@ -554,7 +565,7 @@ def _action_schema() -> dict[str, object]:
     executable_digests["anyOf"] = [{"required": ["local"]}, {"required": ["remote"]}]
     target_binding = _object(
         {
-            "parameter": _ref("identifier"),
+            "parameter": _ref("binding_name"),
             "kind": _ref("target_kind"),
         },
         ("parameter", "kind"),
@@ -599,12 +610,12 @@ def _action_schema() -> dict[str, object]:
             ),
             "parameters": _mapping(
                 _ref("parameter"),
-                key_pattern=_mapping_identifier_pattern(),
+                key_pattern=_binding_name_pattern(),
                 maximum=MAX_ACTION_PARAMETERS,
             ),
             "secrets": _mapping(
                 secret,
-                key_pattern=_mapping_identifier_pattern(),
+                key_pattern=_binding_name_pattern(),
                 maximum=MAX_ACTION_SECRETS,
             ),
             "targets": _array(
@@ -731,6 +742,7 @@ def _actions_schema() -> dict[str, object]:
     )
     definitions = {
         **_common_definitions(),
+        "binding_name": _binding_name(),
         "operator_action_id": {
             "type": "string",
             "pattern": (f"^{_OPERATOR_ACTION_PREFIX_PATTERN}{IDENTIFIER_PATTERN.pattern}$"),
@@ -801,6 +813,7 @@ def _actions_schema() -> dict[str, object]:
 def _action_request_schema() -> dict[str, object]:
     definitions = {
         **_common_definitions(),
+        "binding_name": _binding_name(),
         "risk_level": _enum(RiskLevel),
         "target_list": _array(
             _ref("target"),
@@ -830,7 +843,7 @@ def _action_request_schema() -> dict[str, object]:
             "action_id": _ref("identifier"),
             "parameters": _mapping(
                 _ref("parameter_value"),
-                key_pattern=_mapping_identifier_pattern(),
+                key_pattern=_binding_name_pattern(),
                 maximum=MAX_ACTION_PARAMETERS,
             ),
             "requested_risk": _ref("risk_level"),
@@ -910,14 +923,19 @@ def _runner_schema() -> dict[str, object]:
             {"type": "null"},
             _object(
                 {
-                    "adapter_identity": _ref("identifier"),
+                    "adapter_path": _ref("absolute_path"),
                     "adapter_sha256": _ref("digest"),
-                    "signer_public_key_sha256": _ref("digest"),
+                    "signer_public_key_fingerprint": _ref("digest"),
+                    "max_observation_age_seconds": {
+                        "type": "integer",
+                        "const": MAX_EGRESS_OBSERVATION_AGE_SECONDS,
+                    },
                 },
                 (
-                    "adapter_identity",
+                    "adapter_path",
                     "adapter_sha256",
-                    "signer_public_key_sha256",
+                    "signer_public_key_fingerprint",
+                    "max_observation_age_seconds",
                 ),
             ),
         ]

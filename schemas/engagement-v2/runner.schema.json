@@ -148,20 +148,25 @@
         {
           "additionalProperties": false,
           "properties": {
-            "adapter_identity": {
-              "$ref": "#/$defs/identifier"
+            "adapter_path": {
+              "$ref": "#/$defs/absolute_path"
             },
             "adapter_sha256": {
               "$ref": "#/$defs/digest"
             },
-            "signer_public_key_sha256": {
+            "max_observation_age_seconds": {
+              "const": 60,
+              "type": "integer"
+            },
+            "signer_public_key_fingerprint": {
               "$ref": "#/$defs/digest"
             }
           },
           "required": [
-            "adapter_identity",
+            "adapter_path",
             "adapter_sha256",
-            "signer_public_key_sha256"
+            "signer_public_key_fingerprint",
+            "max_observation_age_seconds"
           ],
           "type": "object"
         }
@@ -352,6 +357,7 @@
     "privilege_signer_public_key_fingerprint"
   ],
   "type": "object",
+  "x-hackbot-canonical-format": "hackbot-canonical-json-v1",
   "x-hackbot-max-document-bytes": 1048576,
   "x-hackbot-max-document-nesting-depth": 32
 }

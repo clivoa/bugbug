@@ -61,6 +61,7 @@
     "note"
   ],
   "type": "object",
+  "x-hackbot-canonical-format": "hackbot-canonical-json-v1",
   "x-hackbot-max-document-bytes": 1048576,
   "x-hackbot-max-document-nesting-depth": 32
 }

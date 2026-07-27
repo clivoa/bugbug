@@ -306,13 +306,13 @@
               "$ref": "#/$defs/identifier"
             },
             "concurrency_parameter": {
-              "$ref": "#/$defs/identifier"
+              "$ref": "#/$defs/binding_name"
             },
             "kind": {
               "$ref": "#/$defs/rate_control_mode"
             },
             "rate_parameter": {
-              "$ref": "#/$defs/identifier"
+              "$ref": "#/$defs/binding_name"
             }
           },
           "required": [
@@ -371,7 +371,7 @@
                 "$ref": "#/$defs/target_kind"
               },
               "parameter": {
-                "$ref": "#/$defs/identifier"
+                "$ref": "#/$defs/binding_name"
               }
             },
             "required": [
@@ -432,9 +432,15 @@
     "argv_token": {
       "maxLength": 4096,
       "minLength": 1,
-      "pattern": "^(?:[^{}]+|\\{(?:value|target|targets_file|artifact_file|secret_file):[a-z0-9]+(?:[._-][a-z0-9]+)*\\})$",
+      "pattern": "^(?:[^{}]+|\\{(?:value|target|targets_file|artifact_file|secret_file):[a-z][a-z0-9_]{0,63}\\})$",
       "type": "string",
       "x-hackbot-max-utf8-bytes": 4096
+    },
+    "binding_name": {
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9_]{0,63}$",
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 64
     },
     "digest": {
       "maxLength": 71,
@@ -816,6 +822,7 @@
   ],
   "type": "object",
   "x-hackbot-argv-token-terminator-bytes": 1,
+  "x-hackbot-canonical-format": "hackbot-canonical-json-v1",
   "x-hackbot-max-argv-bytes": 65536,
   "x-hackbot-max-document-bytes": 4194304,
   "x-hackbot-max-document-nesting-depth": 32,

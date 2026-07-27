@@ -56,6 +56,68 @@ _AUTHORITY_INPUT: Final[dict[str, object]] = {
         "endpoint": "https://scanner.example.invalid/health",
     },
 }
+_CALLER_NORMALIZED_COLLECTIONS: Final[dict[str, object]] = {
+    "set_like_input": [
+        "packet-capture",
+        "network-raw",
+        "packet-capture",
+    ],
+    "canonical_projection": {
+        "permitted_privileges": [
+            "network-raw",
+            "packet-capture",
+        ],
+        "argv": [
+            "/opt/example.invalid/bin/tool",
+            "--second",
+            "--first",
+        ],
+    },
+}
+_RUNNER_SECURITY_PROJECTION: Final[dict[str, object]] = {
+    "role": "execution-node",
+    "node_identity": "runner.example.invalid",
+    "ssh": {
+        "host": "runner.example.invalid",
+        "port": 22,
+        "user": "fixture_runner",
+        "identity": "fixture_runner_identity",
+        "known_hosts_path": "/opt/example.invalid/config/known_hosts",
+        "host_key_sha256": "sha256:" + "4" * 64,
+        "options": {
+            "batch_mode": True,
+            "identities_only": True,
+            "strict_host_key_checking": True,
+            "agent_forwarding": False,
+            "x11_forwarding": False,
+            "port_forwarding": False,
+            "tty": False,
+        },
+    },
+    "helper": {
+        "path": "/opt/example.invalid/bin/hackbot-helper",
+        "protocol_version": PROTOCOL_VERSION,
+        "sha256": "sha256:" + "5" * 64,
+        "code_signing_identity": "example.helper-fixture",
+    },
+    "operating_system": "linux",
+    "architecture": "x86_64",
+    "permitted_privileges": [
+        "network-raw",
+        "packet-capture",
+    ],
+    "source_identity": {
+        "mode": "attested-egress",
+        "address": "203.0.113.10",
+    },
+    "egress_attestation": {
+        "adapter_path": "/opt/example.invalid/bin/egress-attestor",
+        "adapter_sha256": "sha256:" + "6" * 64,
+        "signer_public_key_fingerprint": "sha256:" + "7" * 64,
+        "max_observation_age_seconds": 60,
+    },
+    "privilege_signer_public_key_fingerprint": "sha256:" + "8" * 64,
+}
 _PATTERN_CASES: Final[list[dict[str, object]]] = [
     {
         "name": "synthetic hostname",
@@ -107,6 +169,13 @@ def _canonical_fixtures() -> dict[str, bytes]:
         "canonical/authority-digest.txt": (authority_digest(_AUTHORITY_INPUT) + "\n").encode(
             "ascii"
         ),
+        "canonical/caller-normalized-collections.json": _pretty_json(
+            _CALLER_NORMALIZED_COLLECTIONS
+        ),
+        "canonical/runner-security-projection.json": _pretty_json(_RUNNER_SECURITY_PROJECTION),
+        "canonical/runner-security-authority-digest.txt": (
+            authority_digest(_RUNNER_SECURITY_PROJECTION) + "\n"
+        ).encode("ascii"),
     }
 
 

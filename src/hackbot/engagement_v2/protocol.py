@@ -18,6 +18,7 @@ from typing import BinaryIO, cast
 from hackbot.engagement_v2.canonical import canonical_bytes, execution_digest
 from hackbot.engagement_v2.constants import (
     AUTHORITY_DIGEST_PATTERN,
+    BINDING_NAME_PATTERN,
     FRAME_TYPE_BY_DIRECTION,
     IDENTIFIER_PATTERN,
     MAX_ARGV_TOKEN_BYTES,
@@ -60,7 +61,7 @@ _ABSOLUTE_PATH_PATTERN = re.compile(r"(?:/|[A-Za-z]:[\\/]).+", re.ASCII)
 _PLACEHOLDER_KINDS_PATTERN = "|".join(member.value for member in PlaceholderKind)
 _ARGV_TOKEN_PATTERN = re.compile(
     rf"(?:[^{{}}]+|\{{(?:{_PLACEHOLDER_KINDS_PATTERN}):"
-    rf"{IDENTIFIER_PATTERN.pattern}\}})",
+    rf"{BINDING_NAME_PATTERN.pattern}\}})",
     re.ASCII,
 )
 _DIGEST_PATTERN = AUTHORITY_DIGEST_PATTERN
@@ -135,15 +136,16 @@ def _header_dict(header: Mapping[str, object]) -> dict[str, object]:
 
 
 def _read_exact(stream: BinaryIO, count: int) -> bytes:
-    chunks: list[bytes] = []
-    remaining = count
-    while remaining:
-        chunk = stream.read(remaining)
-        if type(chunk) is not bytes or not chunk or len(chunk) > remaining:
+    value = bytearray(count)
+    offset = 0
+    while offset < count:
+        chunk = stream.read(count - offset)
+        if type(chunk) is not bytes or not chunk or len(chunk) > count - offset:
             raise _invalid()
-        chunks.append(chunk)
-        remaining -= len(chunk)
-    return b"".join(chunks)
+        next_offset = offset + len(chunk)
+        value[offset:next_offset] = chunk
+        offset = next_offset
+    return bytes(value)
 
 
 def _read_payload(stream: BinaryIO, count: int) -> tuple[bytes, bytes]:

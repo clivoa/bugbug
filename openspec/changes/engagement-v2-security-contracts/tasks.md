@@ -5,7 +5,7 @@
 
 ## 2. Canonical values and digests
 
-- [x] 2.1 Add failing canonicalization tests for valid primitives, NFC/control/float/int rejection, mapping order, set-like normalization inputs, ordered argv, domain separation, and golden authority digest.
+- [x] 2.1 Add failing canonicalization tests for valid primitives, NFC/control/float/int rejection, mapping order, caller-normalized set-like inputs, ordered argv, domain separation, and golden authority digest.
 - [x] 2.2 Implement strict canonical bytes plus authority/execution digest helpers until `tests/engagement_v2/test_canonical.py` passes.
 
 ## 3. Safe full-match patterns

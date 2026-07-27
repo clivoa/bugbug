@@ -5,11 +5,16 @@ Action manifest v1 SHALL contain at most 256 actions. Each action SHALL contain
 at most 128 parameters, 32 secrets, 32 target bindings, 64 capabilities, 64
 vulnerability types, 64 impacts, and 128 argv tokens.
 
-Action and parameter identifiers SHALL be lowercase ASCII, at most 128 bytes,
-and match `[a-z0-9]+(?:[._-][a-z0-9]+)*`. Operator action IDs SHALL start with
-`operator.` and SHALL NOT collide with native IDs. Secret references SHALL match
+General value identifiers, including action and node IDs, SHALL be lowercase
+ASCII, at most 128 bytes, and match
+`[a-z0-9]+(?:[._-][a-z0-9]+)*`. Operator action IDs SHALL start with `operator.`
+and SHALL NOT collide with native IDs. Secret reference values SHALL match
 `secret:[a-z0-9]+(?:[._-][a-z0-9]+)*` and SHALL be resolved only inside the
 canonical engagement namespace.
+
+Parameter names, action-request parameter keys, secret binding names, target
+binding names, and placeholder IDs SHALL be lowercase ASCII snake case, at
+most 64 bytes, and match `[a-z][a-z0-9_]{0,63}`.
 
 #### Scenario: Manifest at every closed maximum is valid
 - **WHEN** a manifest uses each maximum without duplicate identifiers
@@ -61,6 +66,8 @@ Grouping, alternation, dot wildcard, anchors, lookaround, backreferences,
 Unicode classes, unbounded `*`/`+`/`?`, nested quantifiers, and empty matches
 without an explicit `{0,n}` MUST fail with `INVALID_ACTION_MANIFEST`.
 Evaluation SHALL be full-match and linear in input length times pattern length.
+Match input SHALL be printable ASCII and at most 8,192 bytes; the first byte
+beyond that limit MUST fail before matching with `INVALID_LIMIT`.
 
 #### Scenario: Bounded identifier pattern matches
 - **WHEN** pattern `[A-Za-z0-9._\-]{1,64}` is compiled and input is `dc01.corp`
@@ -73,8 +80,9 @@ Evaluation SHALL be full-match and linear in input length times pattern length.
 ### Requirement: Whole-token placeholder grammar
 The only placeholders SHALL be `{value:<id>}`, `{target:<id>}`,
 `{targets_file:<id>}`, `{artifact_file:<id>}`, and `{secret_file:<id>}`, where
-`<id>` satisfies the parameter identifier contract. A placeholder SHALL occupy
-the entire argv token and be used only with a matching declared binding.
+`<id>` satisfies the binding-name contract
+`[a-z][a-z0-9_]{0,63}`. A placeholder SHALL occupy the entire argv token and be
+used only with a matching declared binding.
 
 Each argv token SHALL be 1 through 4,096 UTF-8 bytes. The rendered argv SHALL
 contain 1 through 128 tokens and at most 65,536 UTF-8 bytes including one NUL
@@ -88,6 +96,10 @@ executable.
 #### Scenario: Concatenated placeholder is rejected
 - **WHEN** a token is `--target={target:host}` or contains unmatched braces
 - **THEN** manifest validation fails with `INVALID_PLACEHOLDER`
+
+#### Scenario: General identifiers do not widen binding names
+- **WHEN** a binding key or placeholder ID is `1-target`, `target-name`, or `target.name`
+- **THEN** manifest validation fails while those forms remain representable in general value-identifier fields
 
 ### Requirement: Exact platform, architecture, privilege, and execution enums
 Platforms SHALL be exactly `linux`, `darwin`, and `windows`. Architectures

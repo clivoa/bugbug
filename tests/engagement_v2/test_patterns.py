@@ -6,10 +6,12 @@ import sys
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 from types import FrameType
+from typing import ClassVar
 
 import pytest
 
 import hackbot.engagement_v2.patterns as safe_patterns
+from hackbot.engagement_v2.constants import MAX_UTF8_STRING_BYTES
 from hackbot.engagement_v2.errors import ContractError, ReasonCode
 from hackbot.engagement_v2.patterns import (
     CharacterSet,
@@ -202,33 +204,30 @@ def test_matching_call_depth_does_not_grow_with_atom_count() -> None:
     assert bounded_depth <= control_depth
 
 
-@pytest.mark.parametrize(
-    ("value_length", "atom_count", "expected"),
-    [
-        (0, 0, 1_025),
-        (7, 3, 32_800),
-        (2_048, 256, 539_757_825),
-    ],
-)
-def test_operation_limit_formula_is_exact(
-    value_length: int, atom_count: int, expected: int
-) -> None:
-    assert safe_patterns._operation_limit(value_length, atom_count) == expected
+def test_maximum_ascii_match_input_byte_limit_is_exact() -> None:
+    pattern = compile_safe_pattern("a{1024}" * 8)
 
-
-def test_operation_budget_allows_the_operation_at_the_limit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(safe_patterns, "_operation_limit", lambda _value, _atoms: 2)
-
-    assert safe_fullmatch(compile_safe_pattern("a"), "a")
-
-
-def test_operation_budget_rejects_the_next_counted_operation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(safe_patterns, "_operation_limit", lambda _value, _atoms: 1)
-
+    assert safe_fullmatch(pattern, "a" * MAX_UTF8_STRING_BYTES)
     with pytest.raises(ContractError) as caught:
-        safe_fullmatch(compile_safe_pattern("a"), "a")
+        safe_fullmatch(pattern, "a" * (MAX_UTF8_STRING_BYTES + 1))
     assert caught.value.reason_code is ReasonCode.INVALID_LIMIT
+
+
+def test_worst_case_transition_count_is_linear_in_input_times_atoms(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_accepts = CharacterSet.accepts
+
+    class AcceptCounter:
+        calls: ClassVar[int] = 0
+
+    def counted_accepts(character_set: CharacterSet, character: str) -> bool:
+        AcceptCounter.calls += 1
+        return original_accepts(character_set, character)
+
+    monkeypatch.setattr(CharacterSet, "accepts", counted_accepts)
+    pattern = compile_safe_pattern("a{0,1024}" * 8)
+    value = "a" * MAX_UTF8_STRING_BYTES
+
+    assert safe_fullmatch(pattern, value)
+    assert AcceptCounter.calls == len(value) * len(pattern.atoms)

@@ -18,7 +18,7 @@ interfaces from their named modules:
 | `canonical` | `canonical_bytes`, `digest_value`, `authority_digest`, and `execution_digest`. |
 | `patterns` | Immutable `SafePattern`, `compile_safe_pattern`, and `safe_fullmatch`. |
 | `schemas` | `schema_documents` and deterministic `render_schema_files`. |
-| `protocol` | Immutable `Frame`, `FramedMessage`, `RunBinding`, plus `write_message`, `read_message`, and `response_chain`. |
+| `protocol` | Immutable `FrameType`, `Frame`, `FramedMessage`, `RunBinding`, plus `write_message`, `read_message`, and `response_chain`. |
 
 ## Canonical values and digest domains
 
@@ -27,6 +27,13 @@ signed 64-bit integers, exact booleans, and null, at a maximum nesting depth of
 32. Mapping keys are ASCII snake case matching `[a-z][a-z0-9_]{0,63}`. Floats,
 bytes, surrogates, non-NFC strings, and C0/C1 controls are rejected. Encoding is
 sorted-key, compact UTF-8 JSON; ordered lists, including argv, remain ordered.
+Callers in later phases normalize set-like collections before canonicalization;
+P0 deliberately does not provide a loader or semantic normalizer.
+
+Binding names—parameter names and request keys, secret and target bindings, and
+placeholder IDs—use `[a-z][a-z0-9_]{0,63}`. The broader 128-byte
+`[a-z0-9]+(?:[._-][a-z0-9]+)*` grammar remains limited to value identifiers
+such as action/node IDs and secret reference values.
 
 `digest_value` returns lowercase `sha256:<64 hex>`. `authority_digest` hashes
 `{"contract":"hackbot-authority-v1","value":...}` and
@@ -43,7 +50,9 @@ ascending `A-Z`, `a-z`, or `0-9` ranges with optional leading `^`; and bounded
 `{m}` or `{m,n}` quantifiers where `0 <= m <= n <= 1024`. It rejects grouping,
 alternation, wildcards, anchors, lookaround, backreferences, Unicode classes,
 unbounded quantifiers, and nested quantifiers. Matching is full-match and uses
-the bounded parser/matcher rather than Python `re`.
+the bounded parser/matcher rather than Python `re`. Printable ASCII match input
+is capped at 8,192 bytes and processed in deterministic
+`O(input_length * atom_count)` transitions.
 
 ## Generated schemas and fixtures
 
@@ -51,6 +60,13 @@ The code-owned Draft 2020-12 schemas are committed under
 `schemas/engagement-v2/`: program v2, scope v2, authorization v2, actions v1,
 action request v2, runner v2, remote header v1, and `manifest.json`. Check
 exact-byte schema drift without writing:
+
+Every schema root declares
+`"x-hackbot-canonical-format": "hackbot-canonical-json-v1"`. Standard Draft
+2020-12 validation is necessary but not sufficient: P1/P2/P4 must also enforce
+strict exact primitive validation and the code-owned custom annotations
+(`x-hackbot-max-utf8-bytes`, `x-hackbot-unique-by`) and safe-pattern format.
+P0 adds no runtime JSON Schema dependency.
 
 ```bash
 .venv/bin/python scripts/export_engagement_v2_schemas.py --check
@@ -85,6 +101,16 @@ These are validation and framing primitives only. **No SSH, helper, or replay
 cache exists in P0.** P0 neither opens a socket nor reserves a replay tuple nor
 spawns a child. P4 is responsible for any pinned SSH transport, helper identity
 verification, replay storage, privilege permits, and trusted preflight.
+
+The code-owned runner-security projection registry binds the runner role and
+node identity; SSH endpoint, identity, host-key pin, known-hosts path, and fixed
+security options; helper path/protocol plus configured digest and/or
+code-signing selector; OS, architecture, permitted privileges; source mode and
+address; complete egress-attestation trust tuple; and privilege-signer
+fingerprint. Only local private-key path/content and connection timeout are
+operational runner exclusions. A deterministic golden vector proves that every
+registered field changes the authority digest; P0 does not implement the P1
+loader.
 
 ## Phase consumers and status
 

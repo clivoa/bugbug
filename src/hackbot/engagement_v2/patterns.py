@@ -8,6 +8,7 @@ from .constants import (
     MAX_SAFE_PATTERN_BYTES,
     MAX_SAFE_PATTERN_CLASS_LITERALS,
     MAX_SAFE_PATTERN_QUANTIFIER,
+    MAX_UTF8_STRING_BYTES,
     MIN_SAFE_PATTERN_CLASS_LITERALS,
     MIN_SAFE_PATTERN_QUANTIFIER,
 )
@@ -182,42 +183,49 @@ def compile_safe_pattern(source: str) -> SafePattern:
     return SafePattern(source, tuple(atoms))
 
 
-def _operation_limit(value_length: int, atom_count: int) -> int:
-    return (value_length + 1) * (atom_count + 1) * (MAX_SAFE_PATTERN_QUANTIFIER + 1)
-
-
 def safe_fullmatch(pattern: SafePattern, value: str) -> bool:
     """Return a bounded, implicitly anchored match result."""
 
+    try:
+        encoded_value = value.encode("ascii")
+    except (AttributeError, UnicodeEncodeError):
+        return False
+    if len(encoded_value) > MAX_UTF8_STRING_BYTES:
+        raise ContractError(ReasonCode.INVALID_LIMIT)
     if any(
-        not (_FIRST_PRINTABLE_ASCII <= ord(character) <= _LAST_PRINTABLE_ASCII)
-        for character in value
+        not (_FIRST_PRINTABLE_ASCII <= character <= _LAST_PRINTABLE_ASCII)
+        for character in encoded_value
     ):
         return False
 
-    operations = 0
-    operation_limit = _operation_limit(len(value), len(pattern.atoms))
-    positions = {0}
+    value_length = len(value)
+    positions = bytearray(value_length + 1)
+    positions[0] = 1
     for atom in pattern.atoms:
-        next_positions: set[int] = set()
-        for start in positions:
-            operations += 1
-            if operations > operation_limit:
-                raise ContractError(ReasonCode.INVALID_LIMIT)
+        next_positions = bytearray(value_length + 1)
+        window_count = 0
+        added_through = -1
+        removed_before = 0
+        accepted_run_start = 0
 
-            end = start
-            if atom.minimum == 0:
-                next_positions.add(start)
-            for count in range(1, atom.maximum + 1):
-                operations += 1
-                if operations > operation_limit:
-                    raise ContractError(ReasonCode.INVALID_LIMIT)
-                if end >= len(value) or not atom.matcher.accepts(value[end]):
-                    break
-                end += 1
-                if count >= atom.minimum:
-                    next_positions.add(end)
+        for end in range(value_length + 1):
+            if end and not atom.matcher.accepts(value[end - 1]):
+                accepted_run_start = end
+
+            lower = max(accepted_run_start, end - atom.maximum)
+            upper = end - atom.minimum
+            while added_through < upper:
+                added_through += 1
+                if added_through >= 0:
+                    window_count += positions[added_through]
+            while removed_before < lower:
+                if removed_before <= added_through:
+                    window_count -= positions[removed_before]
+                removed_before += 1
+            if lower <= upper and window_count:
+                next_positions[end] = 1
+
         positions = next_positions
-        if not positions:
+        if not any(positions):
             return False
-    return len(value) in positions
+    return bool(positions[value_length])

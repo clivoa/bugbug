@@ -263,7 +263,9 @@ def _write_one(directory_descriptor: int, name: str, content: bytes) -> None:
 def _write_files(destination: Path, rendered: dict[str, bytes]) -> None:
     directory_descriptor = _open_pinned_directory(destination, create=True)
     try:
-        for name, content in sorted(rendered.items()):
+        document_names = sorted(set(rendered) - {"manifest.json"})
+        for name in [*document_names, "manifest.json"]:
+            content = rendered[name]
             _write_one(directory_descriptor, name, content)
         os.fsync(directory_descriptor)
     finally:

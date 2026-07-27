@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
@@ -561,6 +562,11 @@ def test_evidence_limits_and_prohibited_path_segments_are_closed() -> None:
 def test_identifier_and_digest_patterns_accept_only_contract_syntax() -> None:
     assert IDENTIFIER_PATTERN.fullmatch("operator.probe-1")
     assert IDENTIFIER_PATTERN.fullmatch("operator._probe") is None
+    assert contract.BINDING_NAME_PATTERN.fullmatch("target_name_1")
+    assert contract.BINDING_NAME_PATTERN.fullmatch("1-target") is None
+    assert contract.BINDING_NAME_PATTERN.fullmatch("target-name") is None
+    assert contract.BINDING_NAME_PATTERN.fullmatch("target.name") is None
+    assert contract.MAX_BINDING_NAME_BYTES == 64
     assert contract.MAPPING_KEY_PATTERN.fullmatch("policy_limit_1")
     assert contract.MAPPING_KEY_PATTERN.fullmatch("policy-limit") is None
     assert contract.SECRET_REFERENCE_PATTERN.fullmatch("secret:operator.token-1")
@@ -572,6 +578,7 @@ def test_identifier_and_digest_patterns_accept_only_contract_syntax() -> None:
     assert all(
         pattern.flags & re.ASCII
         for pattern in (
+            contract.BINDING_NAME_PATTERN,
             contract.MAPPING_KEY_PATTERN,
             IDENTIFIER_PATTERN,
             contract.SECRET_REFERENCE_PATTERN,
@@ -589,6 +596,65 @@ def test_identifier_and_digest_patterns_accept_only_contract_syntax() -> None:
         "secret:",
     )
     assert CANONICAL_JSON_FORMAT == "hackbot-canonical-json-v1"
+
+
+def test_runner_security_projection_field_registry_is_exact_and_immutable() -> None:
+    assert contract.RUNNER_SECURITY_PROJECTION_FIELDS == (
+        "role",
+        "node_identity",
+        "ssh.host",
+        "ssh.port",
+        "ssh.user",
+        "ssh.identity",
+        "ssh.known_hosts_path",
+        "ssh.host_key_sha256",
+        "ssh.options.batch_mode",
+        "ssh.options.identities_only",
+        "ssh.options.strict_host_key_checking",
+        "ssh.options.agent_forwarding",
+        "ssh.options.x11_forwarding",
+        "ssh.options.port_forwarding",
+        "ssh.options.tty",
+        "helper.path",
+        "helper.protocol_version",
+        "helper.sha256",
+        "helper.code_signing_identity",
+        "operating_system",
+        "architecture",
+        "permitted_privileges",
+        "source_identity.mode",
+        "source_identity.address",
+        "egress_attestation.adapter_path",
+        "egress_attestation.adapter_sha256",
+        "egress_attestation.signer_public_key_fingerprint",
+        "egress_attestation.max_observation_age_seconds",
+        "privilege_signer_public_key_fingerprint",
+    )
+    assert contract.RUNNER_SECURITY_PROJECTION_EXCLUDED_FIELDS == (
+        "ssh.private_key_path",
+        "ssh.connection_timeout_seconds",
+    )
+    with pytest.raises(AttributeError):
+        contract.RUNNER_SECURITY_PROJECTION_FIELDS.append("runtime_result")  # type: ignore[attr-defined]
+
+
+def test_spec_reason_tokens_belong_to_the_closed_registry() -> None:
+    repository_root = Path(__file__).resolve().parents[2]
+    spec_root = (
+        repository_root / "openspec" / "changes" / "engagement-v2-security-contracts" / "specs"
+    )
+    reason_token = re.compile(
+        r"`((?:INVALID|DENY|EXEC|EVIDENCE|CLEANUP)_[A-Z0-9_]+)`",
+        re.ASCII,
+    )
+    tokens = {
+        match.group(1)
+        for path in spec_root.glob("*/spec.md")
+        for match in reason_token.finditer(path.read_text(encoding="utf-8"))
+    }
+
+    assert "INVALID_DOCUMENT_STRUCTURE" in tokens
+    assert tokens <= {reason.value for reason in ReasonCode}
 
 
 def test_reason_codes_are_closed_and_errors_reject_unregistered_values() -> None:
