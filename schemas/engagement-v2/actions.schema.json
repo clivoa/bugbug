@@ -217,13 +217,15 @@
               "maxLength": 2048,
               "minLength": 2,
               "pattern": "^(?:/|[A-Za-z]:[\\\\/]).+$",
-              "type": "string"
+              "type": "string",
+              "x-hackbot-max-utf8-bytes": 2048
             },
             "remote": {
               "maxLength": 2048,
               "minLength": 2,
               "pattern": "^(?:/|[A-Za-z]:[\\\\/]).+$",
-              "type": "string"
+              "type": "string",
+              "x-hackbot-max-utf8-bytes": 2048
             }
           },
           "required": [],
@@ -386,7 +388,8 @@
         "title": {
           "maxLength": 2048,
           "minLength": 1,
-          "type": "string"
+          "type": "string",
+          "x-hackbot-max-utf8-bytes": 2048
         },
         "vulnerability_types": {
           "items": {
@@ -430,13 +433,15 @@
       "maxLength": 4096,
       "minLength": 1,
       "pattern": "^(?:[^{}]+|\\{(?:value|target|targets_file|artifact_file|secret_file):[a-z0-9]+(?:[._-][a-z0-9]+)*\\})$",
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 4096
     },
     "digest": {
       "maxLength": 71,
       "minLength": 71,
       "pattern": "^sha256:[0-9a-f]{64}$",
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 71
     },
     "evidence_mode": {
       "enum": [
@@ -449,12 +454,14 @@
     "identifier": {
       "maxLength": 128,
       "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 128
     },
     "operator_action_id": {
       "maxLength": 128,
       "pattern": "^operator\\.[a-z0-9]+(?:[._-][a-z0-9]+)*$",
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 128
     },
     "parameter": {
       "additionalProperties": false,
@@ -526,6 +533,18 @@
               "artifact_sha256"
             ]
           }
+        },
+        {
+          "if": {
+            "required": [
+              "pattern"
+            ]
+          },
+          "then": {
+            "required": [
+              "pattern_format"
+            ]
+          }
         }
       ],
       "properties": {
@@ -536,7 +555,8 @@
           "oneOf": [
             {
               "maxLength": 8192,
-              "type": "string"
+              "type": "string",
+              "x-hackbot-max-utf8-bytes": 8192
             },
             {
               "maximum": 9223372036854775807,
@@ -555,7 +575,8 @@
           "items": {
             "maxLength": 2048,
             "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "x-hackbot-max-utf8-bytes": 2048
           },
           "maxItems": 256,
           "minItems": 1,
@@ -581,9 +602,11 @@
           "type": "integer"
         },
         "pattern": {
+          "format": "hackbot-safe-fullmatch-v1",
           "maxLength": 256,
           "minLength": 1,
-          "type": "string"
+          "type": "string",
+          "x-hackbot-max-utf8-bytes": 256
         },
         "pattern_format": {
           "const": "hackbot-safe-fullmatch-v1",
@@ -691,7 +714,8 @@
           "maxLength": 2048,
           "minLength": 1,
           "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)(?:\\.|\\.\\.)(?:/|$))(?!.*//).+$",
-          "type": "string"
+          "type": "string",
+          "x-hackbot-max-utf8-bytes": 2048
         },
         "type": {
           "$ref": "#/$defs/retained_output_type"
@@ -725,7 +749,8 @@
     "secret_reference": {
       "maxLength": 135,
       "pattern": "^secret:[a-z0-9]+(?:[._-][a-z0-9]+)*$",
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 135
     },
     "secret_transport": {
       "enum": [
@@ -740,7 +765,8 @@
     "target": {
       "maxLength": 2048,
       "minLength": 1,
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 2048
     },
     "target_kind": {
       "enum": [
@@ -776,7 +802,8 @@
       "maxItems": 256,
       "minItems": 0,
       "type": "array",
-      "uniqueItems": true
+      "uniqueItems": true,
+      "x-hackbot-unique-by": "id"
     },
     "schema_version": {
       "const": 1,

@@ -163,12 +163,15 @@ def _array(
     minimum: int = 0,
     maximum: int | None = None,
     unique: bool = False,
+    unique_by: str | None = None,
 ) -> dict[str, object]:
     result: dict[str, object] = {"type": "array", "items": items, "minItems": minimum}
     if maximum is not None:
         result["maxItems"] = maximum
     if unique:
         result["uniqueItems"] = True
+    if unique_by is not None:
+        result["x-hackbot-unique-by"] = unique_by
     return result
 
 
@@ -219,7 +222,19 @@ def _document(
     if annotations is not None:
         document.update(annotations)
     document["x-hackbot-max-document-nesting-depth"] = MAX_DOCUMENT_NESTING_DEPTH
+    _annotate_utf8_string_limits(document)
     return document
+
+
+def _annotate_utf8_string_limits(value: object) -> None:
+    if isinstance(value, dict):
+        if value.get("type") == "string" and "maxLength" in value:
+            value["x-hackbot-max-utf8-bytes"] = value["maxLength"]
+        for child in value.values():
+            _annotate_utf8_string_limits(child)
+    elif isinstance(value, list):
+        for child in value:
+            _annotate_utf8_string_limits(child)
 
 
 def _common_definitions() -> dict[str, object]:
@@ -408,6 +423,7 @@ def _parameter_schema() -> dict[str, object]:
             "pattern_format": {"type": "string", "const": SAFE_FULLMATCH_FORMAT},
             "pattern": {
                 "type": "string",
+                "format": SAFE_FULLMATCH_FORMAT,
                 "minLength": 1,
                 "maxLength": MAX_SAFE_PATTERN_BYTES,
             },
@@ -441,6 +457,10 @@ def _parameter_schema() -> dict[str, object]:
         {
             "if": {"properties": {"type": {"const": "artifact-ref"}}, "required": ["type"]},
             "then": {"required": ["artifact_sha256"]},
+        },
+        {
+            "if": {"required": ["pattern"]},
+            "then": {"required": ["pattern_format"]},
         },
     ]
     return result
@@ -761,6 +781,7 @@ def _actions_schema() -> dict[str, object]:
                 _ref("action"),
                 maximum=MAX_ACTIONS,
                 unique=True,
+                unique_by="id",
             ),
         },
         required=("schema_version", "actions"),
@@ -1028,7 +1049,7 @@ def _remote_header_schema() -> dict[str, object]:
         },
         "nonce": {
             "type": "string",
-            "pattern": rf"^[A-Za-z0-9_-]{{{NONCE_BASE64URL_LENGTH}}}$",
+            "pattern": rf"^[A-Za-z0-9_-]{{{NONCE_BASE64URL_LENGTH - 1}}}[AQgw]$",
             "minLength": NONCE_BASE64URL_LENGTH,
             "maxLength": NONCE_BASE64URL_LENGTH,
         },
@@ -1077,7 +1098,7 @@ def _remote_header_schema() -> dict[str, object]:
         ("path", "sha256"),
     )
     return _document(
-        schema_id="urn:hackbot:schema:engagement-v2:remote-header:1",
+        schema_id=f"urn:hackbot:schema:engagement-v2:remote-header:{PROTOCOL_VERSION}",
         properties={
             "protocol_version": {"type": "integer", "const": PROTOCOL_VERSION},
             "run_id": _ref("run_id"),
@@ -1109,6 +1130,7 @@ def _remote_header_schema() -> dict[str, object]:
                 _ref("frame_descriptor"),
                 maximum=MAX_FRAME_COUNT,
                 unique=True,
+                unique_by="index",
             ),
             "timeout_seconds": _integer(MIN_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS),
             "stdout_cap_bytes": _integer(MIN_OUTPUT_CAP_BYTES, MAX_OUTPUT_CAP_BYTES),

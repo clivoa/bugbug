@@ -11,13 +11,15 @@
       "maxLength": 4096,
       "minLength": 1,
       "pattern": "^(?:[^{}]+|\\{(?:value|target|targets_file|artifact_file|secret_file):[a-z0-9]+(?:[._-][a-z0-9]+)*\\})$",
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 4096
     },
     "digest": {
       "maxLength": 71,
       "minLength": 71,
       "pattern": "^sha256:[0-9a-f]{64}$",
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 71
     },
     "executable": {
       "additionalProperties": false,
@@ -26,7 +28,8 @@
           "maxLength": 2048,
           "minLength": 2,
           "pattern": "^(?:/|[A-Za-z]:[\\\\/]).+$",
-          "type": "string"
+          "type": "string",
+          "x-hackbot-max-utf8-bytes": 2048
         },
         "sha256": {
           "$ref": "#/$defs/digest"
@@ -74,13 +77,15 @@
     "identifier": {
       "maxLength": 128,
       "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 128
     },
     "nonce": {
       "maxLength": 43,
       "minLength": 43,
-      "pattern": "^[A-Za-z0-9_-]{43}$",
-      "type": "string"
+      "pattern": "^[A-Za-z0-9_-]{42}[AQgw]$",
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 43
     },
     "platform": {
       "enum": [
@@ -110,7 +115,8 @@
     "target": {
       "maxLength": 2048,
       "minLength": 1,
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 2048
     },
     "timestamp": {
       "format": "date-time",
@@ -157,7 +163,8 @@
       "maxItems": 256,
       "minItems": 0,
       "type": "array",
-      "uniqueItems": true
+      "uniqueItems": true,
+      "x-hackbot-unique-by": "index"
     },
     "issued_at": {
       "$ref": "#/$defs/timestamp"

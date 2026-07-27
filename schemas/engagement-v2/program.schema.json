@@ -4,12 +4,14 @@
       "maxLength": 71,
       "minLength": 71,
       "pattern": "^sha256:[0-9a-f]{64}$",
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 71
     },
     "identifier": {
       "maxLength": 128,
       "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 128
     },
     "profile": {
       "enum": [
@@ -25,7 +27,8 @@
     "target": {
       "maxLength": 2048,
       "minLength": 1,
-      "type": "string"
+      "type": "string",
+      "x-hackbot-max-utf8-bytes": 2048
     }
   },
   "$id": "urn:hackbot:schema:engagement-v2:program:2",
@@ -173,7 +176,8 @@
           "items": {
             "maxLength": 2048,
             "minLength": 1,
-            "type": "string"
+            "type": "string",
+            "x-hackbot-max-utf8-bytes": 2048
           },
           "minItems": 0,
           "type": "array",
@@ -190,7 +194,8 @@
                 "timezone": {
                   "maxLength": 2048,
                   "minLength": 1,
-                  "type": "string"
+                  "type": "string",
+                  "x-hackbot-max-utf8-bytes": 2048
                 },
                 "windows": {
                   "items": {
