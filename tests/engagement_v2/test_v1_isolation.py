@@ -264,4 +264,6 @@ def test_next_steps_separates_historical_v1_snapshot_from_p0_status() -> None:
     text = Path("docs/next-steps.md").read_text(encoding="utf-8")
 
     assert "Historical v1 verification snapshot" in text
-    assert "Task 8 full verification and delivery remain pending" in text
+    assert "P0 tasks 1.1–8.2 are complete" in text
+    assert "Current normative text lives under `openspec/specs/`" in text
+    assert "P1 is **Ready**" in text

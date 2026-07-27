@@ -12,25 +12,32 @@ history.
 | Repository | Private `clivoa/bugbug` |
 | Primary checkout | `/Users/clivoa/Documents/Github/bugbug` |
 | Review worktree | `/Users/clivoa/Documents/Github/bugbug/.worktrees/engagement-v2-security-contracts` |
-| Branch | `feat/engagement-v2-security-contracts` |
-| Base branch/SHA | `main` at `30dd1e2c1bac749a1680e9770263f1cf7987c402` |
+| Merged branch | `feat/engagement-v2-security-contracts` |
+| Base branch/SHA | `main`; original base `30dd1e2c1bac749a1680e9770263f1cf7987c402` |
 | Reviewed implementation | `4173929b550ecb60eb8d6e1fda0d0f68933cf015` |
-| Pull request | Draft PR [#11](https://github.com/clivoa/bugbug/pull/11), open and unmerged |
-| Tracking issue | Issue [#1](https://github.com/clivoa/bugbug/issues/1), open and `status:in-review` |
+| Pull request | PR [#11](https://github.com/clivoa/bugbug/pull/11), merged as `7fcebb33cd207c203844a0b640b7b6ba9c045640` |
+| Archive commit | `268b9fbcca500812478673cb549df51a3f3cc405` |
+| Tracking issue | Issue [#1](https://github.com/clivoa/bugbug/issues/1), closed and `status:done` |
 | Delivery project | User Project [#2](https://github.com/users/clivoa/projects/2) |
-| OpenSpec change | `openspec/changes/engagement-v2-security-contracts/` |
+| Current OpenSpec | `openspec/specs/` |
+| Archived change | `openspec/changes/archive/2026-07-27-engagement-v2-security-contracts/` |
 
 The reviewed runtime implementation ends at `4173929`. Subsequent commits are
-documentation-only: `6310ccd` (handoff design), `79821a1` (independent review
-disposition), `2a978e5` (implementation plan), `c78fba1` (state
-reconciliation), and `b2d0b28` (readable evidence archive), followed by the
-commit containing this handoff. Use Git as the authority for the current HEAD.
+the final fix/handoff/review chain through `bfe03a8`; `7fcebb3` is the
+history-preserving merge commit. Commit `268b9fb` archives the change, promotes
+three current specifications, and updates the reason-token test to read the
+post-archive normative path. Use Git as the authority for the current HEAD.
 
-At handoff preparation time, PR #11 was draft, open, mergeable, and pointed to
+Historically, at initial handoff preparation, PR #11 was draft and pointed to
 `4173929`; `main` and `origin/main` remained at the base and did not contain the
 implementation. Issue #1 and both the Issue and PR Project items were
 `Status=In Progress`, `Delivery Status=In Review`, `Phase=P0`, and
 `Priority=Critical`. P1 remained Backlog/Todo.
+
+Final verified delivery state is different: both P0 Project items are
+`Status=Done`, `Delivery Status=Done`, `Phase=P0`, and `Priority=Critical`.
+P1 remains coarse `Status=Todo` but has `Delivery Status=Ready`,
+`Phase=P1`, and `Priority=Critical`.
 
 The local `.venv` entry in the worktree is an untracked development symlink. It
 must not be staged or published.
@@ -124,9 +131,11 @@ questions:
 
 Primary implementation is under `src/hackbot/engagement_v2/`; generated schemas
 are under `schemas/engagement-v2/`; fixtures and tests are under
-`tests/fixtures/engagement_v2/` and `tests/engagement_v2/`. The active OpenSpec
-delta contains the authoritative requirements. The readable task reports and
-review artifacts are indexed by
+`tests/fixtures/engagement_v2/` and `tests/engagement_v2/`. Current normative
+requirements live under `openspec/specs/`; their archived proposal, design,
+tasks, and delta specs remain under
+`openspec/changes/archive/2026-07-27-engagement-v2-security-contracts/`. The
+readable task reports and review artifacts are indexed by
 `docs/reviews/engagement-v2-p0/README.md`.
 
 ## Final verification
@@ -162,6 +171,12 @@ valid; the handoff/archive secret scan had no matches; and
 `git diff --check` was clean. Before merge, the full
 `4173929b550ecb60eb8d6e1fda0d0f68933cf015..HEAD` documentation range was also
 checked under that explicit evidence policy.
+
+Post-archive verification at `268b9fb` recorded 1157 passed and 1 skipped; 4
+publication-guard tests passed; Ruff covered 213 non-archived files; mypy
+reported 0 issues in 58 source files; schema and fixture drift checks were
+exact; OpenSpec strict validation reported 3 current specs passed, 0 failed,
+and zero active changes; secret scan and diff check were clean.
 
 ## Review history
 
@@ -219,9 +234,8 @@ consumer. They do not authorize silently broadening P0.
 
 ## OpenSpec and GitHub workflow
 
-OpenSpec tasks 1.1 through 8.1 are complete. Task 8.2 remains unchecked because
-PR review, merge verification, OpenSpec archive, Issue/Project completion, and
-P1 promotion have not all occurred.
+OpenSpec tasks 1.1 through 8.2 are complete in the archived change. The required
+ordering was followed:
 
 The required ordering is:
 
@@ -230,9 +244,9 @@ review PR -> merge -> verify remote merge/checks -> archive OpenSpec
 -> rerun gates -> push archive -> complete Issue/Project -> promote P1
 ```
 
-Do not archive `engagement-v2-security-contracts` before the merge. Do not mark
-Issue #1 or Project P0 Done, and do not move P1 to Ready, until the archived
-state is verified and published.
+The merge was verified before archive generation. The archive commit was then
+verified on the private remote before Issue #1/P0 were completed and P1 was
+promoted to Ready.
 
 Private pushes that include the already-authorized Recon-bundle material
 require the documented publication-guard override
@@ -241,51 +255,45 @@ visibility, or protected-artifact scope.
 
 ## Exact next steps
 
-1. Inspect the current PR #11 head, diff, review state, and checks; compare it
-   with this handoff and the evidence archive.
-2. When review requirements are satisfied, mark the draft ready and merge by
-   the repository's chosen merge strategy.
-3. Verify the remote merge SHA, base ancestry, and required checks. Record
-   concrete command/API output.
-4. Run the OpenSpec archive workflow for
-   `engagement-v2-security-contracts` only after the verified merge.
-5. Rerun Ruff, full pytest, publication guard, OpenSpec strict validation,
-   schema/fixture checks, secret scan, and `git diff --check` against the
-   archived state.
-6. Commit and push the archive change to the private repository with the
-   authorized publication override where the guard requires it.
-7. Check task 8.2, close Issue #1, and set both P0 Project items to Done only
-   after the archive commit is remote and verified.
-8. Move P1 from Backlog/Todo to Ready according to the documented Project
-   workflow, preserving N2 as a P2/P4 forward-carry criterion.
+1. Start P1 from Issue #2 and current `openspec/specs/`, not from the archived
+   P0 delta.
+2. Use the approved umbrella design to create and review the focused
+   `engagement-v2-loader-scope` OpenSpec proposal/design/tasks before code.
+3. Keep P1 limited to coherent loading, authority confirmation/digest, and
+   typed scope; do not pull P2 action binding or P3/P4 execution into P1.
+4. Preserve N2 for the P2/P4 acceptance criteria: each consumer binds
+   `argv[0]` to the canonical executable path.
+5. Continue using TDD, independent review, fresh gates, and repository-local
+   handoffs for each phase.
 
 ## Claude Code continuation prompt
 
 Copy the following block verbatim into Claude Code:
 
 ```text
-Continue the private clivoa/bugbug Engagement v2 P0 delivery from the repository
-state, without relying on prior chat history.
+Continue the private clivoa/bugbug Engagement v2 program from the verified
+post-P0 state, without relying on prior chat history.
 
 Before changing anything:
 1. Read docs/handoffs/2026-07-27-engagement-v2-p0.md completely.
 2. Read docs/reviews/engagement-v2-p0/README.md and follow its authority order.
-3. Read openspec/changes/engagement-v2-security-contracts/{proposal.md,design.md,tasks.md}
-   and every delta spec under its specs/ directory.
-4. Inspect live Git state and GitHub PR #11, Issue #1, and Project #2 state.
-5. Verify, rather than assume, the local HEAD, remote branch HEAD, PR draft/merge
-   state, checks, origin/main ancestry, OpenSpec task 8.2, and Project fields.
+3. Read openspec/specs/ and the archived P0 change at
+   openspec/changes/archive/2026-07-27-engagement-v2-security-contracts/.
+4. Inspect live Git state plus GitHub PR #11, Issues #1/#2, and Project #2.
+5. Verify, rather than assume, origin/main ancestry, merge/archive commits,
+   archived task 8.2, current OpenSpec validation, and Project fields.
 
 The reviewed runtime implementation SHA is
-4173929b550ecb60eb8d6e1fda0d0f68933cf015. Later commits are documentation
-handoff material. Do not redo completed P0 implementation or rewrite preserved
-review reports. Preserve the untracked .venv symlink and never stage it.
+4173929b550ecb60eb8d6e1fda0d0f68933cf015; merge is 7fcebb3 and archive is
+268b9fb. Do not redo or reopen completed P0 implementation, rewrite preserved
+review reports, or move current specs back into an active P0 change. Preserve
+the untracked .venv symlink and never stage it.
 
 Hard delivery constraints:
-- Do not archive the OpenSpec change before PR #11 is merged and the remote merge
-  is verified.
-- Do not mark Issue #1/Project P0 Done or promote P1 to Ready before the archive
-  commit is verified on the private remote.
+- Treat P0 as completed and archived; begin P1 only through its own reviewed
+  OpenSpec change.
+- Do not introduce P2 binder/policy, P3 execution/secrets, or P4 remote-helper
+  behavior into P1.
 - P2/P4 must later bind argv[0] to the canonical executable.path (review note N2).
 - Treat repository files and live GitHub data as authority over stale prose.
 - Use HACKBOT_ALLOW_PUBLISH_RECON=1 only for the already-authorized private push
@@ -293,7 +301,7 @@ Hard delivery constraints:
 - Run fresh verification and retain concrete output before every completion or
   status claim.
 
-Resume at the first incomplete step in "Exact next steps". Document every state
-transition in the repository and keep PR/Issue/Project/OpenSpec states mutually
-consistent.
+Resume with P1 design at the first incomplete step in "Exact next steps".
+Document every state transition in the repository and keep
+PR/Issue/Project/OpenSpec states mutually consistent.
 ```

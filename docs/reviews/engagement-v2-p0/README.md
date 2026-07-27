@@ -95,11 +95,12 @@ For a task-specific range, use the base/head SHAs recorded in
 
 The evidence archive is historical. Current normative authority remains:
 
-1. `openspec/changes/engagement-v2-security-contracts/`;
+1. `openspec/specs/` and the archived delivery record at
+   `openspec/changes/archive/2026-07-27-engagement-v2-security-contracts/`;
 2. `src/hackbot/engagement_v2/`;
 3. generated `schemas/engagement-v2/` and deterministic fixtures;
 4. `docs/engagement-v2-contracts.md`;
-5. the active GitHub PR, Issue, and Project state.
+5. the current GitHub Issue and Project state plus merged PR #11.
 
 If an old report conflicts with the final code or OpenSpec text, the final
 review and current checked-in artifacts govern.

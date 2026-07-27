@@ -39,10 +39,10 @@ Only informational notes were raised. None blocks P0.
 
 ## Delivery consequence
 
-P0 is approved for merge. Archival remains a post-merge delivery step. The
-forward-carry item N2 is the only finding that changes later work: it is added
-as an explicit binder/consumer obligation for P2 and P4 so no consumer assumes
-P0 already enforces the `argv[0]`/executable binding.
+P0 was approved and subsequently merged and archived. The forward-carry item
+N2 is the only finding that changes later work: it remains an explicit
+binder/consumer obligation for P2 and P4 so no consumer assumes P0 already
+enforces the `argv[0]`/executable binding.
 
 ## Publication note
 
@@ -53,13 +53,10 @@ tracked, unlicensed Recon-bundle artifacts remain in the tree. The remote
 already holds that material under the 2026-07-26 authorization; this push added
 no new protected material and no new destination.
 
-PR #11 remains open, draft, and unmerged. The OpenSpec change has not been
-archived, Issue #1 and its Project item are not complete, and P1 has not been
-promoted to Ready. Those delivery transitions occur only after merge and
-remote-state verification.
+PR #11 merged as `7fcebb3`. The OpenSpec change and current specs were published
+as `268b9fb`; Issue #1 and both P0 Project items are Done, and P1 is Ready.
 
 ## Status
 
-All findings have a concrete disposition. P0 verification and independent
-review are complete; the change is cleared to merge. Merge verification and
-the post-merge OpenSpec/GitHub workflow remain open.
+All findings have a concrete disposition. P0 verification, independent review,
+merge verification, archive, and OpenSpec/GitHub delivery are complete.

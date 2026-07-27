@@ -71,11 +71,12 @@ The umbrella design is decomposed into:
 - P6 autonomous workflow contract;
 - P7 effective migration, documentation, and release.
 
-P0 is the active OpenSpec change at
-`openspec/changes/engagement-v2-security-contracts/`. Dependent code changes
-cannot begin until its normative constants and scenarios are approved. P6
-remains unavailable until its own schema and state machine are approved and
-implemented. Effective migration remains P7.
+P0 was merged as `7fcebb3` and archived as `268b9fb`. Its current contracts are
+under `openspec/specs/`; its delivery artifacts are retained under
+`openspec/changes/archive/2026-07-27-engagement-v2-security-contracts/`. P1 is
+Ready for its own focused OpenSpec design. P6 remains unavailable until its own
+schema and state machine are approved and implemented. Effective migration
+remains P7.
 
 ## GitHub Project fields
 
@@ -92,12 +93,12 @@ state. **Delivery Status** is the canonical detailed workflow field.
 The repository README or `docs/next-steps.md` may summarize the roadmap, but the
 Project is the operational view and OpenSpec is the behavioral record.
 
-## Initial Project inventory
+## Project inventory after P0 archive
 
 | Phase | Issue | Initial delivery status | OpenSpec change |
 |---|---|---|---|
-| P0 | [#1 — normative security contracts](https://github.com/clivoa/bugbug/issues/1) | Ready | `openspec/changes/engagement-v2-security-contracts/` |
-| P1 | [#2 — loader, authority digest, scope v2](https://github.com/clivoa/bugbug/issues/2) | Backlog | — |
+| P0 | [#1 — normative security contracts](https://github.com/clivoa/bugbug/issues/1) | Done | `openspec/changes/archive/2026-07-27-engagement-v2-security-contracts/` |
+| P1 | [#2 — loader, authority digest, scope v2](https://github.com/clivoa/bugbug/issues/2) | Ready | `engagement-v2-loader-scope` |
 | P2 | [#3 — manifest, binder, policy](https://github.com/clivoa/bugbug/issues/3) | Backlog | — |
 | P3 | [#5 — local executor, secrets, evidence, cleanup](https://github.com/clivoa/bugbug/issues/5) | Backlog | — |
 | P4 | [#4 — remote helper and trust protocol](https://github.com/clivoa/bugbug/issues/4) | Backlog | — |
