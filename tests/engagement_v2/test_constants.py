@@ -640,9 +640,7 @@ def test_runner_security_projection_field_registry_is_exact_and_immutable() -> N
 
 def test_spec_reason_tokens_belong_to_the_closed_registry() -> None:
     repository_root = Path(__file__).resolve().parents[2]
-    spec_root = (
-        repository_root / "openspec" / "changes" / "engagement-v2-security-contracts" / "specs"
-    )
+    spec_root = repository_root / "openspec" / "specs"
     reason_token = re.compile(
         r"`((?:INVALID|DENY|EXEC|EVIDENCE|CLEANUP)_[A-Z0-9_]+)`",
         re.ASCII,
