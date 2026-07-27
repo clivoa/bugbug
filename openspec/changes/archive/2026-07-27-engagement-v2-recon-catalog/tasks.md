@@ -19,4 +19,4 @@
 
 - [x] 4.1 Document the P5a non-credential catalog: categories, classification, provenance/attribution, the disabled-by-default rule, and that P5b delivers the credential/L3 categories.
 - [x] 4.2 Run focused P5a tests, the full pytest suite, Ruff check/format, mypy, fixture drift, OpenSpec strict validation, the secret-scan regex over new paths, and `git diff --check`; record fresh outputs.
-- [ ] 4.3 (review complete; all findings resolved — see docs/reviews/2026-07-28-engagement-v2-p5a-recon-catalog-review-disposition.md; remaining: merge + archive) Request independent review, resolve findings, update Issue #6/Project fields, and archive the OpenSpec change only after implementation, verification, and merge.
+- [x] 4.3 (review complete; all findings resolved — see docs/reviews/2026-07-28-engagement-v2-p5a-recon-catalog-review-disposition.md; remaining: merge + archive) Request independent review, resolve findings, update Issue #6/Project fields, and archive the OpenSpec change only after implementation, verification, and merge.
