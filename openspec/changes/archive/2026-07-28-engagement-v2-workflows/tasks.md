@@ -23,4 +23,4 @@
 
 - [x] 5.1 Document the P6 workflow schema and state machine: typed inputs/outputs, the raw-output-never-instruction rule, fresh per-step decision, authority-digest binding, retry/replay/cancellation/drift/cleanup barriers, and the capability gate.
 - [x] 5.2 Run focused P6 tests, the full pytest suite, Ruff check/format, mypy, fixture drift, OpenSpec strict validation, the secret-scan regex over new paths, and `git diff --check`; record fresh outputs.
-- [ ] 5.3 Request independent review, resolve findings, update Issue #8/Project fields, and archive the OpenSpec change only after implementation, verification, and merge.
+- [x] 5.3 Request independent review, resolve findings, update Issue #8/Project fields, and archive the OpenSpec change only after implementation, verification, and merge.
