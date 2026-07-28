@@ -19,6 +19,13 @@ CANONICAL_JSON_FORMAT = "hackbot-canonical-json-v1"
 AUTHORITY_PROJECTION_FORMAT = "hackbot-authority-v1"
 EXECUTION_PROJECTION_FORMAT = "hackbot-execution-v1"
 
+# Workflow (P6) schema version and the domain tag under which a validated
+# workflow manifest joins the confirmed-authority digest. The tag is separate
+# from the authority/execution projection domains so a workflow digest can never
+# be confused with a bare authority digest.
+WORKFLOW_SCHEMA_VERSION = 2
+WORKFLOW_PROJECTION_FORMAT = "hackbot-workflow-authority-v1"
+
 # Authority document limits.
 MAX_PROGRAM_DOCUMENT_BYTES = 1_048_576
 MAX_SCOPE_DOCUMENT_BYTES = 1_048_576
@@ -113,6 +120,15 @@ class PlaceholderKind(str, Enum):
     ARTIFACT_FILE = "artifact_file"
     SECRET_FILE = "secret_file"
 
+
+# Workflow (P6) manifest limits.
+MAX_WORKFLOW_DOCUMENT_BYTES = 1_048_576
+MAX_WORKFLOW_STEPS = 64
+MAX_STEP_INPUTS = 64
+MAX_STEP_OUTPUTS = 64
+MAX_STEP_TARGET_VALUES = 256
+MIN_STEP_RETRIES = 0
+MAX_STEP_RETRIES = 8
 
 # Action and prepared-input limits.
 MAX_ACTIONS = 256

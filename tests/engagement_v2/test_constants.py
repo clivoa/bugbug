@@ -670,6 +670,8 @@ def test_reason_codes_are_closed_and_errors_reject_unregistered_values() -> None
         "INVALID_PLACEHOLDER",
         "INVALID_REQUEST",
         "INVALID_RUNNER",
+        "INVALID_WORKFLOW_MANIFEST",
+        "INVALID_AUTONOMOUS_PROGRESSION",
         "DENY_AUTHORIZATION_UNCONFIRMED",
         "DENY_AUTHORIZATION_STALE",
         "DENY_CAPABILITY_NOT_ALLOWED",
@@ -683,6 +685,7 @@ def test_reason_codes_are_closed_and_errors_reject_unregistered_values() -> None
         "EVIDENCE_POLICY_DENIED",
         "CLEANUP_RESOURCE_INCOMPLETE",
         "CLEANUP_TARGET_INCOMPLETE",
+        "WORKFLOW_STEP_FAILED",
     }
     with pytest.raises(TypeError, match="exact ReasonCode"):
         ContractError("INVALID_LIMIT")  # type: ignore[arg-type]
