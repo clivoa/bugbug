@@ -352,6 +352,21 @@ def _verify_confirmation(authorization: Mapping[str, object], computed_digest: s
         raise ContractError(ReasonCode.DENY_AUTHORIZATION_STALE)
 
 
+def _guard_autonomous_progression(program: Mapping[str, object]) -> None:
+    """Reject ``autonomous_progression_allowed: true`` until P6 is delivered.
+
+    The workflow module's presence is the capability; it is imported lazily so
+    the loader keeps no import cycle with the workflow state machine.
+    """
+
+    from hackbot.engagement_v2.workflow import (
+        guard_autonomous_progression,
+        workflow_capability_available,
+    )
+
+    guard_autonomous_progression(program, capability_available=workflow_capability_available())
+
+
 def load_engagement(engagement_dir: str | os.PathLike[str]) -> EngagementSnapshot:
     """Load one coherent, confirmed engagement v2 snapshot or fail closed."""
 
@@ -396,6 +411,7 @@ def load_engagement(engagement_dir: str | os.PathLike[str]) -> EngagementSnapsho
     assert program is not None and scope is not None and authorization is not None
 
     _validate_nested_fields(program, scope)
+    _guard_autonomous_progression(program)
     try:
         projection = security_projection(program=program, scope=scope, runner=runner)
         computed_digest = projection_digest(projection)
