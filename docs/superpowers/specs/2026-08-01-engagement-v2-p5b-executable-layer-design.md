@@ -1,6 +1,6 @@
 # Engagement v2 P5b Executable Layer Design
 
-**Status:** approved in conversation; awaiting review of this written specification  
+**Status:** approved  
 **Date:** 2026-08-01  
 **Change:** `engagement-v2-l3-catalog`  
 **Issue:** GitHub #10
@@ -425,4 +425,3 @@ move to completed only after independent review and required GitHub checks.
 - All repository tests, lint, format, type checks, OpenSpec validation, fixture
   drift checks, publication guards, and secret scans pass.
 - Documentation and GitHub tracking reflect the delivered implementation.
-
