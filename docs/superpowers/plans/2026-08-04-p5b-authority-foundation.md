@@ -256,7 +256,7 @@
 - Produces: `FrameType.EXECUTION_PERMIT`, `SignedExecutionPermit`, `decode_execution_permit_frame(frame)`, and `validate_l3_request(request, verification_context, replay_reserver, resource_factory)`.
 - Consumes: `verify_execution_permit_v2`, the existing framed message reader, and injectable callbacks `reserve(authority_digest, run_id, nonce, now)` and `create(validated_request)`.
 
-- [ ] **Step 1: Add failing protocol and ordering tests**
+- [x] **Step 1: Add failing protocol and ordering tests**
 
   Require exactly one `EXECUTION_PERMIT` frame for an L3 action and zero for a legacy request. Its canonical JSON payload has exact keys `permit` and `signature`, with the signature base64url encoded. Reject duplicate frames, missing permit, malformed/noncanonical JSON, unknown envelope fields, and a permit frame on a response.
 
@@ -273,17 +273,17 @@
   assert events == ["reserve", "resource"]
   ```
 
-- [ ] **Step 2: Run protocol/gate tests and verify they fail**
+- [x] **Step 2: Run protocol/gate tests and verify they fail**
 
   Run: `/Users/clivoa/Documents/Github/bugbug/.venv/bin/python -m pytest tests/engagement_v2/test_protocol.py tests/engagement_v2/test_l3_gate.py -q`
 
   Expected: FAIL because frame type 8 and the L3 gate do not exist.
 
-- [ ] **Step 3: Implement the frame and gate**
+- [x] **Step 3: Implement the frame and gate**
 
   Add enum value `EXECUTION_PERMIT = 8`, include it only in request frame types, and keep existing request frames valid. The gate validates the P4 run binding, decodes/verifies the permit, confirms the request header echoes permit authority/action/run/nonce, calls replay reservation, and only then calls the injected resource factory. This milestone's factory returns an inert validation token; it must not spawn a process, container, namespace, or mount.
 
-- [ ] **Step 4: Run protocol, helper, permit, and gate suites and commit**
+- [x] **Step 4: Run protocol, helper, permit, and gate suites and commit**
 
   Run:
 

@@ -992,6 +992,81 @@ def test_deterministic_protocol_fixtures_have_exact_bytes_and_hashes() -> None:
     assert read_message(BytesIO(fixture_bytes["request-message.bin"])) == message
 
 
+def test_execution_permit_frame_is_request_only_and_decodes_exact_envelope() -> None:
+    """Catch a response-side permit or an envelope not bound to exact bytes."""
+
+    assert hasattr(FrameType, "EXECUTION_PERMIT")
+    signature = b"s" * 64
+    payload = canonical_bytes(
+        {
+            "permit": {"schema_version": 2},
+            "signature": base64.urlsafe_b64encode(signature).decode("ascii").rstrip("="),
+        }
+    )
+    frame = Frame(FrameType.EXECUTION_PERMIT, payload)
+    signed = protocol.decode_execution_permit_frame(frame)
+    assert signed.permit == {"schema_version": 2}
+    assert signed.signature == signature
+
+    request = FramedMessage(
+        header=_request_header(((FrameType.EXECUTION_PERMIT, payload),)),
+        frames=(frame,),
+    )
+    stream = BytesIO()
+    write_message(stream, request)
+    assert read_message(BytesIO(stream.getvalue())) == request
+
+    response_header = _response_header(((FrameType.EXECUTION_PERMIT, payload),))
+    _assert_reason(
+        ReasonCode.EXEC_PROTOCOL_INVALID,
+        lambda: FramedMessage(header=response_header, frames=(frame,)),
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"not-json",
+        b'{"permit":{"schema_version":2}, "signature":"x"}',
+        canonical_bytes({"permit": {"schema_version": 2}}),
+        canonical_bytes({"permit": {"schema_version": 2}, "signature": "x", "unknown": True}),
+        canonical_bytes({"permit": [], "signature": "x"}),
+        canonical_bytes({"permit": {"schema_version": 2}, "signature": "c2hvcnQ="}),
+    ],
+)
+def test_execution_permit_frame_rejects_malformed_or_noncanonical_payload(
+    payload: bytes,
+) -> None:
+    assert hasattr(FrameType, "EXECUTION_PERMIT")
+    frame = Frame(FrameType.EXECUTION_PERMIT, payload)
+    _assert_reason(
+        ReasonCode.EXEC_PROTOCOL_INVALID,
+        lambda: protocol.decode_execution_permit_frame(frame),
+    )
+
+
+def test_request_rejects_duplicate_execution_permit_frames() -> None:
+    assert hasattr(FrameType, "EXECUTION_PERMIT")
+    signature = base64.urlsafe_b64encode(b"s" * 64).decode("ascii").rstrip("=")
+    payload = canonical_bytes({"permit": {"schema_version": 2}, "signature": signature})
+    header = _request_header(
+        (
+            (FrameType.EXECUTION_PERMIT, payload),
+            (FrameType.EXECUTION_PERMIT, payload),
+        )
+    )
+    _assert_reason(
+        ReasonCode.EXEC_PROTOCOL_INVALID,
+        lambda: FramedMessage(
+            header=header,
+            frames=(
+                Frame(FrameType.EXECUTION_PERMIT, payload),
+                Frame(FrameType.EXECUTION_PERMIT, payload),
+            ),
+        ),
+    )
+
+
 def test_protocol_caps_are_exercised_as_exact_contract_values() -> None:
     assert (
         _PREFIX.size,

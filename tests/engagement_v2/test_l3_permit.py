@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
 import importlib
@@ -26,6 +27,7 @@ _SEED = bytes.fromhex("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031
 _NOW = datetime(2026, 8, 4, 12, 0, 30, tzinfo=UTC)
 _ISSUED = datetime(2026, 8, 4, 12, 0, 0, tzinfo=UTC)
 _RUN_ID = "11111111-1111-4111-8111-111111111111"
+_NONCE = base64.urlsafe_b64encode(b"n" * 32).decode("ascii").rstrip("=")
 _EXPECTED_FIELDS = frozenset(
     {
         "schema_version",
@@ -156,7 +158,7 @@ def _context(*, lifetime_seconds: int = 300):
         required_privileges=contract.action.required_privileges,
         evidence_schema=contract.evidence_schema,
         run_id=_RUN_ID,
-        nonce="n" * 43,
+        nonce=_NONCE,
         issued_at=_ISSUED,
         expires_at=_ISSUED + timedelta(seconds=lifetime_seconds),
     )
