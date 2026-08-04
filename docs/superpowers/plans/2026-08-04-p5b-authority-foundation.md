@@ -204,7 +204,7 @@
 - Produces: `ExecutionPermitContext`, `build_execution_permit_v2()`, `sign_execution_permit_v2(permit, signer)`, and `verify_execution_permit_v2()`.
 - Consumes: `ActivatedL3Catalog`, an `ALLOW` `PolicyDecision`, canonical JSON, an injected `Callable[[bytes], bytes]` signer, and the existing Ed25519 verifier.
 
-- [ ] **Step 1: Add failing exact-field/domain/lifetime tests**
+- [x] **Step 1: Add failing exact-field/domain/lifetime tests**
 
   The permit body must contain exactly the 21 fields from the approved design, including `schema_version`. Use domain `hackbot-execution-permit-v2`. Test 1-second and 300-second validity, and reject 0/301 seconds, expired/not-yet-valid timestamps, unknown/missing fields, bad signer fingerprint, tampered signature, and each mismatched claim group.
 
@@ -221,19 +221,19 @@
           verify_execution_permit_v2(permit, _signed(permit), public_key(_SEED), context=_context(), pinned_signer_fingerprint=_fingerprint(public_key(_SEED)), now=_NOW)
   ```
 
-- [ ] **Step 2: Run tests and confirm v2 is absent**
+- [x] **Step 2: Run tests and confirm v2 is absent**
 
   Run: `/Users/clivoa/Documents/Github/bugbug/.venv/bin/python -m pytest tests/engagement_v2/test_l3_permit.py -q`
 
   Expected: FAIL on missing v2 imports.
 
-- [ ] **Step 3: Implement build/sign/verify without weakening v1**
+- [x] **Step 3: Implement build/sign/verify without weakening v1**
 
   `ExecutionPermitContext` must type every exact claim. Store list-like claims as tuples and map-like claims as immutable mappings, thawing them only for canonical serialization. `build_execution_permit_v2` must require an `ALLOW` decision bound through the same activation and snapshot; it must never accept a caller-supplied action-definition digest. `sign_execution_permit_v2` calls only the injected signer and rejects any signature not exactly 64 bytes.
 
   Map failures as follows: bad field set/canonical form/general binding -> `EXEC_PROTOCOL_INVALID`; bad privilege set -> `EXEC_PRIVILEGE_MISMATCH`; bad signer/helper/runner/image/definition digest -> `EXEC_TRUST_MISMATCH`; invalid time -> `EXEC_PROTOCOL_EXPIRED`.
 
-- [ ] **Step 4: Run v1 and v2 permit suites and commit**
+- [x] **Step 4: Run v1 and v2 permit suites and commit**
 
   Run:
 
