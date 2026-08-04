@@ -158,17 +158,35 @@ model cannot select an arbitrary module.
 
 ### 7. Apply default-deny network containment
 
-The control plane resolves and normalizes targets against the confirmed scope and
-places exact IP/port/protocol rules in the permit. The broker resolves names again
-immediately before execution. Every answer must equal the permitted set and
-remain in scope; mixed, new, redirected, proxied, or discovered endpoints deny.
+Every complete networked action definition declares a closed, ordered
+endpoint-binding schema: each binding has a code-owned role, allowed URI
+scheme/protocol set, and cardinality. The definition does not hard-code
+environment-specific destinations. Instead, the confirmed engagement/request
+supplies the full URI or network endpoint, including an explicit port, for every
+primary and auxiliary destination. DC, Kerberos, LDAP/LDAPS, SMB, CA, SSH,
+proof, and cleanup endpoints are independent bindings when the action uses them.
+
+A hostname binding requires an explicit DNS resolver endpoint; an IP-literal
+binding does not. The resolver is bound to the same snapshot and request and is
+included in the permit. The system resolver is never an implicit fallback. The
+control plane normalizes every binding against confirmed scope and resolves
+hostnames through that resolver, then places the exact role/IP/port/protocol set
+and original hostname in the permit. Immediately before execution, the broker
+resolves the same hostname through the same explicit resolver. The complete
+answer set must exactly equal the permitted set and remain in scope; mixed,
+missing, new, redirected, proxied, or discovered endpoints deny.
+
+Adapters receive only role-bound endpoints. They cannot apply a default port,
+auto-discover a DC, CA, member host, or peer, follow a redirect or proxy, or
+widen authority from tool output. Responder's CIDR and dedicated interface are
+explicit bindings, and the SSH management interface is prohibited. This
+endpoint-explicit policy was approved on 2026-08-04.
 
 Before attaching a container, the broker creates an ephemeral namespace and
 installs default-deny nftables rules. The tool image cannot modify its own policy.
 Containers use a read-only root filesystem, private tmpfs, resource bounds, and
 dropped capabilities. Responder alone receives its mode's minimum network
-capabilities and a dedicated interface. Its CIDR is a first-class target wholly
-contained by scope, and the SSH management interface is rejected.
+capabilities. Its CIDR is a first-class target wholly contained by scope.
 
 The lab uses Docker internal networks without a LAN/Internet route. Production
 uses a dedicated test interface or namespace that can reach only permit rules.

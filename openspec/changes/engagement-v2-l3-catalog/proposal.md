@@ -30,6 +30,12 @@ definitions that appear runnable without an enforced runtime.
   DNS revalidation, durable replay protection, persistent rate budgets, bounded
   resources, secret delivery through ephemeral files/stdin/Kerberos caches, and
   independent resource/target cleanup.
+- Make network authority endpoint-explicit. Every networked action declares a
+  closed ordered set of endpoint roles and allowed URI schemes, while the
+  confirmed engagement/request supplies every concrete primary and auxiliary
+  endpoint, including DNS, DC, Kerberos, LDAP/LDAPS, SMB, CA, SSH, proof, and
+  cleanup destinations. Adapters never infer ports, use the system resolver,
+  discover peers, follow redirects, or widen authority from tool output.
 - Replace free-form sensitive output with closed, action-specific structured
   results. Raw credential material, tickets, hashes, passwords, and reusable
   authentication data are discarded and never enter permits, argv, environment,
