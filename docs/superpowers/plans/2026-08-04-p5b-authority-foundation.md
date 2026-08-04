@@ -139,7 +139,7 @@
 - Produces: `SnapshotBinding`, `ActivatedL3Catalog`, `activate_catalog(snapshot, internal_recon_confirmed, project_root)`, and `decide_l3(request, snapshot, activation, platform)`.
 - Consumes: `EngagementSnapshot.identity/profile/authority_digest`, `policy.decide()`, and `BoundCommand` from the existing binder.
 
-- [ ] **Step 1: Add failing same-snapshot and mismatch tests**
+- [x] **Step 1: Add failing same-snapshot and mismatch tests**
 
   ```python
   activation = activate_catalog(snapshot, internal_recon_confirmed=True, project_root=Path.cwd())
@@ -154,13 +154,13 @@
 
   Cover mismatched `identity`, `profile`, and `authority_digest`; absent/false/non-boolean capabilities; unauthorized profiles; missing internal confirmation; request executable/argv overrides; and activation created from a non-`EngagementSnapshot` object.
 
-- [ ] **Step 2: Run focused tests and confirm the stale-binding failures**
+- [x] **Step 2: Run focused tests and confirm the stale-binding failures**
 
   Run: `/Users/clivoa/Documents/Github/bugbug/.venv/bin/python -m pytest tests/engagement_v2/test_l3_contracts.py -q`
 
   Expected: FAIL because activation currently accepts only a profile string and has no immutable binding.
 
-- [ ] **Step 3: Implement the activation boundary**
+- [x] **Step 3: Implement the activation boundary**
 
   ```python
   @dataclass(frozen=True)
@@ -182,7 +182,7 @@
 
   `activate_catalog` must reject unauthorized/unconfirmed input with `DENY_AUTHORIZATION_UNCONFIRMED`. Remove the profile-string loader as an execution-capable entry point; retain only a clearly named private fixture helper if existing catalog unit tests need raw definitions.
 
-- [ ] **Step 4: Prove v1 isolation and commit**
+- [x] **Step 4: Prove v1 isolation and commit**
 
   Extend the AST/runtime test so importing, activating, rejecting, and discarding P5b changes neither v1 module globals nor the exact bytes of existing v1 fixtures.
 
