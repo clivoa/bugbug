@@ -24,7 +24,7 @@
     {
       "name": "remote-header.schema.json",
       "schema_id": "urn:hackbot:schema:engagement-v2:remote-header:1",
-      "sha256": "4bd1620cf11b9f5f22dc999aa59b805453b1839fc813424d14f475b84b4baa32"
+      "sha256": "7110483532b421bf5d9f9ca790d59b02309857c7c9648f5b6099b3a170ca1739"
     },
     {
       "name": "runner.schema.json",

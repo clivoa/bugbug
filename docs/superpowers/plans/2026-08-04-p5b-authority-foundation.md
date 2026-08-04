@@ -109,6 +109,7 @@
       provenance: Mapping[str, object]
       definition_digest: str
 
+
   def definition_digest(raw: Mapping[str, object]) -> str:
       return digest_value({"contract": "hackbot-l3-action-definition-v1", "value": dict(raw)})
   ```
@@ -169,15 +170,25 @@
       profile: str
       authority_digest: str
 
+
   @dataclass(frozen=True)
   class ActivatedL3Catalog:
       binding: SnapshotBinding
       actions: Mapping[str, L3ActionContract]
 
+
   def decide_l3(request, snapshot, activation, *, platform):
-      if SnapshotBinding(snapshot.identity, snapshot.profile, snapshot.authority_digest) != activation.binding:
+      if (
+          SnapshotBinding(snapshot.identity, snapshot.profile, snapshot.authority_digest)
+          != activation.binding
+      ):
           raise ContractError(ReasonCode.DENY_AUTHORIZATION_STALE)
-      return decide(request, snapshot, {key: value.action for key, value in activation.actions.items()}, platform=platform)
+      return decide(
+          request,
+          snapshot,
+          {key: value.action for key, value in activation.actions.items()},
+          platform=platform,
+      )
   ```
 
   `activate_catalog` must reject unauthorized/unconfirmed input with `DENY_AUTHORIZATION_UNCONFIRMED`. Remove the profile-string loader as an execution-capable entry point; retain only a clearly named private fixture helper if existing catalog unit tests need raw definitions.
@@ -213,12 +224,20 @@
       body = canonical_bytes({"contract": "hackbot-execution-permit-v2", "permit": permit})
       return sign(_SEED, body)
 
+
   @pytest.mark.parametrize("field", sorted(_EXPECTED_FIELDS))
   def test_each_permit_binding_mismatch_denies(field: str) -> None:
       permit = _permit()
       permit[field] = _different_value(field)
       with pytest.raises(ContractError):
-          verify_execution_permit_v2(permit, _signed(permit), public_key(_SEED), context=_context(), pinned_signer_fingerprint=_fingerprint(public_key(_SEED)), now=_NOW)
+          verify_execution_permit_v2(
+              permit,
+              _signed(permit),
+              public_key(_SEED),
+              context=_context(),
+              pinned_signer_fingerprint=_fingerprint(public_key(_SEED)),
+              now=_NOW,
+          )
   ```
 
 - [x] **Step 2: Run tests and confirm v2 is absent**
@@ -326,6 +345,7 @@
       forced_command: str
       permitted_signer_sha256: str
 
+
   def validate_l3_deployment(document: Mapping[str, object]) -> L3DeploymentContract:
       if set(document) != _FIELDS or document.get("schema_version") != 1:
           raise ContractError(ReasonCode.INVALID_RUNNER)
@@ -353,7 +373,7 @@
 - Consumes: completed Tasks 1–5 and fresh gate output.
 - Produces: OpenSpec tasks 1.1–2.5 marked complete; tasks 3.1 onward unchanged.
 
-- [ ] **Step 1: Run the complete milestone gate**
+- [x] **Step 1: Run the complete milestone gate**
 
   ```bash
   /Users/clivoa/Documents/Github/bugbug/.venv/bin/python -m pytest tests/engagement_v2/test_l3_catalog.py tests/engagement_v2/test_l3_contracts.py tests/engagement_v2/test_l3_permit.py tests/engagement_v2/test_l3_gate.py tests/engagement_v2/test_l3_deployment.py tests/engagement_v2/test_v1_isolation.py -q
@@ -366,11 +386,11 @@
   git diff --check origin/main..HEAD
   ```
 
-- [ ] **Step 2: Mark only proven tasks complete**
+- [x] **Step 2: Mark only proven tasks complete**
 
   Change checkboxes 1.1–1.5 and 2.1–2.5 from `[ ]` to `[x]`. Do not mark durable SQLite replay/rate work, OCI, broker execution, networking, adapters, remote lab, review, or delivery complete.
 
-- [ ] **Step 3: Validate progress and commit**
+- [x] **Step 3: Validate progress and commit**
 
   Run:
 
