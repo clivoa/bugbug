@@ -203,7 +203,8 @@ def test_tool_run_l2_approve_without_tty_does_not_execute(
 from hackbot.tools.actions import ffuf_path, web_content_wordlist  # noqa: E402
 
 
-def _write_dir_enum_request(path: Path, target: str) -> Path:
+def _write_dir_enum_request(path: Path, target: str, wordlist: str | None = None) -> Path:
+    wl = wordlist or web_content_wordlist()
     request = path / "request.json"
     request.write_text(
         json.dumps(
@@ -213,10 +214,12 @@ def _write_dir_enum_request(path: Path, target: str) -> Path:
                 "argv": [
                     ffuf_path() or "/opt/homebrew/bin/ffuf",
                     "-s",
+                    "-rate",
+                    "1",
                     "-u",
                     target,
                     "-w",
-                    web_content_wordlist(),
+                    wl,
                 ],
                 "hypothesis_id": "hyp-1",
                 "rationale": "Enumerate one in-scope lab path set once.",
@@ -229,10 +232,47 @@ def _write_dir_enum_request(path: Path, target: str) -> Path:
                 "program_rule": "Authorized lab enumeration.",
                 "required_headers": [],
                 "requested_risk": None,
+                "wordlist": wl,
             }
         )
     )
     return request
+
+
+@pytest.mark.skipif(ffuf_path() is None, reason="ffuf not installed")
+def test_approval_grant_works_for_a_real_tool_action(
+    lab_engagement, tmp_path, capsys, monkeypatch
+):
+    # A pending challenge created by a real `tool run` must be grantable by the
+    # standalone `approval grant` (regression: it failed "action is not
+    # code-owned" because grant only knew the fixture registry).
+    request = _write_dir_enum_request(tmp_path, "http://127.0.0.1/FUZZ")
+    code = app(
+        ["tool", "run", "web.dir-enum", str(request), "--engagement", str(lab_engagement), "--json"]
+    )
+    challenge_id = json.loads(capsys.readouterr().out)["challenge_id"]
+    assert code == 4
+
+    monkeypatch.setattr("hackbot.cli.main._read_approval_from_tty", lambda _c: None)
+    grant_code = app(
+        ["approval", "grant", challenge_id, "--engagement", str(lab_engagement), "--json"]
+    )
+    granted = json.loads(capsys.readouterr().out)
+    assert grant_code == 0
+    assert granted["approval_status"] == "granted"
+
+
+def test_tool_run_web_dir_enum_rejects_non_bundled_wordlist(lab_engagement, tmp_path, capsys):
+    evil = tmp_path / "evil.txt"
+    evil.write_text("admin\n")
+    request = _write_dir_enum_request(tmp_path, "http://127.0.0.1/FUZZ", wordlist=str(evil))
+    code = app(
+        ["tool", "run", "web.dir-enum", str(request), "--engagement", str(lab_engagement), "--json"]
+    )
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "code-owned bundled list" in err
+    assert not (lab_engagement / "evidence").exists()
 
 
 @pytest.mark.skipif(ffuf_path() is None, reason="ffuf not installed")
