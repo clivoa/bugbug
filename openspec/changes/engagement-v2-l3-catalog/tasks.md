@@ -1,7 +1,7 @@
 ## 1. Baseline and exact catalog contracts
 
-- [ ] 1.1 Add failing golden tests for the complete definitions and exact ordered set of 15 L3 action IDs, including inputs, targets, capabilities, characteristics, adapter/image identity, rate, closed ordered endpoint-binding schemas (roles, allowed schemes/protocols, and cardinality), evidence, cleanup, and provenance.
-- [ ] 1.2 Add failing negative tests for excluded capabilities, nonexistent local provenance, shell/interpreter/raw-argv fields, arbitrary modules/scripts/payloads/commands, and incomplete definition validation.
+- [x] 1.1 Add failing golden tests for the complete definitions and exact ordered set of 15 L3 action IDs, including inputs, targets, capabilities, characteristics, adapter/image identity, rate, closed ordered endpoint-binding schemas (roles, allowed schemes/protocols, and cardinality), evidence, cleanup, and provenance.
+- [x] 1.2 Add failing negative tests for excluded capabilities, nonexistent local provenance, shell/interpreter/raw-argv fields, arbitrary modules/scripts/payloads/commands, and incomplete definition validation.
 - [ ] 1.3 Add failing tests that catalog activation, P3 evaluation, input binding, and permit issuance require the same snapshot identity, profile, and authority digest.
 - [ ] 1.4 Replace the prototype catalog/loader/provenance implementation until 1.1-1.3 pass, including the exact corrected capability sets and disabled-by-default behavior.
 - [ ] 1.5 Add a v1 isolation regression proving the executable P5b catalog and its rollback do not alter schema v1 bytes or behavior.
