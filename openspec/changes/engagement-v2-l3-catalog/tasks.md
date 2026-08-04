@@ -12,7 +12,7 @@
 - [x] 2.2 Implement permit issuance on the control plane and extend verification on the Linux side until 2.1 passes without introducing another trust path.
 - [x] 2.3 Add failing protocol tests proving invalid, expired, unknown-field, mismatched, and tampered permits deny before any resource factory is called.
 - [x] 2.4 Integrate the permit with the existing P4 framed request/response chain and fixed SSH transport until 2.3 passes.
-- [ ] 2.5 Add deployment-contract tests for a root-owned digest-pinned broker path and a dedicated forced-command SSH identity with shell, TTY, forwarding, agent, and X11 disabled.
+- [x] 2.5 Add deployment-contract tests for a root-owned digest-pinned broker path and a dedicated forced-command SSH identity with shell, TTY, forwarding, agent, and X11 disabled.
 
 ## 3. Durable replay, rate, and mutable-target state
 

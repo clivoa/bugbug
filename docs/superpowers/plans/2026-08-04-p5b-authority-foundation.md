@@ -303,19 +303,19 @@
 - Produces: `L3DeploymentContract` and `validate_l3_deployment(document)`.
 - Consumes: only canonical primitives and existing digest/identifier validation patterns.
 
-- [ ] **Step 1: Add failing deployment-contract tests**
+- [x] **Step 1: Add failing deployment-contract tests**
 
   The exact document fields are `schema_version`, `broker_path`, `broker_sha256`, `ssh_user`, `forced_command`, `interactive_shell`, `tty`, `port_forwarding`, `agent_forwarding`, `x11_forwarding`, and `permitted_signer_sha256`. The valid broker path and forced command are exactly `/usr/local/libexec/hackbot-l3-runner`; all five interactive/forwarding booleans are exactly `false`; user is exactly `hackbot-l3`; digests are lowercase `sha256:<64 hex>`.
 
   Test unknown/missing fields, relative/different command paths, non-boolean values, any enabled interactive feature, wrong user, tag/self-report fields, and malformed digests.
 
-- [ ] **Step 2: Run tests and confirm the validator is absent**
+- [x] **Step 2: Run tests and confirm the validator is absent**
 
   Run: `/Users/clivoa/Documents/Github/bugbug/.venv/bin/python -m pytest tests/engagement_v2/test_l3_deployment.py -q`
 
   Expected: FAIL on missing module.
 
-- [ ] **Step 3: Implement the closed validator**
+- [x] **Step 3: Implement the closed validator**
 
   ```python
   @dataclass(frozen=True)
@@ -334,7 +334,7 @@
       # Validate exact path/user/digest values, then return the frozen record.
   ```
 
-- [ ] **Step 4: Run focused tests and commit**
+- [x] **Step 4: Run focused tests and commit**
 
   Run:
 
