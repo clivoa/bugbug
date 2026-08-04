@@ -75,6 +75,31 @@ def web_content_wordlist() -> str:
     return str(_WORDLIST_DIR / "web-content.txt")
 
 
+def local_wordlists() -> dict[str, str]:
+    """Code-owned wordlists selectable by a local ``web.dir-enum`` run."""
+    return {
+        "small": str(_WORDLIST_DIR / "web-content.txt"),
+        "common": str(_WORDLIST_DIR / "web-content-common.txt"),
+    }
+
+
+def resolve_local_wordlist(path: str) -> str:
+    """Return *path* iff it is one of the code-owned bundled wordlists.
+
+    Local content discovery may only read an allowlisted wordlist: this rejects
+    an arbitrary ``-w`` argument (including traversal escapes) so the executed
+    argv stays code-owned. Remote enumeration keeps its own lexical-only check
+    because the wordlist lives on the remote host.
+    """
+    if not isinstance(path, str) or not path:
+        raise ValueError("wordlist must be a non-empty path")
+    allowed = {os.path.realpath(candidate) for candidate in local_wordlists().values()}
+    resolved = os.path.realpath(path)
+    if resolved not in allowed or not os.path.isfile(resolved):
+        raise ValueError("wordlist must be a code-owned bundled list")
+    return path
+
+
 def _build_definitions() -> list[ActionDefinition]:
     definitions: list[ActionDefinition] = []
     curl = curl_path()
@@ -178,7 +203,7 @@ def _build_definitions() -> list[ActionDefinition]:
                 uses_external_tool=True,
                 high_volume=True,
                 executable=ffuf,
-                argv_template=(ffuf, "-s", "-u", "{target}", "-w", web_content_wordlist()),
+                argv_template=(ffuf, "-s", "-rate", "{rate}", "-u", "{target}", "-w", "{wordlist}"),
             )
         )
     # Remote-only ("arsenal") action: a bare tool name registers unconditionally
