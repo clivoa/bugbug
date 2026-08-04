@@ -64,6 +64,7 @@ _TESTING_KEYS = (
 )
 
 _DOMAIN_RE = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$")
+_HOST_LABEL_RE = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
 _MOBILE_RE = re.compile(r"^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*){2,}$")
 _REPO_RE = re.compile(r"^github\.com/[^/\s]+/[^/\s]+$", re.I)
 _CONTRACT_RE = re.compile(r"^([a-z0-9]+:)?0x[0-9a-fA-F]{40}$")
@@ -93,6 +94,10 @@ def _err(errors: list[str], msg: str) -> None:
     errors.append(msg)
 
 
+def _valid_hostname(value: str) -> bool:
+    return len(value) <= 253 and all(_HOST_LABEL_RE.fullmatch(label) for label in value.split("."))
+
+
 def _validate_entry(kind: str, value: object, errors: list[str], where: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         _err(errors, f"{where}: entry must be a non-empty string, got {value!r}")
@@ -116,7 +121,7 @@ def _validate_entry(kind: str, value: object, errors: list[str], where: str) -> 
         if "://" in v or "/" in v or "*" in v:
             _err(errors, f"{where}: host must be a bare hostname, got {v!r}")
             return None
-        if not _DOMAIN_RE.match(low):
+        if not _valid_hostname(low):
             _err(errors, f"{where}: invalid host {v!r}")
             return None
         return "re:^" + re.escape(low) + "$"
