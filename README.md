@@ -11,14 +11,19 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 
 ## Status
 
-Early build; **1157 automated tests passing** (**1158 collected; 1 known nmap
-skip**) on **Python 3.14** (project minimum 3.11). Implemented and verified so
+Early build; **1376 automated tests passing** (**1378 collected; 2 expected
+offline-environment skips: nmap and keyring**) on **Python 3.14** (project minimum 3.11). Implemented and verified so
 far:
 - **Engagement v2 P0 security contracts** — merged and archived, with strict
   canonical values/digests, safe patterns, generated schemas/fixtures, and
-  bounded protocol primitives. P0 does not activate v2 execution; P1
-  loader/scope design is Ready. See
+  bounded protocol primitives. See
   [`docs/engagement-v2-contracts.md`](docs/engagement-v2-contracts.md).
+- **Engagement v2 P1–P6 delivery** — atomic loader/scope, action manifest and
+  direct policy gate, local executor/evidence, pinned remote helper, reviewed
+  non-credential internal-recon catalog, and typed autonomous workflow state
+  machine are implemented in separately reviewed phases. P5b adds the disabled-
+  by-default credential/L3 catalog; see
+  [`docs/engagement-v2-l3-catalog.md`](docs/engagement-v2-l3-catalog.md).
 - **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `program`, `risk`, `approval`,
   `tool`, `finding`, `skills`, `version`) — stdlib-only core, runs offline; installable as a wheel
   (`scripts/build_wheel.py` + `scripts/smoke_test.sh`, both fully offline).
@@ -67,7 +72,9 @@ far:
 ## Design principles
 
 - **Scope enforced in code** (default-deny, deny-wins), not by the model.
-- **Four-level risk model** (L0 passive → L3 prohibited); L2 needs explicit approval.
+- **Four-level risk model** — the legacy v1 path keeps L3 prohibited and L2
+  approval-gated; engagement v2 permits only reviewed L3 actions under confirmed
+  internal authority and exact capability flags. Excluded impacts remain denied.
 - **Discovery ≠ authorization** — ASN/cert/Shodan/etc. are hypotheses, never scope.
 - **Secrets in the OS keychain**, never in files/args/logs.
 - **Untrusted target content** — treated as data, never instructions.
@@ -123,7 +130,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 ```bash
 .venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
 .venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/python -m pytest tests -q                 # 1158 collected; 1157 pass + 1 nmap skip
+.venv/bin/python -m pytest tests -q                 # 1378 collected; 1376 pass + 2 expected skips
 ```
 
 ## Documentation
@@ -134,6 +141,7 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 - [`docs/remote-runner.md`](docs/remote-runner.md) — run gated actions on a remote SSH host
 - [`docs/findings-and-reporting.md`](docs/findings-and-reporting.md) — typed findings + markdown reports
 - [`docs/engagement-v2-contracts.md`](docs/engagement-v2-contracts.md) — archived P0 boundary + current contracts
+- [`docs/engagement-v2-l3-catalog.md`](docs/engagement-v2-l3-catalog.md) — controlled P5b credential/L3 catalog
 - [`docs/next-steps.md`](docs/next-steps.md) — current status and the roadmap for the next phase
 - [`docs/reference-review.md`](docs/reference-review.md) — upstream project analysis
 - [`docs/licenses-and-attribution.md`](docs/licenses-and-attribution.md) — license ledger
