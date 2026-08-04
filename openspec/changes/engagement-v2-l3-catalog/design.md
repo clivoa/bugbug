@@ -47,8 +47,12 @@ is not a test target. Public CI remains incapable of live offensive execution.
 ### 1. Extend the existing P0/P3/P4 trust path
 
 P5b extends the current Ed25519 permit and framed P4 transport instead of adding
-a parallel executor. The control plane loads one immutable
-`EngagementSnapshot`, evaluates the exact action through P3, binds typed inputs,
+a parallel executor. Protocol v1 remains byte-for-byte compatible and accepts
+only its original request frame types; L3 is an additive protocol v2 that
+requires exactly one `EXECUTION_PERMIT` frame and one of the 15 reviewed action
+IDs. The control plane loads one recursively immutable `EngagementSnapshot`,
+recomputes its security projection, authority digest, and identity at every
+authority boundary, evaluates the exact action through P3, binds typed inputs,
 and issues `ExecutionPermitV2`. The same `profile`, `authority_digest`, and
 snapshot identity must be present at catalog load, policy decision, permit
 issuance, and broker verification.
@@ -58,6 +62,12 @@ maximum lifetime of 300 seconds. The broker verifies signature, timestamps,
 action definition digest, runner/helper identity, image digest, input digest,
 resolved endpoints, network/rate/evidence claims, privileges, and replay tuple
 before resource creation.
+
+The pre-resource gate also compares the complete P4 execution envelope against
+the fixed deployment contract: broker path/digest, argv, Linux/architecture,
+privileges, limits, and recomputed execution digest. Only a sanitized typed
+execution record crosses the gate; the resource factory never receives the raw
+request or operator-controlled execution fields.
 
 Alternative: trust the existing ALLOW object at the runner. Rejected because it
 does not cryptographically bind the catalog definition or execution environment.
@@ -81,7 +91,9 @@ broker or container would bypass both controls.
 `hackbot-l3-runner` is a root-owned, digest-pinned, stdin/stdout broker installed
 at a fixed path. Production deployment uses a dedicated SSH identity with a
 forced command and no interactive shell, forwarding, agent, X11, or TTY. The
-broker exposes no listening socket.
+broker exposes no listening socket. Deployment attestation requires UID 0,
+exact mode `0755`, a regular non-symlink broker file, and the restrictive
+authorized-keys option in addition to the fixed path and digest.
 
 One adapter class per action owns input validation, secret requirements,
 invocation rendering, image identity, network rules, result parsing, evidence

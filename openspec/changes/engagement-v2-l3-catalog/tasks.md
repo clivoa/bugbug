@@ -2,7 +2,7 @@
 
 - [x] 1.1 Add failing golden tests for the complete definitions and exact ordered set of 15 L3 action IDs, including inputs, targets, capabilities, characteristics, adapter/image identity, rate, closed ordered endpoint-binding schemas (roles, allowed schemes/protocols, and cardinality), evidence, cleanup, and provenance.
 - [x] 1.2 Add failing negative tests for excluded capabilities, nonexistent local provenance, shell/interpreter/raw-argv fields, arbitrary modules/scripts/payloads/commands, and incomplete definition validation.
-- [x] 1.3 Add failing tests that catalog activation, P3 evaluation, input binding, and permit issuance require the same snapshot identity, profile, and authority digest.
+- [x] 1.3 Add failing tests that catalog activation, P3 evaluation, input binding, and permit issuance require the same recursively immutable, recomputed snapshot identity, profile, and authority digest.
 - [x] 1.4 Replace the prototype catalog/loader/provenance implementation until 1.1-1.3 pass, including the exact corrected capability sets and disabled-by-default behavior.
 - [x] 1.5 Add a v1 isolation regression proving the executable P5b catalog and its rollback do not alter schema v1 bytes or behavior.
 
@@ -10,9 +10,9 @@
 
 - [x] 2.1 Add failing tests for the exact canonical `ExecutionPermitV2` field set, domain separation, Ed25519 signer pinning, 1-300 second lifetime, and every snapshot/action/runner/image/input/network/rate/evidence/privilege binding.
 - [x] 2.2 Implement permit issuance on the control plane and extend verification on the Linux side until 2.1 passes without introducing another trust path.
-- [x] 2.3 Add failing protocol tests proving invalid, expired, unknown-field, mismatched, and tampered permits deny before any resource factory is called.
-- [x] 2.4 Integrate the permit with the existing P4 framed request/response chain and fixed SSH transport until 2.3 passes.
-- [x] 2.5 Add deployment-contract tests for a root-owned digest-pinned broker path and a dedicated forced-command SSH identity with shell, TTY, forwarding, agent, and X11 disabled.
+- [x] 2.3 Add failing protocol tests proving invalid, expired, unknown-field, mismatched, tampered, boolean/integer-aliased, and execution-envelope-drifted permits deny before any resource factory is called.
+- [x] 2.4 Preserve protocol v1 bytes and frame cardinality; integrate the permit through additive L3 protocol v2 with exactly one permit, a reviewed action ID, and a sanitized fixed-deployment execution record.
+- [x] 2.5 Add deployment-attestation tests for a UID-0-owned, mode-0755, regular non-symlink, digest-pinned broker path and a dedicated restrictive forced-command SSH identity with shell, TTY, forwarding, agent, and X11 disabled.
 
 ## 3. Durable replay, rate, and mutable-target state
 

@@ -315,6 +315,8 @@ _SPECS: tuple[_ActionSpec, ...] = (
     ),
 )
 
+L3_ACTION_IDS = frozenset(spec.action_id for spec in _SPECS)
+
 _EXPECTED_ACTION_IDS = frozenset(spec.action_id for spec in _SPECS)
 _RATE_CONTROL = {"kind": "native-adapter", "adapter_id": "internal-l3-bounded"}
 
@@ -506,6 +508,7 @@ def _load_catalog_fixture() -> Mapping[str, ActionDefinition]:
 
 __all__ = [
     "EXCLUDED_CAPABILITIES",
+    "L3_ACTION_IDS",
     "L3Provenance",
     "provenance",
     "validate_catalog_manifest",

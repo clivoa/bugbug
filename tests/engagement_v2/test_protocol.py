@@ -16,6 +16,7 @@ import pytest
 import hackbot.engagement_v2.protocol as protocol
 from hackbot.engagement_v2.canonical import canonical_bytes, execution_digest
 from hackbot.engagement_v2.constants import (
+    L3_PROTOCOL_VERSION,
     MAX_CLOCK_SKEW_SECONDS,
     MAX_FRAME_BYTES,
     MAX_FRAME_COUNT,
@@ -128,15 +129,17 @@ def _request_header(
     *,
     issued_at: str = "2026-07-26T12:00:00Z",
     expires_at: str = "2026-07-26T12:05:00Z",
+    protocol_version: int = PROTOCOL_VERSION,
+    action_id: str = "operator.fixture",
 ) -> dict[str, object]:
     header: dict[str, object] = {
-        "protocol_version": PROTOCOL_VERSION,
+        "protocol_version": protocol_version,
         "run_id": _RUN_ID,
         "nonce": _NONCE,
         "issued_at": issued_at,
         "expires_at": expires_at,
         "authority_digest": _AUTHORITY_DIGEST,
-        "action_id": "operator.fixture",
+        "action_id": action_id,
         "argv": ["/usr/bin/true"],
         "executable": {
             "path": "/usr/bin/true",
@@ -1009,7 +1012,11 @@ def test_execution_permit_frame_is_request_only_and_decodes_exact_envelope() -> 
     assert signed.signature == signature
 
     request = FramedMessage(
-        header=_request_header(((FrameType.EXECUTION_PERMIT, payload),)),
+        header=_request_header(
+            ((FrameType.EXECUTION_PERMIT, payload),),
+            protocol_version=L3_PROTOCOL_VERSION,
+            action_id="operator.internal.payload.verify",
+        ),
         frames=(frame,),
     )
     stream = BytesIO()
@@ -1053,7 +1060,9 @@ def test_request_rejects_duplicate_execution_permit_frames() -> None:
         (
             (FrameType.EXECUTION_PERMIT, payload),
             (FrameType.EXECUTION_PERMIT, payload),
-        )
+        ),
+        protocol_version=L3_PROTOCOL_VERSION,
+        action_id="operator.internal.payload.verify",
     )
     _assert_reason(
         ReasonCode.EXEC_PROTOCOL_INVALID,
@@ -1063,6 +1072,41 @@ def test_request_rejects_duplicate_execution_permit_frames() -> None:
                 Frame(FrameType.EXECUTION_PERMIT, payload),
                 Frame(FrameType.EXECUTION_PERMIT, payload),
             ),
+        ),
+    )
+
+
+def test_protocol_versions_keep_v1_legacy_and_require_one_l3_permit() -> None:
+    signature = base64.urlsafe_b64encode(b"s" * 64).decode("ascii").rstrip("=")
+    payload = canonical_bytes({"permit": {"schema_version": 2}, "signature": signature})
+    frame = Frame(FrameType.EXECUTION_PERMIT, payload)
+
+    _assert_reason(
+        ReasonCode.EXEC_PROTOCOL_INVALID,
+        lambda: FramedMessage(
+            header=_request_header(((FrameType.EXECUTION_PERMIT, payload),)),
+            frames=(frame,),
+        ),
+    )
+    _assert_reason(
+        ReasonCode.EXEC_PROTOCOL_INVALID,
+        lambda: FramedMessage(
+            header=_request_header(
+                protocol_version=L3_PROTOCOL_VERSION,
+                action_id="operator.internal.payload.verify",
+            ),
+            frames=(),
+        ),
+    )
+    _assert_reason(
+        ReasonCode.EXEC_PROTOCOL_INVALID,
+        lambda: FramedMessage(
+            header=_request_header(
+                ((FrameType.EXECUTION_PERMIT, payload),),
+                protocol_version=L3_PROTOCOL_VERSION,
+                action_id="operator.fixture",
+            ),
+            frames=(frame,),
         ),
     )
 

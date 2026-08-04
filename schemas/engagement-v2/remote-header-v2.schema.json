@@ -48,7 +48,8 @@
           "enum": [
             1,
             2,
-            3
+            3,
+            8
           ],
           "type": "integer"
         },
@@ -124,12 +125,29 @@
       "type": "string"
     }
   },
-  "$id": "urn:hackbot:schema:engagement-v2:remote-header:1",
+  "$id": "urn:hackbot:schema:engagement-v2:remote-header:2",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
     "action_id": {
-      "$ref": "#/$defs/identifier"
+      "enum": [
+        "operator.internal.credential.asrep",
+        "operator.internal.credential.gmsa",
+        "operator.internal.credential.kerberoast",
+        "operator.internal.credential.laps",
+        "operator.internal.directory.adcs",
+        "operator.internal.directory.graph",
+        "operator.internal.directory.policies",
+        "operator.internal.directory.spns",
+        "operator.internal.exploit.verify",
+        "operator.internal.lateral.verify",
+        "operator.internal.payload.verify",
+        "operator.internal.persistence.verify",
+        "operator.internal.responder.analyze",
+        "operator.internal.responder.capture",
+        "operator.internal.validation.password-spray"
+      ],
+      "type": "string"
     },
     "architecture": {
       "$ref": "#/$defs/architecture"
@@ -157,10 +175,22 @@
       "$ref": "#/$defs/timestamp"
     },
     "frames": {
+      "contains": {
+        "properties": {
+          "frame_type": {
+            "const": 8
+          }
+        },
+        "required": [
+          "frame_type"
+        ]
+      },
       "items": {
         "$ref": "#/$defs/frame_descriptor"
       },
+      "maxContains": 1,
       "maxItems": 256,
+      "minContains": 1,
       "minItems": 0,
       "type": "array",
       "uniqueItems": true,
@@ -176,7 +206,7 @@
       "$ref": "#/$defs/platform"
     },
     "protocol_version": {
-      "const": 1,
+      "const": 2,
       "type": "integer"
     },
     "required_privileges": {

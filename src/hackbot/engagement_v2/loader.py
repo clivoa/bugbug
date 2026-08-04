@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import os
 import stat
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
@@ -86,6 +86,16 @@ class EngagementSnapshot:
     profile: str
     authority_digest: str
     identity: str
+
+
+def _freeze_document(value: object) -> object:
+    """Recursively freeze validated JSON authority values."""
+
+    if isinstance(value, Mapping):
+        return MappingProxyType({str(key): _freeze_document(item) for key, item in value.items()})
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes):
+        return tuple(_freeze_document(item) for item in value)
+    return value
 
 
 def _read_bounded(path: Path, max_bytes: int) -> bytes:
@@ -429,10 +439,10 @@ def load_engagement(engagement_dir: str | os.PathLike[str]) -> EngagementSnapsho
         raise ContractError(ReasonCode.INVALID_CANONICAL_VALUE)
 
     return EngagementSnapshot(
-        program=MappingProxyType(dict(program)),
-        scope=MappingProxyType(dict(scope)),
-        authorization=MappingProxyType(dict(authorization)),
-        runner=MappingProxyType(dict(runner)) if runner is not None else None,
+        program=_freeze_document(program),  # type: ignore[arg-type]
+        scope=_freeze_document(scope),  # type: ignore[arg-type]
+        authorization=_freeze_document(authorization),  # type: ignore[arg-type]
+        runner=_freeze_document(runner) if runner is not None else None,  # type: ignore[arg-type]
         profile=profile,
         authority_digest=computed_digest,
         identity=identity,

@@ -300,7 +300,7 @@
 
 - [x] **Step 3: Implement the frame and gate**
 
-  Add enum value `EXECUTION_PERMIT = 8`, include it only in request frame types, and keep existing request frames valid. The gate validates the P4 run binding, decodes/verifies the permit, confirms the request header echoes permit authority/action/run/nonce, calls replay reservation, and only then calls the injected resource factory. This milestone's factory returns an inert validation token; it must not spawn a process, container, namespace, or mount.
+  Add enum value `EXECUTION_PERMIT = 8` through additive protocol v2 while preserving protocol v1 schema bytes and its original frame set. Require exactly one permit and a reviewed L3 action ID in v2. The gate validates the complete P4 run/execution binding against the fixed deployment, decodes/verifies the permit, confirms the request header echoes permit authority/action/run/nonce, calls replay reservation, and only then calls the injected resource factory with a sanitized typed record. This milestone's factory returns an inert validation token; it must not receive the raw request or spawn a process, container, namespace, or mount.
 
 - [x] **Step 4: Run protocol, helper, permit, and gate suites and commit**
 

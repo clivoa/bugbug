@@ -19,6 +19,11 @@ from hackbot.engagement_v2.l3_contracts import activate_catalog, decide_l3
 from hackbot.engagement_v2.loader import EngagementSnapshot
 from hackbot.engagement_v2.manifest import CAPABILITY_TO_FIELD
 from hackbot.engagement_v2.policy import DecisionKind, PolicyDecision
+from hackbot.engagement_v2.projection import (
+    engagement_identity,
+    projection_digest,
+    security_projection,
+)
 
 from ._ed25519_sign import public_key, sign
 from ._engagement_builders import program_doc, scope_doc
@@ -74,10 +79,13 @@ def _snapshot() -> EngagementSnapshot:
     rules = program["testing_rules"]
     for capability, field in CAPABILITY_TO_FIELD.items():
         rules[field] = capability in {"payload-execution", "state-changing"}
-    authority_digest = "sha256:" + "a" * 64
+    scope = scope_doc()
+    authority_digest = projection_digest(
+        security_projection(program=program, scope=scope, runner=None)
+    )
     return EngagementSnapshot(
         program=MappingProxyType(program),
-        scope=MappingProxyType(scope_doc()),
+        scope=MappingProxyType(scope),
         authorization=MappingProxyType(
             {
                 "confirmed": True,
@@ -87,7 +95,7 @@ def _snapshot() -> EngagementSnapshot:
         runner=None,
         profile="local-lab",
         authority_digest=authority_digest,
-        identity="engagement-v2:synthetic-authority",
+        identity=engagement_identity(authority_digest),
     )
 
 
@@ -351,6 +359,23 @@ def test_each_permit_binding_mismatch_denies(field: str) -> None:
             now=_NOW,
         )
     assert excinfo.value.reason_code is expected_reason
+
+
+def test_nested_boolean_integer_alias_denies_exact_permit_binding() -> None:
+    """Catch Python equality treating a signed boolean as the expected integer."""
+
+    permit, context = _build()
+    permit["rate_policy"]["max_concurrency"] = True
+    with pytest.raises(ContractError) as excinfo:
+        _verify(permit, context)
+    assert excinfo.value.reason_code is ReasonCode.EXEC_PROTOCOL_INVALID
+
+
+def test_non_datetime_verification_clock_denies_closed() -> None:
+    permit, context = _build()
+    with pytest.raises(ContractError) as excinfo:
+        _verify(permit, context, now="2026-08-04T12:00:30Z")  # type: ignore[arg-type]
+    assert excinfo.value.reason_code is ReasonCode.EXEC_PROTOCOL_INVALID
 
 
 def test_permit_requires_the_recomputed_allow_decision_and_same_snapshot() -> None:
