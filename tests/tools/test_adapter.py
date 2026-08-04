@@ -172,7 +172,7 @@ def test_web_dir_enum_requires_approval(lab_engagement):
     context = load_policy_context(lab_engagement)
     definition = REAL_ACTIONS.require("web.dir-enum")
     target = "http://127.0.0.1/FUZZ"
-    argv = (ffuf_path(), "-s", "-u", target, "-w", web_content_wordlist())
+    argv = (ffuf_path(), "-s", "-rate", "1", "-u", target, "-w", web_content_wordlist())
     request = ActionRequest(
         engagement_id=context.engagement_id,
         engagement_path=context.engagement_path,
@@ -190,6 +190,7 @@ def test_web_dir_enum_requires_approval(lab_engagement):
         program_rule="Authorized lab enumeration.",
         required_headers=(),
         requested_risk=None,
+        wordlist=web_content_wordlist(),
     )
     outcome = run_action(
         definition,

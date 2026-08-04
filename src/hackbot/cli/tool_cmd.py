@@ -92,6 +92,20 @@ def cmd_run(
         print("error: request action_id does not match the command", file=sys.stderr)
         return EXIT_INVALID
 
+    if (
+        runner == "local"
+        and "{wordlist}" in definition.argv_template
+        and definition.executable is not None
+        and Path(definition.executable).is_absolute()
+    ):
+        from hackbot.tools.actions import resolve_local_wordlist
+
+        try:
+            resolve_local_wordlist(request.wordlist)
+        except ValueError as exc:
+            print(f"invalid request: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+
     try:
         tool_runner = _make_runner(engagement, runner)
     except CliInputError as exc:

@@ -32,3 +32,7 @@ class ActionRegistry:
             return self._items[action_id]
         except KeyError as exc:
             raise RegistryError(f"unknown action id: {action_id}") from exc
+
+    def definitions(self) -> tuple[ActionDefinition, ...]:
+        """Return the registered definitions (for composing a wider registry)."""
+        return tuple(self._items.values())
