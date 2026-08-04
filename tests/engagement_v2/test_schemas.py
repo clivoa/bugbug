@@ -654,7 +654,12 @@ def test_runner_security_view_and_remote_protocol_limits_are_exact() -> None:
     assert nonce.fullmatch("A" * 42 + "_") is None
     assert remote["properties"]["frames"]["x-hackbot-unique-by"] == "index"
     assert remote["properties"]["frames"]["maxItems"] == 256
-    assert remote["$defs"]["frame_descriptor"]["properties"]["frame_type"]["enum"] == [1, 2, 3]
+    assert remote["$defs"]["frame_descriptor"]["properties"]["frame_type"]["enum"] == [
+        1,
+        2,
+        3,
+        8,
+    ]
     assert remote["$defs"]["frame_descriptor"]["properties"]["length"]["maximum"] == 67108864
     assert remote["x-hackbot-max-header-bytes"] == 1048576
     assert remote["x-hackbot-max-request-bytes"] == 75497472
