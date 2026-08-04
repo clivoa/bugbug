@@ -1,0 +1,55 @@
+{
+  "ci_live_tools_allowed": false,
+  "directory": {
+    "adcs_templates": [
+      "ExampleUser",
+      "ExampleWebServer"
+    ],
+    "base_dn": "DC=example,DC=test",
+    "principals": [
+      "alice@example.test",
+      "svc-web@example.test"
+    ],
+    "spns": [
+      "HTTP/web01.example.test",
+      "CIFS/files01.example.test"
+    ]
+  },
+  "hosts": [
+    {
+      "address": "192.0.2.10",
+      "ldap_endpoint": "ldaps://dc01.example.test:636",
+      "name": "dc01.example.test",
+      "roles": [
+        "directory",
+        "dns",
+        "kerberos",
+        "ldap"
+      ]
+    },
+    {
+      "address": "192.0.2.20",
+      "ldap_endpoint": "ldaps://dc01.example.test:636",
+      "name": "files01.example.test",
+      "roles": [
+        "file-service"
+      ]
+    }
+  ],
+  "isolated_disposable_lab_only": true,
+  "kerberos": {
+    "encryption_types": [
+      "aes256-cts-hmac-sha1-96"
+    ],
+    "ticket_metadata": [
+      {
+        "principal_name": "svc-web@example.test",
+        "renewable": false,
+        "service_name": "HTTP/web01.example.test"
+      }
+    ]
+  },
+  "realm": "EXAMPLE.TEST",
+  "schema_version": 1,
+  "synthetic": true
+}
