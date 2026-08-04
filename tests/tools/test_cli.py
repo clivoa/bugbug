@@ -240,9 +240,7 @@ def _write_dir_enum_request(path: Path, target: str, wordlist: str | None = None
 
 
 @pytest.mark.skipif(ffuf_path() is None, reason="ffuf not installed")
-def test_approval_grant_works_for_a_real_tool_action(
-    lab_engagement, tmp_path, capsys, monkeypatch
-):
+def test_approval_grant_works_for_a_real_tool_action(lab_engagement, tmp_path, capsys, monkeypatch):
     # A pending challenge created by a real `tool run` must be grantable by the
     # standalone `approval grant` (regression: it failed "action is not
     # code-owned" because grant only knew the fixture registry).

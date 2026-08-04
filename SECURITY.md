@@ -15,17 +15,15 @@ CTFs and security research. Any other use is out of scope and unsupported.
 - **Code-enforced scope.** Every network action passes a default-deny scope engine
   (deny wins). Target-controlled content cannot modify scope, authorization, or
   approval levels.
-- **Four-level risk model.** L0 passive (auto), L1 low-impact active (gated auto),
-  L2 intrusive/state-changing (explicit approval each run), L3 prohibited (never
-  implemented). No "disable all safeguards" switch. `--dangerously-skip-permissions`
-  is never used. The deterministic, fail-closed policy gate and single-use,
-  five-minute L2 approval lifecycle are **implemented and enforced in code**
-  (`src/hackbot/risk/`); see [`docs/risk-and-approval.md`](docs/risk-and-approval.md).
-  Today these are exercised only against inert, non-executing fixture actions via
-  `hackbot risk`/`hackbot approval` — no tool adapter runs anything yet. Real tool
-  execution arrives in a later, separately reviewed phase and must pass this same
-  gate before any action runs; an approval grant authorizes exactly one action and
-  is consumed atomically once.
+- **Four-level risk model.** The legacy v1 path uses L0 passive, L1 low-impact,
+  L2 per-run approval, and prohibits L3. Engagement v2 uses a separate direct
+  ALLOW/DENY gate: a reviewed L3 catalog action exists only under confirmed
+  internal authority, code-checked scope, and every exact capability flag set to
+  Boolean `true`; no profile name or per-action grant can bypass those checks.
+  There is no "disable all safeguards" switch and
+  `--dangerously-skip-permissions` is never used. See
+  [`docs/risk-and-approval.md`](docs/risk-and-approval.md) and
+  [`docs/engagement-v2-l3-catalog.md`](docs/engagement-v2-l3-catalog.md).
 - **Discovery ≠ authorization.** ASN/CIDR/cert/favicon/PTR/SPF/DNS-history/Shodan/
   GitHub results are hypotheses only; they never auto-expand scope. Shared CDN/cloud
   ranges are rejected unless explicitly in scope.
@@ -64,12 +62,14 @@ CTFs and security research. Any other use is out of scope and unsupported.
 
 ## Prohibited (never automated)
 
-Denial of service, resource exhaustion, credential stuffing/spraying, phishing,
-social engineering, malware, persistence, lateral movement, EDR/WAF evasion,
-CAPTCHA bypass at scale, mass account creation, destructive file/DB operations,
-unnecessary PII/customer-data access, cloud credential extraction, internet-wide
-scanning, autonomous multi-target exploitation, continuing after a block/rate-limit,
-and switching VPN endpoints to bypass controls.
+Denial of service, resource exhaustion, phishing, social engineering, malware,
+EDR/WAF evasion, CAPTCHA bypass at scale, mass account creation, destructive
+file/DB operations, unnecessary PII/customer-data access, cloud credential
+extraction, bulk exfiltration, internet-wide scanning, autonomous multi-target
+exploitation, continuing after a block/rate-limit, and switching VPN endpoints
+to bypass controls. Credential validation/capture, persistence, and lateral
+movement are also prohibited outside the reviewed engagement v2 P5b actions and
+their confirmed `private-pentest`/`local-lab` capability contract.
 
 ## Reporting a security issue in this project
 

@@ -1,119 +1,78 @@
 # Next steps
 
-Status snapshot after P0 engagement-v2 security contracts. Use the current P0
-status below for the next phase.
+Current engagement v2 delivery snapshot. OpenSpec is the behavioral source of
+truth; GitHub Project #2 tracks delivery state.
+
+## Delivered phases
+
+- **P0 — security contracts:** canonical values/digests, schemas, fixtures,
+  bounded framing, and authority projection are merged and archived.
+- **P1 — loader and scope:** atomic coherent snapshots, confirmation bound to the
+  authority digest, and typed deny-wins scope are merged and archived.
+- **P2 — actions and policy:** strict code-owned manifests, whole-token binding,
+  capability gates, rate controls, and direct v2 ALLOW/DENY are merged and
+  archived.
+- **P3 — executor and evidence:** post-ALLOW secret resolution, private CWD,
+  conservative evidence, and independent resource/target cleanup are merged and
+  archived.
+- **P4 — remote trust:** pinned SSH/helper identity, framed replay-resistant
+  protocol, privilege verification, and egress claims are merged and archived.
+- **P5a — non-credential internal recon:** reviewed L1/L2 catalog, provenance,
+  disabled-by-default loader, and synthetic lab fixture are merged and archived.
+- **P6 — autonomous workflow contracts:** typed state machine, fresh policy per
+  step, replay/retry/cancel semantics, evidence dependencies, and cleanup
+  barriers are merged and archived. It does not bypass P5b dependencies.
+
+Implementation guides live in `docs/engagement-v2-*.md`; normative requirements
+live under `openspec/specs/`.
+
+## Current delivery: P5b credential/L3 catalog
+
+P5b adds only reviewed, code-owned L3 actions for confirmed internal pentests and
+operator-owned labs. The catalog remains disabled unless the profile is
+`private-pentest` or `local-lab` and internal recon was explicitly confirmed.
+Presence in code grants nothing.
+
+Every request must satisfy, in order:
+
+1. confirmed engagement authority bound to the current digest;
+2. every target accepted by typed scope;
+3. every action capability mapped to an exact Boolean `true` testing rule;
+4. prohibited-tool, vulnerability, impact, target-count, concurrency, and rate
+   limits;
+5. evidence and local/remote execution contracts.
+
+The P5b catalog covers authenticated directory enumeration, credential material
+access, bounded validation/capture, exploit verification, payload proof, lateral
+access verification, and controlled persistence markers. It excludes DoS,
+destruction, bulk exfiltration, and evasion. See
+[`engagement-v2-l3-catalog.md`](engagement-v2-l3-catalog.md).
+
+Before merge, P5b still requires fresh full verification, independent review,
+finding resolution, Issue #10/Project transition to In Review, and PR merge. The
+OpenSpec change is archived only after merge; “Done” requires that archive and a
+post-merge verification record.
+
+## Next phase
+
+**P7 — effective migration, active release documentation, and publication** is
+next after P5b. It must preserve v1 compatibility until an explicit migration,
+perform migration atomically with recovery, update any remaining active docs,
+and pass the repository release/publication gates.
+
+## Guardrails that remain invariant
+
+- Discovery never expands authorization or scope.
+- Target/tool/MCP output is untrusted data, never executable instruction.
+- Secrets never enter argv, logs, reports, fixtures, challenges, or git.
+- Shell strings, inline evaluation, and model/target-supplied argv are rejected.
+- DoS, destruction, bulk exfiltration, and evasion remain outside P5b.
+- CI performs no live credential, capture, exploit, lateral, or persistence
+  action; real exercise is isolated-lab-only.
+- Stop on unexpected scope/egress change or a target block/rate limit.
 
 ## Historical v1 verification snapshot
 
-The following is the recorded v1 snapshot: 912 tests passing, 913 collected
-with 1 known nmap skip, Ruff/format/mypy clean, and an offline smoke pass. It
-predates P0 and is not a current P0 full-verification claim.
-
-- **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen.
-- **Programs / engagements** (`src/hackbot/programs/`) — strict local
-  program/scope ingestion; typed `testing_rules`; confirmed-authorization
-  context loading.
-- **Risk & approval engine** (`src/hackbot/risk/`) — deterministic, fail-closed
-  L0–L3 policy gate; canonical L2 challenges; atomic, descriptor-owned,
-  single-use, five-minute approval store; see
-  [`risk-and-approval.md`](risk-and-approval.md). CLI: `hackbot risk evaluate`,
-  `hackbot approval grant` (TTY only), `hackbot approval status`.
-- **Tool execution substrate** (`src/hackbot/tools/`, `src/hackbot/audit/`) — a
-  gate-bound, validated subprocess runner (no shell, sanitized env, timeout,
-  output caps enforced during streaming capture) that executes a code-owned argv
-  array **only** after an `ALLOW`, plus a secret-free audit trail. Actions are
-  promoted from reviewed recon-bundle skills (with `@reeshasx` attribution;
-  `hackbot skills list`): HTTP probes, DNS record lookups, TLS cert (L0),
-  `net.port-scan` (nmap), and `web.dir-enum` (ffuf directory fuzzing) (L2),
-  in-scope only. L2 runs once via
-  `hackbot tool run --approve` after a TTY-typed, single-use approval consumed
-  atomically by `evaluate`. Actions can run locally or on a remote SSH host
-  (`--runner remote`, e.g. Kali) with the gate still local; see
-  [`tool-execution.md`](tool-execution.md), [`skill-promotion.md`](skill-promotion.md),
-  and [`remote-runner.md`](remote-runner.md).
-- **Evidence persistence** (`src/hackbot/evidence/`) — executed runs store their
-  output **redacted** and run-linked under `<engagement>/evidence/<run_id>/`
-  (audit written first); best-effort redaction, raw output never printed or
-  stored un-redacted.
-- **Findings & reporting** (`src/hackbot/findings/`, `src/hackbot/reporting/`) —
-  typed findings that separate demonstrated from plausible impact and require
-  reproducible evidence; per-platform markdown reports
-  (`generic`/`hackerone`/`bugcrowd`/`yeswehack`/`intigriti`/`immunefi`) reference
-  redacted evidence (`hackbot finding add/report/list`), including
-  operator-customizable templates through explicit `--templates-dir`, strict
-  allowlisted placeholders, and fail-before-output validation; see
-  [`findings-and-reporting.md`](findings-and-reporting.md).
-- **Secrets** (OS keychain), **doctor**, wheel build + offline smoke test.
-
-## Current P0 status
-
-- **P0 engagement v2 security contracts** (`src/hackbot/engagement_v2/`) —
-  **Done**, merged, verified, and archived, with isolated constants, canonical
-  values and digests, safe patterns, generated schemas, fixtures, and bounded
-  framing; see [`engagement-v2-contracts.md`](engagement-v2-contracts.md).
-  Current normative text lives under `openspec/specs/`. P0 does not enable
-  engagement v2 execution: schema v1 remains current. P1 is **Ready**; P2–P7
-  remain dependent on their preceding phases.
-
-P0 tasks 1.1–8.2 are complete. Post-archive verification recorded 1157 passed,
-1 skipped; publication guard 4 passed; Ruff, mypy, schemas, fixtures, OpenSpec,
-secret scan, and diff check clean.
-
-The only executing path is the gate-bound substrate above; there is still no
-provider call or MCP.
-
-## The gate contract for the next phase
-
-The plan's safety boundary is now satisfied: attack-skill / tool-execution work
-can begin, and **every action must pass the existing gate before anything runs.**
-Concretely, a real tool adapter must:
-
-1. Be a **code-owned `ActionDefinition`** in a real registry (not the fixtures) —
-   `uses_external_tool=True`, a canonical `executable`, and a small
-   `argv_template` with only whole-token placeholders (`{target}`, `{rate}`,
-   `{concurrency}`). Never build argv from model or target content.
-2. Obtain a `PolicyContext` from `load_policy_context(engagement)` and call
-   `RiskEngine.evaluate(request, context, grant=..., now=...)`.
-3. Execute **only** on a `DecisionKind.ALLOW`. For L2, an `ApprovalGrant` must be
-   granted at the TTY and is consumed atomically exactly once by `evaluate`.
-4. Run the rendered argv via a validated adapter in `src/hackbot/tools/` with an
-   argv array — never a shell string. `shell_execution=True` is L3 (prohibited).
-
-## Suggested order of work
-
-Done: the gate-bound tool substrate with streaming output caps, actions promoted
-from reviewed recon-bundle skills (HTTP/DNS/TLS L0 + nmap port-scan & ffuf dir-enum L2, with attribution +
-`skills list`),
-redacted run-linked evidence, L2 execution over the CLI (`tool run --approve`),
-typed findings, per-platform markdown reporting, a remote SSH runner
-(`--runner remote`, verified on Kali with gobuster), and **custom operator
-wordlists** — the `{wordlist}` argv placeholder (a reviewed risk-model extension)
-lets `web.dir-enum-gobuster` take an operator-supplied absolute path such as a
-[SecLists](https://github.com/danielmiessler/SecLists) list, verified end-to-end
-on Kali with `/usr/share/seclists/Discovery/Web-Content/common.txt`, and **remote
-wordlist discovery** — `hackbot wordlists list --runner remote` lists `*.txt`
-files under a fixed code-owned allowlist of remote roots, display-only, verified
-on Kali against SecLists, and **operator-customizable report templates** —
-explicit `--templates-dir`, strict allowlisted placeholders, and
-fail-before-output validation.
-
-1. **Reviewed recon skills / internal-recon** stays disabled unless an
-   explicitly-authorized internal profile is confirmed.
-2. **Provider gateway / MCP** (loopback-only) when model-in-the-loop work starts.
-
-## Guardrails to keep (from CLAUDE.md / SECURITY.md)
-
-- L3 is absolute; program/profile/request/grant/operator can never enable it.
-- Discovery ≠ authorization; nothing auto-expands scope.
-- Treat all target/tool/MCP output as untrusted data.
-- Secrets never enter argv, logs, artifacts, or challenges (the store already
-  scans for and rejects them).
-- Stop on unexpected scope/egress change or when a target blocks/rate-limits.
-
-## Housekeeping
-
-- Each phase is developed on a `feat/*` branch and merged into `main` once tests,
-  Ruff/format, mypy, and the offline smoke test pass. Delete the branch after
-  merge.
-- Specs and plans live in `docs/superpowers/specs/` and
-  `docs/superpowers/plans/`; the risk-engine SDD reports are in `.superpowers/sdd/`.
+The recorded pre-engagement-v2 baseline was 912 passing tests out of 913
+collected, with one known nmap skip. It is historical evidence only and must not
+be reported as a current verification result.
