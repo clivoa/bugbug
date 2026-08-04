@@ -67,7 +67,7 @@ _ENUM_COLLECTION: Mapping[str, object] = MappingProxyType(
     {
         "type": "enum",
         "required": True,
-        "enum_values": ["policies", "spns", "adcs", "graph"],
+        "enum_values": ["DCOnly"],
     }
 )
 _DIRECTORY_SECRET: Mapping[str, object] = MappingProxyType(
@@ -226,7 +226,7 @@ _SPECS: tuple[_ActionSpec, ...] = (
         ("host",),
         {},
         _CANDIDATE_SECRET,
-        ("credential-capture", "automated-scanning", "state-changing"),
+        ("credential-capture", "automated-scanning", "multiple-accounts", "state-changing"),
         state_changing=True,
         high_volume=True,
     ),
@@ -241,7 +241,7 @@ _SPECS: tuple[_ActionSpec, ...] = (
         ("subnet",),
         {},
         {},
-        ("authenticated-testing", "sensitive-data-access"),
+        ("sensitive-data-access",),
         ("analyze-only",),
         touches_third_party=True,
     ),
