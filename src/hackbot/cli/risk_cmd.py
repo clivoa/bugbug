@@ -347,6 +347,12 @@ def cmd_grant(engagement: str, challenge_id: str, *, as_json: bool) -> int:
 
     from hackbot.risk.approvals import ApprovalError, ApprovalStore
     from hackbot.risk.fixtures import FIXTURE_ACTIONS
+    from hackbot.risk.registry import ActionRegistry
+    from hackbot.tools.actions import REAL_ACTIONS
+
+    # Grant challenges for real tool actions (`tool run`) as well as fixture
+    # actions (`risk evaluate`); their action ids are disjoint.
+    registry = ActionRegistry([*REAL_ACTIONS.definitions(), *FIXTURE_ACTIONS.definitions()])
 
     try:
         store = ApprovalStore(engagement)
@@ -356,7 +362,7 @@ def cmd_grant(engagement: str, challenge_id: str, *, as_json: bool) -> int:
     try:
         try:
             grant, _fresh = interactive_grant(
-                engagement, store, FIXTURE_ACTIONS, challenge_id, context=context
+                engagement, store, registry, challenge_id, context=context
             )
         except GrantAborted as exc:
             print(exc.message, file=sys.stderr)
