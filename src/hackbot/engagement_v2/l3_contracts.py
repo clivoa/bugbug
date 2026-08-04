@@ -14,10 +14,12 @@ from types import MappingProxyType
 from typing import TypeAlias
 
 from hackbot.engagement_v2.canonical import digest_value
-from hackbot.engagement_v2.constants import ACTIONS_SCHEMA_VERSION
+from hackbot.engagement_v2.constants import ACTIONS_SCHEMA_VERSION, Profile
 from hackbot.engagement_v2.errors import ContractError, ReasonCode
 from hackbot.engagement_v2.l3_catalog import _SPECS, _catalog_manifest
+from hackbot.engagement_v2.loader import EngagementSnapshot
 from hackbot.engagement_v2.manifest import ActionDefinition, validate_manifest
+from hackbot.engagement_v2.policy import PolicyDecision, decide
 
 _CONTRACT_SCHEMA_VERSION = 1
 _DEFINITION_DIGEST_DOMAIN = "hackbot-l3-action-definition-v1"
@@ -224,6 +226,23 @@ class L3ActionContract:
     cleanup_contract: Mapping[str, object]
     provenance: Mapping[str, object]
     definition_digest: str
+
+
+@dataclass(frozen=True)
+class SnapshotBinding:
+    """The exact immutable authority identity used for catalog activation."""
+
+    snapshot_identity: str
+    profile: str
+    authority_digest: str
+
+
+@dataclass(frozen=True)
+class ActivatedL3Catalog:
+    """Complete contracts activated for exactly one confirmed snapshot."""
+
+    binding: SnapshotBinding
+    actions: Mapping[str, L3ActionContract]
 
 
 def _input_schema(action_id: str, manifest: Mapping[str, object]) -> dict[str, object]:
@@ -498,9 +517,71 @@ def validate_complete_catalog(
     return MappingProxyType(contracts)
 
 
+def _snapshot_binding(snapshot: object) -> SnapshotBinding:
+    if type(snapshot) is not EngagementSnapshot:
+        raise ContractError(ReasonCode.INVALID_REQUEST)
+    assert isinstance(snapshot, EngagementSnapshot)
+    return SnapshotBinding(
+        snapshot_identity=snapshot.identity,
+        profile=snapshot.profile,
+        authority_digest=snapshot.authority_digest,
+    )
+
+
+def activate_catalog(
+    snapshot: object,
+    *,
+    internal_recon_confirmed: bool,
+    project_root: Path,
+) -> ActivatedL3Catalog:
+    """Activate complete definitions for one explicitly confirmed snapshot."""
+
+    binding = _snapshot_binding(snapshot)
+    assert isinstance(snapshot, EngagementSnapshot)
+    authorized_profiles = {Profile.PRIVATE_PENTEST.value, Profile.LOCAL_LAB.value}
+    if (
+        internal_recon_confirmed is not True
+        or snapshot.authorization.get("confirmed") is not True
+        or binding.profile not in authorized_profiles
+    ):
+        raise ContractError(ReasonCode.DENY_AUTHORIZATION_UNCONFIRMED)
+    if (
+        snapshot.program.get("profile") != binding.profile
+        or snapshot.authorization.get("confirmed_authority_digest") != binding.authority_digest
+    ):
+        raise ContractError(ReasonCode.DENY_AUTHORIZATION_STALE)
+    actions = validate_complete_catalog(complete_catalog_document(), project_root=project_root)
+    return ActivatedL3Catalog(binding=binding, actions=actions)
+
+
+def decide_l3(
+    request: Mapping[str, object],
+    snapshot: object,
+    activation: object,
+    *,
+    platform: str,
+) -> PolicyDecision:
+    """Evaluate and bind an L3 request only under its activating snapshot."""
+
+    binding = _snapshot_binding(snapshot)
+    if type(activation) is not ActivatedL3Catalog:
+        raise ContractError(ReasonCode.INVALID_REQUEST)
+    assert isinstance(activation, ActivatedL3Catalog)
+    if binding != activation.binding:
+        raise ContractError(ReasonCode.DENY_AUTHORIZATION_STALE)
+    registry = MappingProxyType(
+        {action_id: contract.action for action_id, contract in activation.actions.items()}
+    )
+    return decide(request, snapshot, registry, platform=platform)
+
+
 __all__ = [
+    "ActivatedL3Catalog",
     "L3ActionContract",
+    "SnapshotBinding",
+    "activate_catalog",
     "complete_catalog_document",
+    "decide_l3",
     "definition_digest",
     "validate_complete_catalog",
 ]

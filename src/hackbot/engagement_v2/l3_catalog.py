@@ -15,13 +15,11 @@ from hackbot.engagement_v2.constants import (
     ACTIONS_SCHEMA_VERSION,
     INTERPRETER_BASENAMES,
     SHELL_BASENAMES,
-    Profile,
 )
 from hackbot.engagement_v2.errors import ContractError, ReasonCode
 from hackbot.engagement_v2.manifest import ActionDefinition, validate_manifest
 
 _ATTRIBUTION = "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
-_INTERNAL_PROFILES = frozenset({Profile.PRIVATE_PENTEST.value, Profile.LOCAL_LAB.value})
 EXCLUDED_CAPABILITIES = frozenset({"denial-of-service", "destructive-testing", "data-exfiltration"})
 _SENSITIVE_CAPABILITIES = frozenset(
     {"credential-access", "credential-capture", "sensitive-data-access"}
@@ -500,20 +498,15 @@ def validate_structured_evidence(
     return MappingProxyType(normalized)
 
 
-def load_catalog(
-    *, active_profile: str | None, internal_recon_confirmed: bool
-) -> Mapping[str, ActionDefinition]:
-    """Load only for a confirmed internal profile; presence never self-enables."""
+def _load_catalog_fixture() -> Mapping[str, ActionDefinition]:
+    """Return raw prototype definitions for legacy unit fixtures only."""
 
-    if active_profile not in _INTERNAL_PROFILES or not internal_recon_confirmed:
-        raise ContractError(ReasonCode.DENY_CAPABILITY_NOT_ALLOWED)
     return validate_catalog_manifest(_catalog_manifest())
 
 
 __all__ = [
     "EXCLUDED_CAPABILITIES",
     "L3Provenance",
-    "load_catalog",
     "provenance",
     "validate_catalog_manifest",
     "validate_structured_evidence",
