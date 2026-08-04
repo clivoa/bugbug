@@ -1,8 +1,8 @@
 # Engagement v2 P5b Executable Layer Design
 
-**Status:** approved  
-**Date:** 2026-08-01  
-**Change:** `engagement-v2-l3-catalog`  
+**Status:** approved
+**Date:** 2026-08-01
+**Change:** `engagement-v2-l3-catalog`
 **Issue:** GitHub #10
 
 ## Purpose
