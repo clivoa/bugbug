@@ -43,11 +43,28 @@ def test_hosts_kind_is_exact_and_excludes_subdomains():
     assert not scope.check("https://policies.accentra.assaabloy.com/").allowed
 
 
-def test_hosts_kind_rejects_a_path_or_wildcard():
+def test_hosts_kind_accepts_a_single_label_exactly():
+    from hackbot.scope.engine import Scope
+
+    sd = validate_scope({"schema_version": SCHEMA_VERSION, "in_scope": {"hosts": ["FileServer"]}})
+    assert sd.in_rules == ["re:^fileserver$"]
+    scope = Scope(in_scope=sd.in_rules)
+    assert scope.check("fileserver").allowed
+    assert not scope.check("fileserver.corp.example").allowed
+
+
+@pytest.mark.parametrize(
+    "invalid_host",
+    [
+        "https://a.example.com",
+        "a.example.com/x",
+        "*.example.com",
+        ".".join(["a" * 63] * 4),
+    ],
+)
+def test_hosts_kind_rejects_non_bare_or_overlong_hostname(invalid_host):
     with pytest.raises(ValidationError) as e:
-        validate_scope(
-            {"schema_version": SCHEMA_VERSION, "in_scope": {"hosts": ["a.example.com/x"]}}
-        )
+        validate_scope({"schema_version": SCHEMA_VERSION, "in_scope": {"hosts": [invalid_host]}})
     assert any("host" in m for m in e.value.errors)
 
 
