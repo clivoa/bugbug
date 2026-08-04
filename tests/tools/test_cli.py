@@ -203,7 +203,8 @@ def test_tool_run_l2_approve_without_tty_does_not_execute(
 from hackbot.tools.actions import ffuf_path, web_content_wordlist  # noqa: E402
 
 
-def _write_dir_enum_request(path: Path, target: str) -> Path:
+def _write_dir_enum_request(path: Path, target: str, wordlist: str | None = None) -> Path:
+    wl = wordlist or web_content_wordlist()
     request = path / "request.json"
     request.write_text(
         json.dumps(
@@ -213,10 +214,12 @@ def _write_dir_enum_request(path: Path, target: str) -> Path:
                 "argv": [
                     ffuf_path() or "/opt/homebrew/bin/ffuf",
                     "-s",
+                    "-rate",
+                    "1",
                     "-u",
                     target,
                     "-w",
-                    web_content_wordlist(),
+                    wl,
                 ],
                 "hypothesis_id": "hyp-1",
                 "rationale": "Enumerate one in-scope lab path set once.",
@@ -229,10 +232,24 @@ def _write_dir_enum_request(path: Path, target: str) -> Path:
                 "program_rule": "Authorized lab enumeration.",
                 "required_headers": [],
                 "requested_risk": None,
+                "wordlist": wl,
             }
         )
     )
     return request
+
+
+def test_tool_run_web_dir_enum_rejects_non_bundled_wordlist(lab_engagement, tmp_path, capsys):
+    evil = tmp_path / "evil.txt"
+    evil.write_text("admin\n")
+    request = _write_dir_enum_request(tmp_path, "http://127.0.0.1/FUZZ", wordlist=str(evil))
+    code = app(
+        ["tool", "run", "web.dir-enum", str(request), "--engagement", str(lab_engagement), "--json"]
+    )
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "code-owned bundled list" in err
+    assert not (lab_engagement / "evidence").exists()
 
 
 @pytest.mark.skipif(ffuf_path() is None, reason="ffuf not installed")

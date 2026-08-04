@@ -127,7 +127,22 @@ def test_web_dir_enum_is_registered_l2_high_volume():
     assert d.high_volume is True
     assert d.network_access is True and d.uses_external_tool is True
     assert "-u" in d.argv_template and "{target}" in d.argv_template
-    assert web_content_wordlist() in d.argv_template
+
+
+def test_web_dir_enum_threads_the_policy_rate_into_ffuf():
+    d = REAL_ACTIONS.require("web.dir-enum")
+    # The gate caps request.rate at the program's max_requests_per_second, so
+    # threading it into `-rate` makes ffuf honor the limit instead of bursting.
+    assert "-rate" in d.argv_template
+    assert "{rate}" in d.argv_template
+
+
+def test_web_dir_enum_takes_a_configurable_wordlist():
+    d = REAL_ACTIONS.require("web.dir-enum")
+    # No baked wordlist: the operator selects one (validated against the
+    # code-owned allowlist by resolve_local_wordlist).
+    assert "{wordlist}" in d.argv_template
+    assert web_content_wordlist() not in d.argv_template
 
 
 def test_web_content_wordlist_exists():
