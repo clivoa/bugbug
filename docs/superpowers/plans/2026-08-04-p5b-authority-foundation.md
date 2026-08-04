@@ -13,6 +13,7 @@
 - Schema v1 behavior and fixture bytes remain unchanged.
 - Public CI performs no live credential, capture, exploit, payload, lateral, persistence, Docker, nftables, or remote-host action.
 - No shell text, arbitrary argv, script, payload bytes, unreviewed module, generic command, or raw credential material enters any new interface.
+- Network authority is endpoint-explicit: each definition owns a closed ordered binding schema, while the confirmed request supplies every full primary and auxiliary URI/endpoint with an explicit port; no default port, implicit resolver, discovery, redirect, proxy, or tool-output widening is allowed.
 - `ExecutionPermitV2` lifetime is 1–300 seconds inclusive and uses replay key `(authority_digest, run_id, nonce)`.
 - Every failure uses an existing `ReasonCode`; public errors remain secret-free and path-free.
 - The existing privilege permit v1 domain, field set, and tests remain unchanged.
@@ -49,7 +50,7 @@
 
 - [ ] **Step 1: Add the independent golden and failing exactness test**
 
-  Add a manually reviewed JSON fixture whose `actions` array is ordered exactly as the 15 IDs in the approved design. Each action record must contain these exact top-level keys: `manifest`, `adapter_id`, `image_key`, `input_schema`, `network_policy`, `rate_policy`, `evidence_schema`, `cleanup_contract`, and `provenance`. Use adapter/image groups `openldap`, `certipy`, `bloodhound`, `impacket`, `netexec`, `responder`, `lab_exploit`, `payload_proof`, `lateral_ssh`, and `persistence_proof`; use the real provenance path `skills/internal-recon/credential-l3-catalog.md` for all locally reviewed behavior.
+  Add a manually reviewed JSON fixture whose `actions` array is ordered exactly as the 15 IDs in the approved design. Each action record must contain these exact top-level keys: `manifest`, `adapter_id`, `image_key`, `input_schema`, `network_policy`, `rate_policy`, `evidence_schema`, `cleanup_contract`, and `provenance`. Each `network_policy` is a closed ordered endpoint-binding schema with code-owned roles, allowed URI schemes/protocols, and cardinality; it contains no environment-specific destination or inferred default. Use adapter/image groups `openldap`, `certipy`, `bloodhound`, `impacket`, `netexec`, `responder`, `lab_exploit`, `payload_proof`, `lateral_ssh`, and `persistence_proof`; use the real provenance path `skills/internal-recon/credential-l3-catalog.md` for all locally reviewed behavior.
 
   ```python
   def test_complete_catalog_matches_independent_golden() -> None:
@@ -67,7 +68,7 @@
 
 - [ ] **Step 3: Add mutation tests for the full definition surface**
 
-  Parametrize mutations for every complete-definition section, plus excluded capabilities, shell/interpreter executable, raw `argv`/`command`/`script`/`payload`/`module` input fields, nonexistent provenance path, duplicate/missing/extra action, and reordered action IDs. Every mutation must raise `ContractError(ReasonCode.INVALID_ACTION_MANIFEST)`.
+  Parametrize mutations for every complete-definition section, plus excluded capabilities, shell/interpreter executable, raw `argv`/`command`/`script`/`payload`/`module` input fields, a missing/unknown endpoint role, an omitted-port/default-port policy, nonexistent provenance path, duplicate/missing/extra action, and reordered action IDs. Every mutation must raise `ContractError(ReasonCode.INVALID_ACTION_MANIFEST)`.
 
   ```python
   @pytest.mark.parametrize(

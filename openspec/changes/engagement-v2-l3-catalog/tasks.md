@@ -1,6 +1,6 @@
 ## 1. Baseline and exact catalog contracts
 
-- [ ] 1.1 Add failing golden tests for the complete definitions and exact ordered set of 15 L3 action IDs, including inputs, targets, capabilities, characteristics, adapter/image identity, rate, network, evidence, cleanup, and provenance.
+- [ ] 1.1 Add failing golden tests for the complete definitions and exact ordered set of 15 L3 action IDs, including inputs, targets, capabilities, characteristics, adapter/image identity, rate, closed ordered endpoint-binding schemas (roles, allowed schemes/protocols, and cardinality), evidence, cleanup, and provenance.
 - [ ] 1.2 Add failing negative tests for excluded capabilities, nonexistent local provenance, shell/interpreter/raw-argv fields, arbitrary modules/scripts/payloads/commands, and incomplete definition validation.
 - [ ] 1.3 Add failing tests that catalog activation, P3 evaluation, input binding, and permit issuance require the same snapshot identity, profile, and authority digest.
 - [ ] 1.4 Replace the prototype catalog/loader/provenance implementation until 1.1-1.3 pass, including the exact corrected capability sets and disabled-by-default behavior.
@@ -44,10 +44,10 @@
 
 ## 6. Target normalization and network containment
 
-- [ ] 6.1 Add failing scope tests for first-class CIDR targets, exact endpoint/auxiliary bindings, deny-wins subnet containment, and SSH management-interface rejection.
+- [ ] 6.1 Add failing scope tests for first-class CIDR targets, exact endpoint/auxiliary bindings with full URI and explicit port values, missing/default-port denial, deny-wins subnet containment, and SSH management-interface rejection.
 - [ ] 6.2 Extend target normalization/scope parsing until 6.1 passes without changing v1 behavior.
-- [ ] 6.3 Add failing DNS tests for permit-time resolution, pre-run re-resolution, mixed-scope answers, changed/missing addresses, redirects, proxies, and undeclared discovery.
-- [ ] 6.4 Implement exact resolved-endpoint binding and fail-closed DNS revalidation until 6.3 passes.
+- [ ] 6.3 Add failing DNS tests for explicit resolver binding, absent-resolver denial, no system-resolver fallback, permit-time resolution, pre-run re-resolution, mixed-scope answers, changed/missing addresses, redirects, proxies, and undeclared discovery.
+- [ ] 6.4 Implement exact resolved-endpoint binding using the same explicit resolver and exact answer-set equality, with fail-closed DNS revalidation, until 6.3 passes.
 - [ ] 6.5 Add failing namespace-plan tests for default-deny nftables, exact IP/port/protocol rules, read-only rootfs, private tmpfs, dropped capabilities, resource bounds, and Responder-only privilege exceptions.
 - [ ] 6.6 Implement ephemeral namespace/container containment and cleanup until 6.5 passes.
 - [ ] 6.7 Run negative remote escape tests against undeclared IPs, ports, protocols, the LAN gateway, SSH management address, and Internet; retain only sanitized containment receipts.

@@ -151,9 +151,20 @@ until its E2E test passes again.
 - **THEN** the broker denies with `EXEC_TRUST_MISMATCH` before container creation
 
 ### Requirement: Default-deny network containment
-The permit SHALL contain the complete code-owned IP, port, and protocol set for
-the action, including explicit DNS/DC auxiliary endpoints. The broker SHALL
-resolve names immediately before execution; every result SHALL equal the
+Every complete networked action definition SHALL declare a closed ordered
+endpoint-binding schema containing each code-owned role, its allowed URI
+scheme/protocol set, and cardinality. The confirmed engagement/request SHALL
+supply the full URI or network endpoint, including an explicit port, for every
+primary and auxiliary destination. An adapter SHALL NOT apply an omitted-port
+default, use an implicit system resolver, discover an undeclared endpoint,
+follow a redirect or proxy, or widen authority from tool output.
+
+A hostname binding SHALL require an explicit DNS resolver endpoint bound to the
+same snapshot, request, and permit; an IP-literal binding SHALL NOT require a
+resolver. The control plane and broker SHALL use that same resolver. The permit
+SHALL contain the complete normalized role, original hostname, resolved IP,
+port, and protocol set for the action. The broker SHALL resolve names
+immediately before execution; every complete answer set SHALL exactly equal the
 permitted resolved set and remain in confirmed scope. Mixed-scope answers, DNS
 changes, redirects, proxies, and discovery of undeclared peers SHALL deny.
 
@@ -165,6 +176,14 @@ wholly contained by confirmed scope.
 #### Scenario: Exact endpoint is contained
 - **WHEN** every resolved address and requested port/protocol matches the permit and confirmed scope
 - **THEN** the namespace allows only those flows and blocks all other egress and ingress
+
+#### Scenario: Required endpoint binding is absent
+- **WHEN** a required primary or auxiliary endpoint, explicit port, or required DNS resolver binding is absent
+- **THEN** validation denies with `INVALID_REQUEST` or `DENY_POLICY_LIMIT` before permit issuance
+
+#### Scenario: Adapter attempts implicit or discovered authority
+- **WHEN** an adapter attempts a default port, system-resolver fallback, undeclared peer, discovered endpoint, redirect, or proxy
+- **THEN** execution fails closed before forbidden traffic leaves the namespace
 
 #### Scenario: DNS answer or destination changes
 - **WHEN** re-resolution adds, removes, or changes an address or the tool attempts an undeclared IP, port, protocol, redirect, proxy, or peer
