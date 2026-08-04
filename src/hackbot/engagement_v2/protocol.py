@@ -19,8 +19,10 @@ from hackbot.engagement_v2.canonical import canonical_bytes, execution_digest
 from hackbot.engagement_v2.constants import (
     AUTHORITY_DIGEST_PATTERN,
     BINDING_NAME_PATTERN,
-    FRAME_TYPE_BY_DIRECTION,
+    ED25519_SIGNATURE_BYTES,
     IDENTIFIER_PATTERN,
+    L3_PROTOCOL_VERSION,
+    L3_REQUEST_FRAME_TYPES,
     MAX_ARGV_TOKEN_BYTES,
     MAX_ARGV_TOKENS,
     MAX_CLOCK_SKEW_SECONDS,
@@ -41,6 +43,8 @@ from hackbot.engagement_v2.constants import (
     NONCE_BYTES,
     PROTOCOL_MAGIC,
     PROTOCOL_VERSION,
+    REQUEST_FRAME_TYPES,
+    RESPONSE_FRAME_TYPES,
     Architecture,
     FrameType,
     PlaceholderKind,
@@ -48,6 +52,7 @@ from hackbot.engagement_v2.constants import (
     Privilege,
 )
 from hackbot.engagement_v2.errors import ContractError, ReasonCode
+from hackbot.engagement_v2.l3_catalog import L3_ACTION_IDS
 
 _PREFIX = struct.Struct("!8sHIH")
 _FRAME_PREFIX = struct.Struct("!HQ32s")
@@ -257,11 +262,12 @@ def _validated_descriptor_list(
     *,
     expected_count: int,
     response: bool,
+    protocol_version: int,
 ) -> list[dict[str, object]]:
     descriptors = header.get("frames")
     if type(descriptors) is not list or len(descriptors) != expected_count:
         raise _invalid()
-    allowed = FRAME_TYPE_BY_DIRECTION["response" if response else "request"]
+    allowed = _allowed_frame_types(protocol_version, response=response)
     result: list[dict[str, object]] = []
     for index, value in enumerate(descriptors):
         if type(value) is not dict:
@@ -291,6 +297,12 @@ def _validated_descriptor_list(
         if frame_type not in allowed:
             raise _invalid()
         result.append(descriptor)
+    if not response:
+        permit_count = sum(
+            descriptor["frame_type"] == FrameType.EXECUTION_PERMIT.value for descriptor in result
+        )
+        if protocol_version == L3_PROTOCOL_VERSION and permit_count != 1:
+            raise _invalid()
     return result
 
 
@@ -320,10 +332,13 @@ def _validate_request_header(
         raise _invalid()
     if type(header.get("protocol_version")) is not int:
         raise _invalid()
-    if header["protocol_version"] != PROTOCOL_VERSION:
+    protocol_version = cast(int, header["protocol_version"])
+    if protocol_version not in {PROTOCOL_VERSION, L3_PROTOCOL_VERSION}:
         raise _invalid()
     RunBinding.from_header(header)
     _validate_identifier(header["action_id"])
+    if protocol_version == L3_PROTOCOL_VERSION and header["action_id"] not in L3_ACTION_IDS:
+        raise _invalid()
     _validate_identifier(header["runner_identity"])
 
     argv = header["argv"]
@@ -390,6 +405,7 @@ def _validate_request_header(
         header,
         expected_count=expected_count,
         response=False,
+        protocol_version=protocol_version,
     )
     request = {key: value for key, value in header.items() if key != "execution_digest"}
     expected_execution_digest = execution_digest({"schema_version": 1, "request": request})
@@ -407,7 +423,8 @@ def _validate_response_header(
         raise _invalid()
     if type(header.get("protocol_version")) is not int:
         raise _invalid()
-    if header["protocol_version"] != PROTOCOL_VERSION:
+    protocol_version = cast(int, header["protocol_version"])
+    if protocol_version not in {PROTOCOL_VERSION, L3_PROTOCOL_VERSION}:
         raise _invalid()
     _validated_uuid(header["run_id"])
     _validated_nonce(header["nonce"])
@@ -419,6 +436,7 @@ def _validate_response_header(
         header,
         expected_count=expected_count,
         response=True,
+        protocol_version=protocol_version,
     )
 
 
@@ -439,13 +457,23 @@ def _frames_are_response(
 ) -> bool:
     if not frames:
         return header is not None and set(header) == _RESPONSE_HEADER_FIELDS
-    request_types = FRAME_TYPE_BY_DIRECTION["request"]
-    response_types = FRAME_TYPE_BY_DIRECTION["response"]
+    request_types = L3_REQUEST_FRAME_TYPES
+    response_types = RESPONSE_FRAME_TYPES
     if all(frame.frame_type in request_types for frame in frames):
         return False
     if all(frame.frame_type in response_types for frame in frames):
         return True
     raise _invalid()
+
+
+def _allowed_frame_types(protocol_version: int, *, response: bool) -> frozenset[FrameType]:
+    if protocol_version not in {PROTOCOL_VERSION, L3_PROTOCOL_VERSION}:
+        raise _invalid()
+    if response:
+        return RESPONSE_FRAME_TYPES
+    if protocol_version == L3_PROTOCOL_VERSION:
+        return L3_REQUEST_FRAME_TYPES
+    return REQUEST_FRAME_TYPES
 
 
 @dataclass(frozen=True, slots=True)
@@ -462,6 +490,52 @@ class Frame:
             or len(self.payload) > MAX_FRAME_BYTES
         ):
             raise _invalid()
+
+
+@dataclass(frozen=True, slots=True)
+class SignedExecutionPermit:
+    """One exact decoded permit envelope carried only in a request frame."""
+
+    permit: Mapping[str, object]
+    signature: bytes
+
+    def __post_init__(self) -> None:
+        if type(self.permit) is not dict or type(self.signature) is not bytes:
+            raise _invalid()
+        if len(self.signature) != ED25519_SIGNATURE_BYTES:
+            raise _invalid()
+        permit = cast(dict[str, object], self.permit)
+        try:
+            canonical_bytes(permit)
+        except ContractError as error:
+            raise _invalid() from error
+        object.__setattr__(self, "permit", _freeze_json(permit))
+
+
+def decode_execution_permit_frame(frame: Frame) -> SignedExecutionPermit:
+    """Decode one canonical request-only ExecutionPermitV2 envelope."""
+
+    if type(frame) is not Frame or frame.frame_type is not FrameType.EXECUTION_PERMIT:
+        raise _invalid()
+    envelope = _decode_header(frame.payload)
+    if set(envelope) != {"permit", "signature"}:
+        raise _invalid()
+    permit = envelope["permit"]
+    encoded_signature = envelope["signature"]
+    if type(permit) is not dict or type(encoded_signature) is not str:
+        raise _invalid()
+    if not encoded_signature.isascii() or "=" in encoded_signature:
+        raise _invalid()
+    try:
+        signature = base64.urlsafe_b64decode(
+            encoded_signature + "=" * (-len(encoded_signature) % 4)
+        )
+    except (binascii.Error, ValueError) as error:
+        raise _invalid() from error
+    canonical_signature = base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
+    if len(signature) != ED25519_SIGNATURE_BYTES or canonical_signature != encoded_signature:
+        raise _invalid()
+    return SignedExecutionPermit(permit=permit, signature=signature)
 
 
 @dataclass(frozen=True, slots=True)
@@ -605,7 +679,7 @@ def write_message(stream: BinaryIO, message: FramedMessage) -> None:
         stream,
         _PREFIX.pack(
             PROTOCOL_MAGIC,
-            PROTOCOL_VERSION,
+            cast(int, header["protocol_version"]),
             len(raw_header),
             len(message.frames),
         ),
@@ -630,7 +704,7 @@ def read_message(stream: BinaryIO, response: bool = False) -> FramedMessage:
     magic, version, header_length, frame_count = _PREFIX.unpack(raw_prefix)
     if (
         magic != PROTOCOL_MAGIC
-        or version != PROTOCOL_VERSION
+        or version not in {PROTOCOL_VERSION, L3_PROTOCOL_VERSION}
         or header_length > MAX_PROTOCOL_HEADER_BYTES
         or frame_count > MAX_FRAME_COUNT
     ):
@@ -641,6 +715,8 @@ def read_message(stream: BinaryIO, response: bool = False) -> FramedMessage:
     raw_header = _read_exact(stream, header_length)
     total_bytes += header_length
     header = _decode_header(raw_header)
+    if header.get("protocol_version") != version:
+        raise _invalid()
     descriptors = _validate_header(
         header,
         expected_count=frame_count,
@@ -656,7 +732,7 @@ def read_message(stream: BinaryIO, response: bool = False) -> FramedMessage:
         raise _invalid()
 
     frames: list[Frame] = []
-    allowed = FRAME_TYPE_BY_DIRECTION["response" if response else "request"]
+    allowed = _allowed_frame_types(version, response=response)
     for index in range(frame_count):
         if total_bytes + _FRAME_PREFIX.size > cap:
             raise _invalid()
@@ -700,7 +776,7 @@ def response_chain(
         raise _invalid()
     if any(type(frame) is not Frame for frame in frames):
         raise _invalid()
-    response_types = FRAME_TYPE_BY_DIRECTION["response"]
+    response_types = RESPONSE_FRAME_TYPES
     if any(frame.frame_type not in response_types for frame in frames):
         raise _invalid()
     chain = bytes.fromhex(execution_digest_value.removeprefix("sha256:"))
@@ -720,6 +796,8 @@ __all__ = [
     "FrameType",
     "FramedMessage",
     "RunBinding",
+    "SignedExecutionPermit",
+    "decode_execution_permit_frame",
     "read_message",
     "response_chain",
     "write_message",

@@ -51,7 +51,7 @@ def _catalog() -> ModuleType:
 
 
 def _registry():
-    return _catalog().load_catalog(active_profile="local-lab", internal_recon_confirmed=True)
+    return _catalog()._load_catalog_fixture()
 
 
 def _raw_actions() -> dict[str, dict[str, object]]:
@@ -257,22 +257,6 @@ def test_every_action_has_reviewed_non_excluded_provenance() -> None:
             term in normalized
             for term in ("denial-of-service", "destructive", "exfiltration", "evasion")
         )
-
-
-# --------------------------------------------------- disabled by default ---
-@pytest.mark.parametrize(
-    ("profile", "confirmed"),
-    [(None, False), ("bug-bounty", True), ("private-pentest", False), ("local-lab", False)],
-)
-def test_catalog_is_disabled_without_internal_profile_and_confirmation(
-    profile: str | None, confirmed: bool
-) -> None:
-    with pytest.raises(ContractError) as excinfo:
-        _catalog().load_catalog(
-            active_profile=profile,
-            internal_recon_confirmed=confirmed,
-        )
-    assert excinfo.value.reason_code is ReasonCode.DENY_CAPABILITY_NOT_ALLOWED
 
 
 def test_catalog_module_has_no_live_execution_path() -> None:

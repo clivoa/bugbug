@@ -15,13 +15,11 @@ from hackbot.engagement_v2.constants import (
     ACTIONS_SCHEMA_VERSION,
     INTERPRETER_BASENAMES,
     SHELL_BASENAMES,
-    Profile,
 )
 from hackbot.engagement_v2.errors import ContractError, ReasonCode
 from hackbot.engagement_v2.manifest import ActionDefinition, validate_manifest
 
 _ATTRIBUTION = "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
-_INTERNAL_PROFILES = frozenset({Profile.PRIVATE_PENTEST.value, Profile.LOCAL_LAB.value})
 EXCLUDED_CAPABILITIES = frozenset({"denial-of-service", "destructive-testing", "data-exfiltration"})
 _SENSITIVE_CAPABILITIES = frozenset(
     {"credential-access", "credential-capture", "sensitive-data-access"}
@@ -67,7 +65,7 @@ _ENUM_COLLECTION: Mapping[str, object] = MappingProxyType(
     {
         "type": "enum",
         "required": True,
-        "enum_values": ["policies", "spns", "adcs", "graph"],
+        "enum_values": ["DCOnly"],
     }
 )
 _DIRECTORY_SECRET: Mapping[str, object] = MappingProxyType(
@@ -226,7 +224,7 @@ _SPECS: tuple[_ActionSpec, ...] = (
         ("host",),
         {},
         _CANDIDATE_SECRET,
-        ("credential-capture", "automated-scanning", "state-changing"),
+        ("credential-capture", "automated-scanning", "multiple-accounts", "state-changing"),
         state_changing=True,
         high_volume=True,
     ),
@@ -241,7 +239,7 @@ _SPECS: tuple[_ActionSpec, ...] = (
         ("subnet",),
         {},
         {},
-        ("authenticated-testing", "sensitive-data-access"),
+        ("sensitive-data-access",),
         ("analyze-only",),
         touches_third_party=True,
     ),
@@ -316,6 +314,8 @@ _SPECS: tuple[_ActionSpec, ...] = (
         state_changing=True,
     ),
 )
+
+L3_ACTION_IDS = frozenset(spec.action_id for spec in _SPECS)
 
 _EXPECTED_ACTION_IDS = frozenset(spec.action_id for spec in _SPECS)
 _RATE_CONTROL = {"kind": "native-adapter", "adapter_id": "internal-l3-bounded"}
@@ -500,20 +500,16 @@ def validate_structured_evidence(
     return MappingProxyType(normalized)
 
 
-def load_catalog(
-    *, active_profile: str | None, internal_recon_confirmed: bool
-) -> Mapping[str, ActionDefinition]:
-    """Load only for a confirmed internal profile; presence never self-enables."""
+def _load_catalog_fixture() -> Mapping[str, ActionDefinition]:
+    """Return raw prototype definitions for legacy unit fixtures only."""
 
-    if active_profile not in _INTERNAL_PROFILES or not internal_recon_confirmed:
-        raise ContractError(ReasonCode.DENY_CAPABILITY_NOT_ALLOWED)
     return validate_catalog_manifest(_catalog_manifest())
 
 
 __all__ = [
     "EXCLUDED_CAPABILITIES",
+    "L3_ACTION_IDS",
     "L3Provenance",
-    "load_catalog",
     "provenance",
     "validate_catalog_manifest",
     "validate_structured_evidence",

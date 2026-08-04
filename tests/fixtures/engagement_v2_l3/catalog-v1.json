@@ -1,0 +1,2178 @@
+{
+  "schema_version": 1,
+  "actions": [
+    {
+      "manifest": {
+        "id": "operator.internal.directory.policies",
+        "title": "Authenticated directory policy enumeration",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/usr/bin/ldapsearch"
+        },
+        "required_privileges": [],
+        "parameters": {
+          "base_dn": {
+            "type": "string",
+            "required": true,
+            "max_length": 512
+          }
+        },
+        "secrets": {},
+        "targets": [
+          "endpoint"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": false,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "authenticated-testing",
+          "sensitive-data-access"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "-LLL",
+          "-Y",
+          "GSSAPI",
+          "-H",
+          "{target:endpoint}",
+          "-b",
+          "{value:base_dn}",
+          "(objectClass=domainDNS)",
+          "minPwdLength",
+          "lockoutThreshold"
+        ]
+      },
+      "adapter_id": "l3.directory.policies.v1",
+      "image_key": "openldap",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "endpoint": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          },
+          "base_dn": {
+            "kind": "string",
+            "required": true,
+            "max_length": 512
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "directory",
+            "field": "endpoint",
+            "schemes": [
+              "ldap",
+              "ldaps"
+            ],
+            "protocols": [
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "single-run",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "directory-policy-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "not-applicable",
+        "block_on_target_failure": false
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "authenticated-directory-enumeration",
+        "classification": "authenticated-directory",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.directory.spns",
+        "title": "Authenticated directory SPN enumeration",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/usr/bin/ldapsearch"
+        },
+        "required_privileges": [],
+        "parameters": {
+          "base_dn": {
+            "type": "string",
+            "required": true,
+            "max_length": 512
+          }
+        },
+        "secrets": {},
+        "targets": [
+          "endpoint"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": false,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "authenticated-testing",
+          "sensitive-data-access"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "-LLL",
+          "-Y",
+          "GSSAPI",
+          "-H",
+          "{target:endpoint}",
+          "-b",
+          "{value:base_dn}",
+          "(servicePrincipalName=*)",
+          "sAMAccountName",
+          "servicePrincipalName"
+        ]
+      },
+      "adapter_id": "l3.directory.spns.v1",
+      "image_key": "openldap",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "endpoint": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          },
+          "base_dn": {
+            "kind": "string",
+            "required": true,
+            "max_length": 512
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "directory",
+            "field": "endpoint",
+            "schemes": [
+              "ldap",
+              "ldaps"
+            ],
+            "protocols": [
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "single-run",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "spn-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "not-applicable",
+        "block_on_target_failure": false
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "authenticated-directory-enumeration",
+        "classification": "authenticated-directory",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.directory.adcs",
+        "title": "Authenticated ADCS configuration enumeration",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/usr/local/bin/certipy"
+        },
+        "required_privileges": [],
+        "parameters": {},
+        "secrets": {},
+        "targets": [
+          "host"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": false,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "authenticated-testing",
+          "sensitive-data-access"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "find",
+          "-target",
+          "{target:host}",
+          "-json",
+          "-enabled"
+        ]
+      },
+      "adapter_id": "l3.directory.adcs.v1",
+      "image_key": "certipy",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "host": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "kerberos_endpoint": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "directory",
+            "field": "host",
+            "schemes": [
+              "ldap",
+              "ldaps"
+            ],
+            "protocols": [
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "kerberos",
+            "field": "kerberos_endpoint",
+            "schemes": [
+              "kerberos"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "single-run",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "adcs-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "not-applicable",
+        "block_on_target_failure": false
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "authenticated-directory-enumeration",
+        "classification": "authenticated-directory",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.directory.graph",
+        "title": "Bounded Active Directory graph collection",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/usr/local/bin/bloodhound-python"
+        },
+        "required_privileges": [],
+        "parameters": {
+          "collection": {
+            "type": "enum",
+            "required": true,
+            "enum_values": [
+              "DCOnly"
+            ]
+          },
+          "domain": {
+            "type": "string",
+            "required": true,
+            "max_length": 512
+          }
+        },
+        "secrets": {},
+        "targets": [
+          "host"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": false,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "authenticated-testing",
+          "sensitive-data-access"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "-c",
+          "{value:collection}",
+          "-d",
+          "{value:domain}",
+          "-dc",
+          "{target:host}"
+        ]
+      },
+      "adapter_id": "l3.directory.graph.v1",
+      "image_key": "bloodhound",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "host": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "kerberos_endpoint": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          },
+          "collection": {
+            "kind": "enum",
+            "required": true,
+            "enum_values": [
+              "DCOnly"
+            ]
+          },
+          "domain": {
+            "kind": "string",
+            "required": true,
+            "max_length": 512
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "directory",
+            "field": "host",
+            "schemes": [
+              "ldap",
+              "ldaps"
+            ],
+            "protocols": [
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "kerberos",
+            "field": "kerberos_endpoint",
+            "schemes": [
+              "kerberos"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "single-run",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "directory-graph-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "not-applicable",
+        "block_on_target_failure": false
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "authenticated-directory-enumeration",
+        "classification": "authenticated-directory",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.credential.asrep",
+        "title": "AS-REP material request for offline validation",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/usr/local/bin/GetNPUsers.py"
+        },
+        "required_privileges": [],
+        "parameters": {},
+        "secrets": {},
+        "targets": [
+          "host"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": false,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "credential-access",
+          "sensitive-data-access"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "-no-pass",
+          "-request",
+          "{target:host}"
+        ]
+      },
+      "adapter_id": "l3.credential.asrep.v1",
+      "image_key": "impacket",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "host": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          },
+          "principals": {
+            "kind": "string-list",
+            "required": true,
+            "min_items": 1,
+            "max_items": 25,
+            "max_item_bytes": 256
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "kerberos",
+            "field": "host",
+            "schemes": [
+              "kerberos"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "single-run",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "asrep-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "not-applicable",
+        "block_on_target_failure": false
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "credential-material-access",
+        "classification": "credential-access",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.credential.kerberoast",
+        "title": "Kerberos service-ticket request for offline validation",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/usr/local/bin/GetUserSPNs.py"
+        },
+        "required_privileges": [],
+        "parameters": {},
+        "secrets": {},
+        "targets": [
+          "host"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": false,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "credential-access",
+          "sensitive-data-access"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "-request",
+          "{target:host}"
+        ]
+      },
+      "adapter_id": "l3.credential.kerberoast.v1",
+      "image_key": "impacket",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "host": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "kerberos_endpoint": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          },
+          "principals": {
+            "kind": "string-list",
+            "required": true,
+            "min_items": 1,
+            "max_items": 25,
+            "max_item_bytes": 256
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "directory",
+            "field": "host",
+            "schemes": [
+              "ldap",
+              "ldaps"
+            ],
+            "protocols": [
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "kerberos",
+            "field": "kerberos_endpoint",
+            "schemes": [
+              "kerberos"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "single-run",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "kerberoast-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "not-applicable",
+        "block_on_target_failure": false
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "credential-material-access",
+        "classification": "credential-access",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.credential.laps",
+        "title": "Authorized LAPS attribute read",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/usr/local/bin/nxc"
+        },
+        "required_privileges": [],
+        "parameters": {},
+        "secrets": {
+          "directory_credential": {
+            "reference": "engagement.directory-credential",
+            "transport": "file"
+          }
+        },
+        "targets": [
+          "host"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": false,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "credential-access",
+          "sensitive-data-access"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "ldap",
+          "{target:host}",
+          "--laps",
+          "{secret_file:directory_credential}"
+        ]
+      },
+      "adapter_id": "l3.credential.laps.v1",
+      "image_key": "netexec",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "host": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          },
+          "directory_credential": {
+            "kind": "secret-reference",
+            "required": true
+          },
+          "computers": {
+            "kind": "string-list",
+            "required": true,
+            "min_items": 1,
+            "max_items": 25,
+            "max_item_bytes": 256
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "directory",
+            "field": "host",
+            "schemes": [
+              "ldap",
+              "ldaps"
+            ],
+            "protocols": [
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "single-run",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "laps-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "not-applicable",
+        "block_on_target_failure": false
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "credential-material-access",
+        "classification": "credential-access",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.credential.gmsa",
+        "title": "Authorized gMSA metadata read",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/usr/local/bin/nxc"
+        },
+        "required_privileges": [],
+        "parameters": {},
+        "secrets": {
+          "directory_credential": {
+            "reference": "engagement.directory-credential",
+            "transport": "file"
+          }
+        },
+        "targets": [
+          "host"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": false,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "credential-access",
+          "sensitive-data-access"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "ldap",
+          "{target:host}",
+          "--gmsa",
+          "{secret_file:directory_credential}"
+        ]
+      },
+      "adapter_id": "l3.credential.gmsa.v1",
+      "image_key": "netexec",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "host": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          },
+          "directory_credential": {
+            "kind": "secret-reference",
+            "required": true
+          },
+          "accounts": {
+            "kind": "string-list",
+            "required": true,
+            "min_items": 1,
+            "max_items": 25,
+            "max_item_bytes": 256
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "directory",
+            "field": "host",
+            "schemes": [
+              "ldap",
+              "ldaps"
+            ],
+            "protocols": [
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "single-run",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "gmsa-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "not-applicable",
+        "block_on_target_failure": false
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "credential-material-access",
+        "classification": "credential-access",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.validation.password-spray",
+        "title": "Bounded password validation against one scoped host",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/usr/local/bin/nxc"
+        },
+        "required_privileges": [],
+        "parameters": {},
+        "secrets": {
+          "credential_candidates": {
+            "reference": "engagement.synthetic-candidate-set",
+            "transport": "file"
+          }
+        },
+        "targets": [
+          "host"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": true,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": true,
+          "creates_account": false,
+          "uses_multiple_accounts": true,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "credential-capture",
+          "automated-scanning",
+          "multiple-accounts",
+          "state-changing"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "smb",
+          "{target:host}",
+          "-p",
+          "{secret_file:credential_candidates}"
+        ]
+      },
+      "adapter_id": "l3.validation.password-spray.v1",
+      "image_key": "netexec",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "host": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          },
+          "credential_candidates": {
+            "kind": "secret-reference",
+            "required": true
+          },
+          "accounts": {
+            "kind": "string-list",
+            "required": true,
+            "min_items": 1,
+            "max_items": 25,
+            "max_item_bytes": 256
+          },
+          "lockout_threshold": {
+            "kind": "integer",
+            "required": true,
+            "minimum": 2,
+            "maximum": 2147483647
+          },
+          "lockout_observed_at": {
+            "kind": "timestamp",
+            "required": true
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "smb",
+            "field": "host",
+            "schemes": [
+              "smb"
+            ],
+            "protocols": [
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "durable-account-budget",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 30,
+        "maximum_targets": 1,
+        "maximum_accounts": 25,
+        "maximum_candidates": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "password-validation-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "required",
+        "block_on_target_failure": true
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "validation-and-capture",
+        "classification": "credential-validation",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.responder.analyze",
+        "title": "Responder analyze-only observation",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/opt/hackbot/adapters/responder"
+        },
+        "required_privileges": [],
+        "parameters": {},
+        "secrets": {},
+        "targets": [
+          "subnet"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": true,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": false,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "sensitive-data-access"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "--mode",
+          "analyze",
+          "--authorized-subnet",
+          "{target:subnet}"
+        ]
+      },
+      "adapter_id": "l3.responder.analyze.v1",
+      "image_key": "responder",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "subnet": {
+            "kind": "cidr",
+            "required": true,
+            "max_items": 1
+          },
+          "interface": {
+            "kind": "interface-name",
+            "required": true,
+            "max_length": 64
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "authorized-subnet",
+            "field": "subnet",
+            "schemes": [
+              "cidr"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "cidr"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "bounded-observation",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1,
+        "maximum_duration_seconds": 120
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "responder-analysis-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "not-applicable",
+        "block_on_target_failure": false
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "validation-and-capture",
+        "classification": "analyze-only",
+        "labels": [
+          "analyze-only"
+        ],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.responder.capture",
+        "title": "Responder poison/capture in an isolated authorized subnet",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/opt/hackbot/adapters/responder"
+        },
+        "required_privileges": [],
+        "parameters": {},
+        "secrets": {},
+        "targets": [
+          "subnet"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": true,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": true,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "credential-capture",
+          "state-changing"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "--mode",
+          "poison-capture",
+          "--authorized-subnet",
+          "{target:subnet}"
+        ]
+      },
+      "adapter_id": "l3.responder.capture.v1",
+      "image_key": "responder",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "subnet": {
+            "kind": "cidr",
+            "required": true,
+            "max_items": 1
+          },
+          "interface": {
+            "kind": "interface-name",
+            "required": true,
+            "max_length": 64
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "authorized-subnet",
+            "field": "subnet",
+            "schemes": [
+              "cidr"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "cidr"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "bounded-observation",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1,
+        "maximum_duration_seconds": 120
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "responder-capture-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "required",
+        "block_on_target_failure": true
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "validation-and-capture",
+        "classification": "credential-capture",
+        "labels": [
+          "capture",
+          "poisoning",
+          "third-party"
+        ],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.exploit.verify",
+        "title": "Single-target controlled exploit verification",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/opt/hackbot/adapters/exploit-verify"
+        },
+        "required_privileges": [],
+        "parameters": {},
+        "secrets": {},
+        "targets": [
+          "host"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": false,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "exploit-execution"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "--single-proof",
+          "--target",
+          "{target:host}"
+        ]
+      },
+      "adapter_id": "l3.exploit.verify.v1",
+      "image_key": "lab_exploit",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "host": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "proof-target",
+            "field": "host",
+            "schemes": [
+              "http",
+              "https"
+            ],
+            "protocols": [
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "single-run",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "exploit-proof-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "not-applicable",
+        "block_on_target_failure": false
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "exploit-verification",
+        "classification": "exploit-verification",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.payload.verify",
+        "title": "Single-target controlled payload verification",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/opt/hackbot/adapters/payload-verify"
+        },
+        "required_privileges": [],
+        "parameters": {},
+        "secrets": {},
+        "targets": [
+          "host"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": true,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "payload-execution",
+          "state-changing"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "--minimal-proof",
+          "--target",
+          "{target:host}"
+        ]
+      },
+      "adapter_id": "l3.payload.verify.v1",
+      "image_key": "payload_proof",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "host": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "proof-target",
+            "field": "host",
+            "schemes": [
+              "https"
+            ],
+            "protocols": [
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "single-run",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "payload-proof-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "required",
+        "block_on_target_failure": true
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "payload-post-exploitation",
+        "classification": "payload-execution",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.lateral.verify",
+        "title": "Verify access to one additional scoped asset",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/usr/bin/ssh"
+        },
+        "required_privileges": [],
+        "parameters": {},
+        "secrets": {},
+        "targets": [
+          "host"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": false,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "lateral-movement",
+          "credential-access"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "-o",
+          "BatchMode=yes",
+          "{target:host}",
+          "/usr/bin/true"
+        ]
+      },
+      "adapter_id": "l3.lateral.verify.v1",
+      "image_key": "lateral_ssh",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "host": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "ssh-target",
+            "field": "host",
+            "schemes": [
+              "ssh"
+            ],
+            "protocols": [
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "single-run",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "lateral-proof-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "not-applicable",
+        "block_on_target_failure": false
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "lateral-movement",
+        "classification": "lateral-movement",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    },
+    {
+      "manifest": {
+        "id": "operator.internal.persistence.verify",
+        "title": "Install and remove one controlled persistence marker",
+        "risk": "L3",
+        "platforms": [
+          "linux"
+        ],
+        "architectures": [
+          "x86_64",
+          "arm64"
+        ],
+        "executables": {
+          "linux": "/opt/hackbot/adapters/persistence-verify"
+        },
+        "required_privileges": [],
+        "parameters": {},
+        "secrets": {},
+        "targets": [
+          "host"
+        ],
+        "characteristics": {
+          "network_access": true,
+          "high_volume": false,
+          "touches_third_party": false,
+          "follows_redirects": false,
+          "recursive_discovery": false,
+          "state_changing": true,
+          "creates_account": false,
+          "uses_multiple_accounts": false,
+          "out_of_band": false,
+          "honors_required_headers": true
+        },
+        "rate_control": {
+          "kind": "native-adapter",
+          "adapter_id": "internal-l3-bounded"
+        },
+        "capabilities": [
+          "persistence",
+          "state-changing"
+        ],
+        "vulnerability_types": [],
+        "impacts": [],
+        "evidence_policy": {
+          "mode": "metadata-only"
+        },
+        "argv": [
+          "--install-test-marker",
+          "--target",
+          "{target:host}"
+        ]
+      },
+      "adapter_id": "l3.persistence.verify.v1",
+      "image_key": "persistence_proof",
+      "input_schema": {
+        "additional_properties": false,
+        "fields": {
+          "host": {
+            "kind": "network-endpoint",
+            "required": true,
+            "max_items": 1
+          },
+          "dns_resolver": {
+            "kind": "network-endpoint",
+            "required": false,
+            "max_items": 1
+          }
+        }
+      },
+      "network_policy": {
+        "mode": "default-deny",
+        "endpoint_authority": "request-explicit",
+        "port_authority": "request-explicit",
+        "resolver_policy": "explicit-for-hostnames",
+        "answer_set": "exact",
+        "redirects": false,
+        "proxies": false,
+        "discovery": false,
+        "bindings": [
+          {
+            "role": "ssh-target",
+            "field": "host",
+            "schemes": [
+              "ssh"
+            ],
+            "protocols": [
+              "tcp"
+            ],
+            "minimum": 1,
+            "maximum": 1,
+            "host_kind": "hostname-or-ip"
+          },
+          {
+            "role": "dns-resolver",
+            "field": "dns_resolver",
+            "schemes": [
+              "dns"
+            ],
+            "protocols": [
+              "udp",
+              "tcp"
+            ],
+            "minimum": 0,
+            "maximum": 1,
+            "host_kind": "ip-literal"
+          }
+        ]
+      },
+      "rate_policy": {
+        "kind": "single-run",
+        "max_concurrency": 1,
+        "minimum_interval_seconds": 0,
+        "maximum_targets": 1
+      },
+      "evidence_schema": {
+        "mode": "metadata-only",
+        "schema_id": "persistence-proof-summary-v1",
+        "additional_properties": false
+      },
+      "cleanup_contract": {
+        "resource": "required",
+        "target": "required",
+        "block_on_target_failure": true
+      },
+      "provenance": {
+        "local_path": "skills/internal-recon/credential-l3-catalog.md",
+        "category": "persistence",
+        "classification": "persistence",
+        "labels": [],
+        "attribution": "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+      }
+    }
+  ]
+}
