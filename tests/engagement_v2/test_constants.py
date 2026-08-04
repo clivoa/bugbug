@@ -498,9 +498,16 @@ def test_lifecycle_cleanup_and_frame_type_registries_are_closed() -> None:
         "failed",
         "unverified-self-report",
     }
-    assert {item.value for item in FrameType} == set(range(1, 8))
+    assert {item.value for item in FrameType} == set(range(1, 9))
     assert FRAME_TYPE_BY_DIRECTION == {
-        "request": frozenset({FrameType.TARGET_LIST, FrameType.ARTIFACT, FrameType.SECRET}),
+        "request": frozenset(
+            {
+                FrameType.TARGET_LIST,
+                FrameType.ARTIFACT,
+                FrameType.SECRET,
+                FrameType.EXECUTION_PERMIT,
+            }
+        ),
         "response": frozenset(
             {
                 FrameType.STDOUT,
@@ -518,6 +525,7 @@ def test_lifecycle_cleanup_and_frame_type_registries_are_closed() -> None:
         FrameType.STDERR: "stderr",
         FrameType.STRUCTURED_RESULT: "structured-result",
         FrameType.CLEANUP_RECEIPT: "cleanup-receipt",
+        FrameType.EXECUTION_PERMIT: "execution-permit",
     }
     with pytest.raises(TypeError):
         FRAME_TYPE_BY_DIRECTION["request"] = frozenset()

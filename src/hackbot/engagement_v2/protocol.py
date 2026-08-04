@@ -19,6 +19,7 @@ from hackbot.engagement_v2.canonical import canonical_bytes, execution_digest
 from hackbot.engagement_v2.constants import (
     AUTHORITY_DIGEST_PATTERN,
     BINDING_NAME_PATTERN,
+    ED25519_SIGNATURE_BYTES,
     FRAME_TYPE_BY_DIRECTION,
     IDENTIFIER_PATTERN,
     MAX_ARGV_TOKEN_BYTES,
@@ -291,6 +292,12 @@ def _validated_descriptor_list(
         if frame_type not in allowed:
             raise _invalid()
         result.append(descriptor)
+    if not response:
+        permit_count = sum(
+            descriptor["frame_type"] == FrameType.EXECUTION_PERMIT.value for descriptor in result
+        )
+        if permit_count > 1:
+            raise _invalid()
     return result
 
 
@@ -462,6 +469,52 @@ class Frame:
             or len(self.payload) > MAX_FRAME_BYTES
         ):
             raise _invalid()
+
+
+@dataclass(frozen=True, slots=True)
+class SignedExecutionPermit:
+    """One exact decoded permit envelope carried only in a request frame."""
+
+    permit: Mapping[str, object]
+    signature: bytes
+
+    def __post_init__(self) -> None:
+        if type(self.permit) is not dict or type(self.signature) is not bytes:
+            raise _invalid()
+        if len(self.signature) != ED25519_SIGNATURE_BYTES:
+            raise _invalid()
+        permit = cast(dict[str, object], self.permit)
+        try:
+            canonical_bytes(permit)
+        except ContractError as error:
+            raise _invalid() from error
+        object.__setattr__(self, "permit", _freeze_json(permit))
+
+
+def decode_execution_permit_frame(frame: Frame) -> SignedExecutionPermit:
+    """Decode one canonical request-only ExecutionPermitV2 envelope."""
+
+    if type(frame) is not Frame or frame.frame_type is not FrameType.EXECUTION_PERMIT:
+        raise _invalid()
+    envelope = _decode_header(frame.payload)
+    if set(envelope) != {"permit", "signature"}:
+        raise _invalid()
+    permit = envelope["permit"]
+    encoded_signature = envelope["signature"]
+    if type(permit) is not dict or type(encoded_signature) is not str:
+        raise _invalid()
+    if not encoded_signature.isascii() or "=" in encoded_signature:
+        raise _invalid()
+    try:
+        signature = base64.urlsafe_b64decode(
+            encoded_signature + "=" * (-len(encoded_signature) % 4)
+        )
+    except (binascii.Error, ValueError) as error:
+        raise _invalid() from error
+    canonical_signature = base64.urlsafe_b64encode(signature).decode("ascii").rstrip("=")
+    if len(signature) != ED25519_SIGNATURE_BYTES or canonical_signature != encoded_signature:
+        raise _invalid()
+    return SignedExecutionPermit(permit=permit, signature=signature)
 
 
 @dataclass(frozen=True, slots=True)
@@ -720,6 +773,8 @@ __all__ = [
     "FrameType",
     "FramedMessage",
     "RunBinding",
+    "SignedExecutionPermit",
+    "decode_execution_permit_frame",
     "read_message",
     "response_chain",
     "write_message",

@@ -342,7 +342,7 @@ def sign_execution_permit_v2(
     if set(permit) != _EXECUTION_PERMIT_FIELDS or not callable(signer):
         raise _execution_error()
     try:
-        body = canonical_bytes({"contract": _EXECUTION_PERMIT_DOMAIN, "permit": dict(permit)})
+        body = canonical_bytes({"contract": _EXECUTION_PERMIT_DOMAIN, "permit": _thaw(permit)})
         signature = signer(body)
     except Exception as exc:
         raise _execution_error() from exc
@@ -371,7 +371,7 @@ def verify_execution_permit_v2(
     if set(permit) != _EXECUTION_PERMIT_FIELDS:
         raise _execution_error()
     try:
-        message = canonical_bytes({"contract": _EXECUTION_PERMIT_DOMAIN, "permit": dict(permit)})
+        message = canonical_bytes({"contract": _EXECUTION_PERMIT_DOMAIN, "permit": _thaw(permit)})
     except ContractError as exc:
         raise _execution_error() from exc
     if (
@@ -389,7 +389,7 @@ def verify_execution_permit_v2(
 
     expected = build_execution_permit_v2(context)
     for field in _EXECUTION_PERMIT_FIELDS:
-        if permit[field] == expected[field]:
+        if _thaw(permit[field]) == expected[field]:
             continue
         if field == "required_privileges":
             raise _execution_error(ReasonCode.EXEC_PRIVILEGE_MISMATCH)

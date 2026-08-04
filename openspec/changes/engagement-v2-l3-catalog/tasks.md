@@ -10,8 +10,8 @@
 
 - [x] 2.1 Add failing tests for the exact canonical `ExecutionPermitV2` field set, domain separation, Ed25519 signer pinning, 1-300 second lifetime, and every snapshot/action/runner/image/input/network/rate/evidence/privilege binding.
 - [x] 2.2 Implement permit issuance on the control plane and extend verification on the Linux side until 2.1 passes without introducing another trust path.
-- [ ] 2.3 Add failing protocol tests proving invalid, expired, unknown-field, mismatched, and tampered permits deny before any resource factory is called.
-- [ ] 2.4 Integrate the permit with the existing P4 framed request/response chain and fixed SSH transport until 2.3 passes.
+- [x] 2.3 Add failing protocol tests proving invalid, expired, unknown-field, mismatched, and tampered permits deny before any resource factory is called.
+- [x] 2.4 Integrate the permit with the existing P4 framed request/response chain and fixed SSH transport until 2.3 passes.
 - [ ] 2.5 Add deployment-contract tests for a root-owned digest-pinned broker path and a dedicated forced-command SSH identity with shell, TTY, forwarding, agent, and X11 disabled.
 
 ## 3. Durable replay, rate, and mutable-target state
