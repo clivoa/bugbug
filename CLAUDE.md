@@ -38,9 +38,12 @@ mass exploitation.
      approval** immediately before execution, showing program, asset, exact
      command, rationale, expected impact, rate, data touched, stop condition,
      the authorizing program rule, and cleanup plan.
-   - **L3 prohibited** — never perform (DoS, credential stuffing, phishing,
-     persistence, lateral movement, evasion, mass account creation, destructive
-     ops, exfiltration beyond minimal proof, etc.).
+   - **L3 controlled in engagement v2** — a reviewed P5b action may run only
+     under a confirmed `private-pentest`/`local-lab` engagement, in code-checked
+     scope, when every exact capability flag is Boolean `true`. A profile name
+     grants nothing and ad-hoc L3 commands remain prohibited. DoS, phishing,
+     evasion, destructive operations, and exfiltration beyond minimal proof are
+     excluded without exception. The legacy v1 path continues to prohibit L3.
 6. **Discovery ≠ authorization.** ASN/CIDR/cert/favicon/PTR/SPF/DNS-history/Shodan/
    GitHub/branding are hypothesis evidence only. They never auto-add an asset to
    scope.

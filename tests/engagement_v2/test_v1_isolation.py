@@ -314,10 +314,13 @@ def test_contract_document_declares_v2_unavailable() -> None:
     ) in text
 
 
-def test_next_steps_separates_historical_v1_snapshot_from_p0_status() -> None:
+def test_next_steps_separates_historical_v1_snapshot_from_current_status() -> None:
     text = Path("docs/next-steps.md").read_text(encoding="utf-8")
 
     assert "Historical v1 verification snapshot" in text
-    assert "P0 tasks 1.1–8.2 are complete" in text
-    assert "Current normative text lives under `openspec/specs/`" in text
-    assert "P1 is **Ready**" in text
+    current, historical = text.split("## Historical v1 verification snapshot", maxsplit=1)
+    assert "Current delivery: P5b credential/L3 catalog" in current
+    assert "P0 — security contracts" in current
+    assert "P6 — autonomous workflow contracts" in current
+    assert "912 passing tests out of 913 collected" in " ".join(historical.split())
+    assert "P1 is **Ready**" not in text

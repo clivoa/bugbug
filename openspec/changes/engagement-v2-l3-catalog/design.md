@@ -1,114 +1,274 @@
 ## Context
 
-The engagement v2 engine (P0–P4) and the non-credential catalog (P5a) are shipped
-and archived. Every action already passes confirmed authority, typed scope, an
-exact sensitive-capability gate (P2), redacted conservative evidence (P3), and, if
-remote, a pinned replay-resistant protocol (P4). P5b specifies the credential/L3
-offensive catalog for **authorized internal-pentest and bug-bounty** work, where
-offensive tooling is expected — but only under the operator's explicit,
-capability-scoped authority.
+P0-P4 already provide strict engagement loading, scope and capability decisions,
+canonical framing, Ed25519 privilege-permit verification, fixed SSH transport,
+executable digest checks, and in-process replay protection. P5a supplies a
+non-credential catalog. The first P5b implementation added 15 inert L3 manifest
+entries and synthetic fixtures but independent review found that it could load a
+catalog for one profile and decide against another snapshot, advertised adapters
+that did not exist, did not bind all tools to actual destinations, and did not
+mechanically enforce rate, evidence, or E2E promotion.
 
-This change is the safety/governance contract for that tooling: it makes
-credential and exploitation techniques auditable, capability-gated, and
-evidence-restricted rather than ad-hoc. It deliberately **excludes** denial of
-service, destruction/wiping, bulk exfiltration beyond minimal proof, and detection
-evasion.
+P5b now includes the complete executable boundary defined by
+`docs/superpowers/specs/2026-08-01-engagement-v2-p5b-executable-layer-design.md`.
+The exact normative fields, action semantics, upstream pins, lifecycle, and
+acceptance criteria in that document are part of this design.
+
+The macOS workstation is the control plane. L3 tools execute on a Linux runner.
+The authorized test host may be reached through SSH, but its management address
+is not a test target. Public CI remains incapable of live offensive execution.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Specify a reviewed L3 catalog (authenticated directory enumeration, credential
-  access, validation/capture, exploit verification, post-exploitation, lateral
-  movement, persistence) classified per the umbrella table.
-- Require every declared capability to be exactly enabled; deny otherwise, with no
-  per-action approval.
-- Restrict credential evidence to metadata-only or a closed native structured
-  schema; never raw dumps, never beyond minimal proof.
-- Classify capture-capable modes distinctly from analyze modes; never label
-  capture passive.
-- Keep the catalog disabled by default and provenance-tagged; confine real
-  end-to-end exercise to isolated disposable labs.
+- Deliver 15 exact L3 actions through real, typed, code-owned adapters.
+- Bind catalog activation, P3 decision, request, snapshot, runner, image,
+  containment, rate, evidence, and cleanup to one signed permit.
+- Fail closed on profile, authority, target, DNS, adapter, helper, image, version,
+  or receipt drift before creating an execution resource.
+- Keep reusable credential material out of persistent artifacts.
+- Promote each action only after a faithful E2E test in a disposable lab.
+- Allow explicitly authorized local-network testing from the Linux runner while
+  keeping the lab isolated from that network.
 
 **Non-Goals:**
 
-- No DoS/DDoS, destruction, bulk exfiltration, or evasion tooling.
-- No engine-gate change, no per-action approval, no auto-enable.
-- No execution wiring beyond P2/P3/P4; CI runs no live credential/exploit action.
+- Generic commands, arbitrary argv, shell text, scripts, payload bytes, or
+  unreviewed modules supplied by an operator or model.
+- DoS, destruction, exfiltration, evasion, persistent changes surviving the run,
+  or automatic action chaining.
+- Treating a profile name, catalog presence, exit code, or target self-report as
+  authorization or proof.
+- Live offensive execution in public CI or on macOS.
 
 ## Decisions
 
-### 1. The catalog is a code-owned v2 action manifest (as P5a)
+### 1. Extend the existing P0/P3/P4 trust path
 
-Each L3 action is an `operator.internal.<category>.<tool>` entry with an absolute
-executable, whole-token argv, typed parameters, scope-checked target bindings,
-its exact `L3` risk, and its full capability set, validated by the P2
-`validate_manifest`. Routing through the P2 validator guarantees no shell,
-inline-eval, or pipeline, and that target-shaped inputs go through scope-checked
-bindings.
+P5b extends the current Ed25519 permit and framed P4 transport instead of adding
+a parallel executor. The control plane loads one immutable
+`EngagementSnapshot`, evaluates the exact action through P3, binds typed inputs,
+and issues `ExecutionPermitV2`. The same `profile`, `authority_digest`, and
+snapshot identity must be present at catalog load, policy decision, permit
+issuance, and broker verification.
 
-### 2. Capability sets follow the umbrella table exactly
+The permit uses the exact closed field set in the approved design and has a
+maximum lifetime of 300 seconds. The broker verifies signature, timestamps,
+action definition digest, runner/helper identity, image digest, input digest,
+resolved endpoints, network/rate/evidence claims, privileges, and replay tuple
+before resource creation.
 
-Credential access → `credential-access` + `sensitive-data-access`; capture →
-`credential-capture` (+ `automated-scanning`/`state-changing`); exploit →
-`exploit-execution`; payload → `payload-execution` + `state-changing`; lateral →
-`lateral-movement` + `credential-access`; persistence → `persistence` +
-`state-changing`; authenticated enumeration → `authenticated-testing` +
-`sensitive-data-access`. The P2 policy gate requires **all** of an action's
-capability flags to be `true`, so partial authorization denies.
+Alternative: trust the existing ALLOW object at the runner. Rejected because it
+does not cryptographically bind the catalog definition or execution environment.
 
-### 3. Credential evidence is metadata-only or closed-structured
+### 2. Make replay and rate state durable
 
-The evidence mode for credential actions is `metadata-only` by default, or
-`structured` constrained to a closed native schema (counts, principal names,
-ticket/hash metadata, not raw secret bytes). `redacted-output` is denied for
-credential/sensitive capabilities (P3 already enforces `EVIDENCE_POLICY_DENIED`).
-A validation test asserts no credential action declares `redacted-output` and that
-structured schemas are closed-form.
+The broker reserves `(authority_digest, run_id, nonce)` atomically in SQLite
+before creating a namespace or container. The reservation survives process
+restart for at least the existing replay window.
 
-### 4. Capture vs analyze are separate actions
+Rate budgets use the same durable store and are keyed by authority, action,
+target, and account-set digest. Password spray runs with concurrency one,
+mandatory inter-attempt delay, a bounded candidate set, and a budget below the
+confirmed directory lockout threshold. Missing or stale lockout policy denies.
 
-A responder is split into an analyze/observe action (no capture capability) and a
-poison/capture action (`credential-capture`, `state-changing`, third-party). No
-capture-capable action may carry a passive/discovery label; a classification test
-enforces the distinction and the "never passive" rule.
+Alternative: keep replay and rate state in memory. Rejected because restarting a
+broker or container would bypass both controls.
 
-### 5. Provenance, disabled-by-default, and lab-only exercise
+### 3. Use one root-owned broker with typed adapters
 
-Every action carries a provenance record with attribution; the catalog loads only
-through the gated loader (module-private manifest builder, as P5a). Any real
-end-to-end exercise runs only in an isolated disposable lab (e.g. an operator's
-own AD/Kerberos lab); fixtures are synthetic; CI executes no live action.
+`hackbot-l3-runner` is a root-owned, digest-pinned, stdin/stdout broker installed
+at a fixed path. Production deployment uses a dedicated SSH identity with a
+forced command and no interactive shell, forwarding, agent, X11, or TTY. The
+broker exposes no listening socket.
+
+One adapter class per action owns input validation, secret requirements,
+invocation rendering, image identity, network rules, result parsing, evidence
+sanitization, and target cleanup. Inputs reject unknown fields and all
+collections, strings, counts, timeouts, and byte sizes are explicitly bounded by
+the approved action definitions. No adapter invokes a shell or accepts raw argv.
+
+Alternative: one daemon per upstream tool. Rejected because it duplicates
+authorization and cleanup policy. Alternative: render Docker commands directly
+from the manifest. Rejected because a declarative argv cannot safely enforce
+network, rate, evidence, or state recovery.
+
+### 4. Validate complete definitions and promote by receipt
+
+The catalog contains exact code-owned definitions for the 15 reviewed IDs.
+Validation compares the complete definition: inputs, targets, capabilities,
+characteristics, adapter/image identity, rate, network, evidence, cleanup, and
+provenance. Fictional executable paths or partially validated manifests are
+invalid.
+
+Every action moves through:
+
+```text
+implemented -> isolated-e2e-passed -> executable
+```
+
+A committed promotion receipt binds action-definition, adapter, image, and lab
+scenario digests. Drift resets the action to `implemented`. The loader returns
+only executable actions and also requires an authorized internal profile,
+explicit confirmation, exact snapshot binding, all capability booleans, and a
+compatible runner.
+
+Alternative: load all implemented definitions and document missing tools.
+Rejected because source presence would appear to enable unproved behavior.
+
+### 5. Pin the complete OCI supply chain
+
+Tool execution uses only `repository@sha256:...`. A generated lockfile records
+the upstream release/commit, source digest, base-image digest, package snapshot,
+built image digest, platform, and SBOM digest. Tags are metadata only. A lock
+update invalidates E2E receipts for affected actions.
+
+Initial pins are NetExec v1.5.1, Impacket 0.13.1, Certipy 5.1.0,
+BloodHound.py commit `fd3f322e066d66314bfb31d4ae6f497df5872177`, and
+Responder commit `424fbe53d6a61824e3c7685fe5f69668721b821e`. OpenLDAP
+and OS packages are pinned through the image/package snapshot and final digest.
+
+Alternative: use host-installed tools or tags. Rejected because tool behavior
+could change without a catalog or receipt change.
+
+### 6. Keep the 15 action semantics closed
+
+The catalog contains four authenticated directory actions, four
+credential-material actions, password spray, separate Responder analyze/capture,
+and four controlled proofs. Detailed behavior and closed results are normative in
+the approved design.
+
+- LDAP policies/SPNs contact one explicit DC/base DN.
+- Certipy `find` and BloodHound.py `DCOnly` contact explicit directory endpoints.
+- Impacket AS-REP/Kerberoast use bounded principal sets and discard ticket/hash
+  material after parsing.
+- NetExec LAPS/gMSA returns presence and rotation metadata, never values.
+- Spray has durable rate/lockout enforcement and declares `multiple-accounts`.
+- Responder analyze cannot poison; capture is separate L3 state-changing
+  credential capture on a dedicated authorized interface.
+- Exploit uses only a reviewed closed profile and returns a one-time proof token.
+- Payload creates, verifies, and removes a benign marker.
+- Lateral movement uses batch SSH and only `/usr/bin/true`.
+- Persistence installs, verifies, and removes one inert user-level marker.
+
+The initial exploit profile is lab-only. A future production exploit profile
+requires separate reviewed code and a matching E2E receipt; the operator or
+model cannot select an arbitrary module.
+
+### 7. Apply default-deny network containment
+
+The control plane resolves and normalizes targets against the confirmed scope and
+places exact IP/port/protocol rules in the permit. The broker resolves names again
+immediately before execution. Every answer must equal the permitted set and
+remain in scope; mixed, new, redirected, proxied, or discovered endpoints deny.
+
+Before attaching a container, the broker creates an ephemeral namespace and
+installs default-deny nftables rules. The tool image cannot modify its own policy.
+Containers use a read-only root filesystem, private tmpfs, resource bounds, and
+dropped capabilities. Responder alone receives its mode's minimum network
+capabilities and a dedicated interface. Its CIDR is a first-class target wholly
+contained by scope, and the SSH management interface is rejected.
+
+The lab uses Docker internal networks without a LAN/Internet route. Production
+uses a dedicated test interface or namespace that can reach only permit rules.
+
+Alternative: rely on scope validation before spawn. Rejected because tools may
+discover or follow undeclared endpoints after validation.
+
+### 8. Resolve secrets after authorization and retain closed evidence
+
+The runner resolves engagement-scoped secret references only after permit and
+containment validation. It delivers secrets through read-only tmpfs files,
+stdin, or an ephemeral Kerberos cache. Secret values never enter permits,
+environment variables, argv, labels, audit, logs, errors, receipts, or reports.
+
+Sensitive adapters parse raw output in memory and return only their closed
+action-specific result. P3's archived evidence requirement already permits
+closed `structured` results while denying `redacted-output` for credential and
+sensitive-data capabilities; implementation is corrected to match that
+requirement. A final detector rejects password, NTLM/Kerberos, private-key,
+bearer-token, and credential-line patterns before serialization.
+
+Exit code alone never proves impact. Results include the run/action/image
+binding, lifecycle/reason, timing, normalized target, typed result, durable rate
+state, cleanup status, and response/evidence digests.
+
+### 9. Treat cleanup and recovery as security controls
+
+Failures are classified as authorization, containment, runtime, parsing,
+cleanup, or evidence. Authorization/containment failures spawn nothing. Timeout
+terminates the complete container/cgroup. Resource and target cleanup run
+independently.
+
+A target-cleanup failure for a mutable action is critical. The durable ledger
+blocks further mutable actions for that engagement/target until an operator
+resolves it. On broker start, recovery reconciles unfinished ledger records with
+labeled containers, namespaces, nftables rules, tmpfs mounts, and target cleanup
+receipts before accepting work.
+
+### 10. Require faithful per-action remote E2E
+
+The remote lab contains a synthetic Samba AD domain, directory objects for the
+reviewed LDAP scenarios, SMB member, Responder client, SSH source/destination,
+isolated DNS, vulnerable proof service, and payload/persistence proof target.
+Every network is internal and the harness proves lack of LAN/Internet routing
+before executing an action.
+
+Each action test proves permit/replay, pinned image, expected traffic, blocked
+traffic, real adapter/tool interaction, closed evidence, secret absence, and
+cleanup. Protocol mocks may test parsers but cannot create a promotion receipt.
+If Certipy or another tool cannot be exercised faithfully, that action remains
+implemented and unavailable.
+
+Public CI runs unit, golden, property, negative, parser-fixture, secret-scan,
+lockfile/SBOM, receipt, documentation-drift, and publication-guard tests only.
 
 ## Risks / Trade-offs
 
-- A DoS/destruction/exfiltration action slips in → a disjointness test asserts the
-  catalog capability set excludes `denial-of-service`/`destructive-testing`/
-  `data-exfiltration`; adding one fails CI.
-- A capture tool mislabeled passive → a classification test asserts every
-  capture-capable action is `L3` `credential-capture` and carries no passive label.
-- Raw credential material persisted → evidence tests assert metadata-only/closed
-  structured and that credential actions cannot use `redacted-output`.
-- Partial authorization runs an L3 action → a policy test asserts a single missing
-  capability flag denies `DENY_CAPABILITY_NOT_ALLOWED`.
-- Accidental live exercise in CI → tests import no scanner/exploit tool and run
-  only against synthetic fixtures.
+- **The scope is substantially larger than the original catalog-only P5b** ->
+  deliver four reviewable milestones: authority; broker; adapters/lab; final
+  verification and delivery.
+- **Docker and nftables require privilege** -> install one root-owned fixed broker
+  behind a forced SSH command; never expose the Docker socket or generic sudo
+  through the Hackbot protocol.
+- **ADCS/LAPS/gMSA behavior may not be faithful in Samba** -> require the real
+  tool and protocol-faithful objects; leave the action unavailable rather than
+  promote from a mock.
+- **Responder requires L2 behavior and extra capabilities** -> use a dedicated
+  interface/network, distinct analyze/capture adapters, minimum capabilities,
+  and explicit containment escape tests.
+- **Upstream CLI changes can invalidate parsers** -> pin source and image digests;
+  golden parser tests and E2E receipts are version-bound.
+- **Raw secrets exist transiently inside tool memory/output** -> use synthetic or
+  engagement-scoped secrets, in-memory parsing, tmpfs, immediate destruction,
+  closed schemas, and a final secret detector.
+- **Cleanup cannot undo a completed network interaction** -> report interaction
+  separately from proof, make cleanup status explicit, and block subsequent
+  mutable actions after target-cleanup failure.
+- **A compromised Linux root can bypass broker controls** -> the Linux execution
+  node is a trusted computing base; pin its identity/helper and document host
+  hardening and recovery. P5b does not claim safety against compromised root.
 
 ## Migration Plan
 
-1. Add the code-owned L3 catalog manifest and provenance, reviewed
-   `skills/internal-recon/**` L3 notes, and isolated-lab synthetic fixtures.
-2. Add classification, disjointness (excluded impacts), all-capabilities-required,
-   evidence-mode, capture-vs-analyze, and disabled-by-default tests; keep CI
-   scanner/exploit-free.
-3. Verify, request independent review, merge, and archive.
+1. Keep the current L3 prototype non-executable while adding exact golden tests
+   and snapshot-bound catalog loading.
+2. Extend permit/framing and deploy the root-owned broker with durable replay,
+   rate, containment, evidence, cleanup, and recovery tests.
+3. Build and lock OCI images, create the lab, implement adapters, and generate a
+   receipt only after each action's E2E passes.
+4. Publish the executable catalog, operator/security docs, and verification
+   report only after the full local and remote suites pass.
+5. Merge and archive P5b after independent review and required GitHub checks.
 
-Rollback removes the catalog, provenance, notes, fixtures, and tests. P5b adds no
-engine behavior and no persisted state; rollback migrates no data.
+Rollback first disables all promotion receipts, which makes every L3 action
+unavailable without changing v1 or P5a. The broker and lab can then be removed.
+Durable ledgers and receipts contain no raw credentials; rollback preserves them
+for audit unless the operator explicitly performs the documented cleanup.
 
 ## Open Questions
 
-None blocking. Categories, levels, and capabilities are fixed by the umbrella
-table; the manifest/policy/evidence contracts are fixed by P2/P3; the
-disabled-by-default rule by CLAUDE.md/SECURITY.md. DoS, destruction, bulk
-exfiltration, and evasion are out of scope for this catalog by decision.
+None blocking. An action whose lab cannot faithfully exercise the upstream tool
+remains unavailable, which is a defined outcome rather than an unresolved design
+choice.
