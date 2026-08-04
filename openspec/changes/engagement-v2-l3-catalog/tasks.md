@@ -1,18 +1,18 @@
 ## 1. Baseline and exact catalog contracts
 
-- [ ] 1.1 Add failing golden tests for the complete definitions and exact ordered set of 15 L3 action IDs, including inputs, targets, capabilities, characteristics, adapter/image identity, rate, network, evidence, cleanup, and provenance.
-- [ ] 1.2 Add failing negative tests for excluded capabilities, nonexistent local provenance, shell/interpreter/raw-argv fields, arbitrary modules/scripts/payloads/commands, and incomplete definition validation.
-- [ ] 1.3 Add failing tests that catalog activation, P3 evaluation, input binding, and permit issuance require the same snapshot identity, profile, and authority digest.
-- [ ] 1.4 Replace the prototype catalog/loader/provenance implementation until 1.1-1.3 pass, including the exact corrected capability sets and disabled-by-default behavior.
-- [ ] 1.5 Add a v1 isolation regression proving the executable P5b catalog and its rollback do not alter schema v1 bytes or behavior.
+- [x] 1.1 Add failing golden tests for the complete definitions and exact ordered set of 15 L3 action IDs, including inputs, targets, capabilities, characteristics, adapter/image identity, rate, closed ordered endpoint-binding schemas (roles, allowed schemes/protocols, and cardinality), evidence, cleanup, and provenance.
+- [x] 1.2 Add failing negative tests for excluded capabilities, nonexistent local provenance, shell/interpreter/raw-argv fields, arbitrary modules/scripts/payloads/commands, and incomplete definition validation.
+- [x] 1.3 Add failing tests that catalog activation, P3 evaluation, input binding, and permit issuance require the same recursively immutable, recomputed snapshot identity, profile, and authority digest.
+- [x] 1.4 Replace the prototype catalog/loader/provenance implementation until 1.1-1.3 pass, including the exact corrected capability sets and disabled-by-default behavior.
+- [x] 1.5 Add a v1 isolation regression proving the executable P5b catalog and its rollback do not alter schema v1 bytes or behavior.
 
 ## 2. Snapshot-bound ExecutionPermitV2
 
-- [ ] 2.1 Add failing tests for the exact canonical `ExecutionPermitV2` field set, domain separation, Ed25519 signer pinning, 1-300 second lifetime, and every snapshot/action/runner/image/input/network/rate/evidence/privilege binding.
-- [ ] 2.2 Implement permit issuance on the control plane and extend verification on the Linux side until 2.1 passes without introducing another trust path.
-- [ ] 2.3 Add failing protocol tests proving invalid, expired, unknown-field, mismatched, and tampered permits deny before any resource factory is called.
-- [ ] 2.4 Integrate the permit with the existing P4 framed request/response chain and fixed SSH transport until 2.3 passes.
-- [ ] 2.5 Add deployment-contract tests for a root-owned digest-pinned broker path and a dedicated forced-command SSH identity with shell, TTY, forwarding, agent, and X11 disabled.
+- [x] 2.1 Add failing tests for the exact canonical `ExecutionPermitV2` field set, domain separation, Ed25519 signer pinning, 1-300 second lifetime, and every snapshot/action/runner/image/input/network/rate/evidence/privilege binding.
+- [x] 2.2 Implement permit issuance on the control plane and extend verification on the Linux side until 2.1 passes without introducing another trust path.
+- [x] 2.3 Add failing protocol tests proving invalid, expired, unknown-field, mismatched, tampered, boolean/integer-aliased, and execution-envelope-drifted permits deny before any resource factory is called.
+- [x] 2.4 Preserve protocol v1 bytes and frame cardinality; integrate the permit through additive L3 protocol v2 with exactly one permit, a reviewed action ID, and a sanitized fixed-deployment execution record.
+- [x] 2.5 Add deployment-attestation tests for a UID-0-owned, mode-0755, regular non-symlink, digest-pinned broker path and a dedicated restrictive forced-command SSH identity with shell, TTY, forwarding, agent, and X11 disabled.
 
 ## 3. Durable replay, rate, and mutable-target state
 
@@ -44,10 +44,10 @@
 
 ## 6. Target normalization and network containment
 
-- [ ] 6.1 Add failing scope tests for first-class CIDR targets, exact endpoint/auxiliary bindings, deny-wins subnet containment, and SSH management-interface rejection.
+- [ ] 6.1 Add failing scope tests for first-class CIDR targets, exact endpoint/auxiliary bindings with full URI and explicit port values, missing/default-port denial, deny-wins subnet containment, and SSH management-interface rejection.
 - [ ] 6.2 Extend target normalization/scope parsing until 6.1 passes without changing v1 behavior.
-- [ ] 6.3 Add failing DNS tests for permit-time resolution, pre-run re-resolution, mixed-scope answers, changed/missing addresses, redirects, proxies, and undeclared discovery.
-- [ ] 6.4 Implement exact resolved-endpoint binding and fail-closed DNS revalidation until 6.3 passes.
+- [ ] 6.3 Add failing DNS tests for explicit resolver binding, absent-resolver denial, no system-resolver fallback, permit-time resolution, pre-run re-resolution, mixed-scope answers, changed/missing addresses, redirects, proxies, and undeclared discovery.
+- [ ] 6.4 Implement exact resolved-endpoint binding using the same explicit resolver and exact answer-set equality, with fail-closed DNS revalidation, until 6.3 passes.
 - [ ] 6.5 Add failing namespace-plan tests for default-deny nftables, exact IP/port/protocol rules, read-only rootfs, private tmpfs, dropped capabilities, resource bounds, and Responder-only privilege exceptions.
 - [ ] 6.6 Implement ephemeral namespace/container containment and cleanup until 6.5 passes.
 - [ ] 6.7 Run negative remote escape tests against undeclared IPs, ports, protocols, the LAN gateway, SSH management address, and Internet; retain only sanitized containment receipts.

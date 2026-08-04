@@ -324,6 +324,7 @@ class TargetCleanupState(str, Enum):
 # Remote runner wire protocol.
 PROTOCOL_MAGIC = b"HBV2RUN\x00"
 PROTOCOL_VERSION = 1
+L3_PROTOCOL_VERSION = 2
 MAX_PROTOCOL_HEADER_BYTES = 1_048_576
 MAX_FRAME_COUNT = 256
 MAX_FRAME_BYTES = 67_108_864
@@ -339,6 +340,7 @@ class FrameType(IntEnum):
     STDERR = 5
     STRUCTURED_RESULT = 6
     CLEANUP_RECEIPT = 7
+    EXECUTION_PERMIT = 8
 
 
 FRAME_TYPE_NAMES = MappingProxyType(
@@ -350,9 +352,17 @@ FRAME_TYPE_NAMES = MappingProxyType(
         FrameType.STDERR: "stderr",
         FrameType.STRUCTURED_RESULT: "structured-result",
         FrameType.CLEANUP_RECEIPT: "cleanup-receipt",
+        FrameType.EXECUTION_PERMIT: "execution-permit",
     }
 )
-REQUEST_FRAME_TYPES = frozenset({FrameType.TARGET_LIST, FrameType.ARTIFACT, FrameType.SECRET})
+REQUEST_FRAME_TYPES = frozenset(
+    {
+        FrameType.TARGET_LIST,
+        FrameType.ARTIFACT,
+        FrameType.SECRET,
+    }
+)
+L3_REQUEST_FRAME_TYPES = REQUEST_FRAME_TYPES | {FrameType.EXECUTION_PERMIT}
 RESPONSE_FRAME_TYPES = frozenset(
     {
         FrameType.STDOUT,

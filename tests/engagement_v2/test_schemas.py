@@ -24,6 +24,7 @@ EXPECTED = {
     "action-request.schema.json",
     "runner.schema.json",
     "remote-header.schema.json",
+    "remote-header-v2.schema.json",
     "manifest.json",
 }
 EXPECTED_IDS = {
@@ -32,6 +33,7 @@ EXPECTED_IDS = {
     "authorization.schema.json": "urn:hackbot:schema:engagement-v2:authorization:2",
     "program.schema.json": "urn:hackbot:schema:engagement-v2:program:2",
     "remote-header.schema.json": "urn:hackbot:schema:engagement-v2:remote-header:1",
+    "remote-header-v2.schema.json": "urn:hackbot:schema:engagement-v2:remote-header:2",
     "runner.schema.json": "urn:hackbot:schema:engagement-v2:runner:2",
     "scope.schema.json": "urn:hackbot:schema:engagement-v2:scope:2",
 }
@@ -654,7 +656,40 @@ def test_runner_security_view_and_remote_protocol_limits_are_exact() -> None:
     assert nonce.fullmatch("A" * 42 + "_") is None
     assert remote["properties"]["frames"]["x-hackbot-unique-by"] == "index"
     assert remote["properties"]["frames"]["maxItems"] == 256
-    assert remote["$defs"]["frame_descriptor"]["properties"]["frame_type"]["enum"] == [1, 2, 3]
+    assert remote["$defs"]["frame_descriptor"]["properties"]["frame_type"]["enum"] == [
+        1,
+        2,
+        3,
+    ]
+    remote_v2 = docs["remote-header-v2.schema.json"]
+    assert remote_v2["$defs"]["frame_descriptor"]["properties"]["frame_type"]["enum"] == [
+        1,
+        2,
+        3,
+        8,
+    ]
+    assert remote_v2["properties"]["frames"]["minContains"] == 1
+    assert remote_v2["properties"]["frames"]["maxContains"] == 1
+    assert remote_v2["properties"]["action_id"] == {
+        "enum": [
+            "operator.internal.credential.asrep",
+            "operator.internal.credential.gmsa",
+            "operator.internal.credential.kerberoast",
+            "operator.internal.credential.laps",
+            "operator.internal.directory.adcs",
+            "operator.internal.directory.graph",
+            "operator.internal.directory.policies",
+            "operator.internal.directory.spns",
+            "operator.internal.exploit.verify",
+            "operator.internal.lateral.verify",
+            "operator.internal.payload.verify",
+            "operator.internal.persistence.verify",
+            "operator.internal.responder.analyze",
+            "operator.internal.responder.capture",
+            "operator.internal.validation.password-spray",
+        ],
+        "type": "string",
+    }
     assert remote["$defs"]["frame_descriptor"]["properties"]["length"]["maximum"] == 67108864
     assert remote["x-hackbot-max-header-bytes"] == 1048576
     assert remote["x-hackbot-max-request-bytes"] == 75497472
@@ -781,6 +816,7 @@ def test_exporter_publishes_schema_documents_before_manifest(
         "actions.schema.json",
         "authorization.schema.json",
         "program.schema.json",
+        "remote-header-v2.schema.json",
         "remote-header.schema.json",
         "runner.schema.json",
         "scope.schema.json",
@@ -813,6 +849,7 @@ def test_exporter_never_publishes_manifest_after_a_schema_failure(
         "actions.schema.json",
         "authorization.schema.json",
         "program.schema.json",
+        "remote-header-v2.schema.json",
         "remote-header.schema.json",
         "runner.schema.json",
     ]

@@ -44,6 +44,16 @@ def test_snapshot_is_frozen(tmp_path: Path) -> None:
         snapshot.profile = "local-lab"  # type: ignore[misc]
 
 
+def test_snapshot_authority_documents_are_recursively_frozen(tmp_path: Path) -> None:
+    write_engagement(tmp_path, include_runner=True)
+    snapshot = load_engagement(tmp_path)
+
+    with pytest.raises(TypeError):
+        snapshot.program["testing_rules"]["timeout_seconds"] = 1
+    with pytest.raises(TypeError):
+        snapshot.scope["in_scope"]["domains"] += ("changed.example",)
+
+
 # --------------------------------------------------------- descriptor safety ---
 def test_symlinked_authority_file_is_refused(tmp_path: Path) -> None:
     real = tmp_path / "real"

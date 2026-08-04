@@ -17,6 +17,8 @@ from hackbot.engagement_v2.constants import (
     ED25519_PUBLIC_KEY_BYTES,
     ED25519_SIGNATURE_BYTES,
     IDENTIFIER_PATTERN,
+    L3_PROTOCOL_VERSION,
+    L3_REQUEST_FRAME_TYPES,
     MAX_ACTION_CAPABILITIES,
     MAX_ACTION_IMPACTS,
     MAX_ACTION_MANIFEST_BYTES,
@@ -103,6 +105,7 @@ from hackbot.engagement_v2.constants import (
     SecretTransport,
     SourceIdentityMode,
 )
+from hackbot.engagement_v2.l3_catalog import L3_ACTION_IDS
 
 _DRAFT = "https://json-schema.org/draft/2020-12/schema"
 _CONTRACT = "hackbot-engagement-v2-schemas-v1"
@@ -1055,9 +1058,17 @@ def _runner_schema() -> dict[str, object]:
     return document
 
 
-def _remote_header_schema() -> dict[str, object]:
+def _remote_header_schema(
+    *,
+    protocol_version: int | None = None,
+    request_types: frozenset[FrameType] | None = None,
+) -> dict[str, object]:
+    if protocol_version is None:
+        protocol_version = PROTOCOL_VERSION
+    if request_types is None:
+        request_types = REQUEST_FRAME_TYPES
     request_frame_types = [
-        frame_type.value for frame_type in FrameType if frame_type in REQUEST_FRAME_TYPES
+        frame_type.value for frame_type in FrameType if frame_type in request_types
     ]
     definitions = {
         **_common_definitions(),
@@ -1116,9 +1127,9 @@ def _remote_header_schema() -> dict[str, object]:
         ("path", "sha256"),
     )
     return _document(
-        schema_id=f"urn:hackbot:schema:engagement-v2:remote-header:{PROTOCOL_VERSION}",
+        schema_id=f"urn:hackbot:schema:engagement-v2:remote-header:{protocol_version}",
         properties={
-            "protocol_version": {"type": "integer", "const": PROTOCOL_VERSION},
+            "protocol_version": {"type": "integer", "const": protocol_version},
             "run_id": _ref("run_id"),
             "nonce": _ref("nonce"),
             "issued_at": _ref("timestamp"),
@@ -1193,6 +1204,31 @@ def _remote_header_schema() -> dict[str, object]:
     )
 
 
+def _l3_remote_header_schema() -> dict[str, object]:
+    document = _remote_header_schema(
+        protocol_version=L3_PROTOCOL_VERSION,
+        request_types=L3_REQUEST_FRAME_TYPES,
+    )
+    properties = document["properties"]
+    assert isinstance(properties, dict)
+    properties["action_id"] = {"type": "string", "enum": sorted(L3_ACTION_IDS)}
+    frames = properties["frames"]
+    assert isinstance(frames, dict)
+    frames.update(
+        {
+            "contains": {
+                "properties": {
+                    "frame_type": {"const": FrameType.EXECUTION_PERMIT.value},
+                },
+                "required": ["frame_type"],
+            },
+            "minContains": 1,
+            "maxContains": 1,
+        }
+    )
+    return document
+
+
 def schema_documents() -> dict[str, dict[str, object]]:
     """Return fresh, closed Draft 2020-12 schema documents keyed by filename."""
 
@@ -1204,6 +1240,7 @@ def schema_documents() -> dict[str, dict[str, object]]:
         "action-request.schema.json": _action_request_schema(),
         "runner.schema.json": _runner_schema(),
         "remote-header.schema.json": _remote_header_schema(),
+        "remote-header-v2.schema.json": _l3_remote_header_schema(),
     }
 
 
