@@ -31,6 +31,26 @@ def test_valid_program():
     assert sd.rule_sources["acme-corp.example"] == "in_scope.domains"
 
 
+def test_hosts_kind_is_exact_and_excludes_subdomains():
+    from hackbot.scope.engine import Scope
+
+    sd = validate_scope(
+        {"schema_version": SCHEMA_VERSION, "in_scope": {"hosts": ["accentra.assaabloy.com"]}}
+    )
+    assert r"re:^accentra\.assaabloy\.com$" in sd.in_rules
+    scope = Scope(in_scope=sd.in_rules)
+    assert scope.check("https://accentra.assaabloy.com/").allowed
+    assert not scope.check("https://policies.accentra.assaabloy.com/").allowed
+
+
+def test_hosts_kind_rejects_a_path_or_wildcard():
+    with pytest.raises(ValidationError) as e:
+        validate_scope(
+            {"schema_version": SCHEMA_VERSION, "in_scope": {"hosts": ["a.example.com/x"]}}
+        )
+    assert any("host" in m for m in e.value.errors)
+
+
 def test_valid_scope():
     sd = validate_scope(load("valid_scope.yaml"))
     assert "example.com" in sd.in_rules and "internal.example.com" in sd.out_rules
