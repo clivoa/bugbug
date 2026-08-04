@@ -71,6 +71,11 @@ binding, and permit issuance SHALL use the same immutable snapshot identity,
 profile, and `authority_digest`. Presence in source code SHALL NOT enable an
 action.
 
+The snapshot documents SHALL be recursively immutable after loading. Each
+activation, decision, and permit boundary SHALL recompute the security
+projection, authority digest, and identity and reject stale or forged stored
+identifiers.
+
 #### Scenario: Same snapshot permits evaluation
 - **WHEN** activation, P3 evaluation, binding, and permit issuance use the same confirmed authorized snapshot
 - **THEN** snapshot binding does not deny the action
@@ -78,6 +83,10 @@ action.
 #### Scenario: Profile or authority changes after activation
 - **WHEN** the P3 snapshot profile, identity, or authority digest differs from the snapshot that activated the catalog
 - **THEN** execution denies with `DENY_AUTHORIZATION_STALE` before permit issuance
+
+#### Scenario: Nested authority changes after activation
+- **WHEN** any nested program, scope, authorization, or runner authority value differs from the activated projection
+- **THEN** execution denies with `DENY_AUTHORIZATION_STALE` before policy evaluation
 
 #### Scenario: Catalog is disabled by default
 - **WHEN** the profile is unauthorized or internal recon is not explicitly confirmed
@@ -95,6 +104,12 @@ The broker SHALL atomically reserve `(authority_digest, run_id, nonce)` in a
 durable SQLite ledger before creating any namespace, mount, or container. The
 reservation SHALL survive broker restart for the protocol replay window.
 
+Legacy protocol v1 SHALL retain its original schema and frame set and SHALL
+accept zero execution-permit frames. L3 protocol v2 SHALL require exactly one
+execution-permit frame and a reviewed L3 action ID. The gate SHALL validate the
+complete P4 execution envelope against the fixed deployment contract and SHALL
+pass only a sanitized typed execution record beyond the gate.
+
 #### Scenario: Exact permit runs once
 - **WHEN** a valid unexpired permit matches every broker and request binding
 - **THEN** the broker reserves its replay tuple before resource creation and continues validation
@@ -111,11 +126,18 @@ reservation SHALL survive broker restart for the protocol replay window.
 - **WHEN** a permit is expired, not yet valid, or has a lifetime outside 1-300 seconds
 - **THEN** the broker denies with `EXEC_PROTOCOL_EXPIRED`
 
+#### Scenario: Protocol or execution envelope differs
+- **WHEN** v1 carries a permit, v2 omits or duplicates a permit, or executable, argv, platform, architecture, limits, privileges, or deployment digest differs
+- **THEN** the broker denies with `EXEC_PROTOCOL_INVALID` before replay reservation or resource creation
+
 ### Requirement: Fixed broker and typed adapters
 The Linux runner SHALL execute an L3 action only through the fixed, root-owned,
 digest-pinned `hackbot-l3-runner`. The SSH transport SHALL invoke only that
 forced stdin/stdout command with host key and identity pinned and forwarding,
 agent, X11, TTY, and interactive shell disabled.
+The broker attestation SHALL prove UID 0 ownership, exact mode `0755`, a regular
+non-symlink file, the pinned binary digest, and restrictive authorized-key
+options.
 
 Each action SHALL map to one code-owned typed adapter. Adapter inputs SHALL
 reject unknown fields. An adapter SHALL construct its immutable invocation,

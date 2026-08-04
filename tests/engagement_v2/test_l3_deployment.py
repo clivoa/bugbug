@@ -18,6 +18,10 @@ def _document() -> dict[str, object]:
         "schema_version": 1,
         "broker_path": _BROKER_PATH,
         "broker_sha256": "sha256:" + "a" * 64,
+        "broker_owner_uid": 0,
+        "broker_mode": 493,
+        "broker_regular_file": True,
+        "broker_symlink": False,
         "ssh_user": "hackbot-l3",
         "forced_command": _BROKER_PATH,
         "interactive_shell": False,
@@ -25,6 +29,7 @@ def _document() -> dict[str, object]:
         "port_forwarding": False,
         "agent_forwarding": False,
         "x11_forwarding": False,
+        "authorized_keys_restrict": True,
         "permitted_signer_sha256": "sha256:" + "b" * 64,
     }
 
@@ -41,6 +46,8 @@ def test_valid_fixed_deployment_returns_immutable_contract() -> None:
     result = _module().validate_l3_deployment(_document())
     assert result.broker_path == _BROKER_PATH
     assert result.broker_sha256 == "sha256:" + "a" * 64
+    assert result.broker_owner_uid == 0
+    assert result.broker_mode == 0o755
     assert result.ssh_user == "hackbot-l3"
     assert result.forced_command == _BROKER_PATH
     assert result.permitted_signer_sha256 == "sha256:" + "b" * 64
@@ -79,6 +86,12 @@ def test_field_set_is_exact(shape: str) -> None:
         ("broker_sha256", "a" * 64),
         ("broker_sha256", "sha256:" + "A" * 64),
         ("permitted_signer_sha256", "sha256:" + "b" * 63),
+        ("broker_owner_uid", 1000),
+        ("broker_owner_uid", False),
+        ("broker_mode", 511),
+        ("broker_regular_file", False),
+        ("broker_symlink", True),
+        ("authorized_keys_restrict", False),
     ],
 )
 def test_identity_path_and_digest_drift_denies(field: str, value: object) -> None:

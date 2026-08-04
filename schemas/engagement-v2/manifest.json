@@ -22,9 +22,14 @@
       "sha256": "dc145a424dce14f295b1756eaeef2ea5518f0f67bfc96828bcd6b28dc4978c7d"
     },
     {
+      "name": "remote-header-v2.schema.json",
+      "schema_id": "urn:hackbot:schema:engagement-v2:remote-header:2",
+      "sha256": "58710fe76025f20d4291f552a37fb7e2092e812a6e8039c21d872e7f3fbea222"
+    },
+    {
       "name": "remote-header.schema.json",
       "schema_id": "urn:hackbot:schema:engagement-v2:remote-header:1",
-      "sha256": "7110483532b421bf5d9f9ca790d59b02309857c7c9648f5b6099b3a170ca1739"
+      "sha256": "4bd1620cf11b9f5f22dc999aa59b805453b1839fc813424d14f475b84b4baa32"
     },
     {
       "name": "runner.schema.json",

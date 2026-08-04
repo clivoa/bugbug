@@ -222,6 +222,13 @@ def _thaw(value: object) -> object:
     return value
 
 
+def _canonical_equal(left: object, right: object) -> bool:
+    try:
+        return canonical_bytes(_thaw(left)) == canonical_bytes(_thaw(right))
+    except ContractError:
+        return False
+
+
 def _utc_text(value: datetime) -> str:
     if (
         not isinstance(value, datetime)
@@ -279,11 +286,11 @@ def _validated_execution_context(
     if contract is None:
         raise _execution_error()
     parameters = context.request.get("parameters")
-    if not isinstance(parameters, Mapping) or dict(parameters) != dict(context.typed_input):
+    if not isinstance(parameters, Mapping) or not _canonical_equal(parameters, context.typed_input):
         raise _execution_error()
-    if dict(context.rate_policy) != dict(contract.rate_policy):
+    if not _canonical_equal(context.rate_policy, contract.rate_policy):
         raise _execution_error()
-    if dict(context.evidence_schema) != dict(contract.evidence_schema):
+    if not _canonical_equal(context.evidence_schema, contract.evidence_schema):
         raise _execution_error()
     if context.required_privileges != contract.action.required_privileges:
         raise _execution_error(ReasonCode.EXEC_PRIVILEGE_MISMATCH)
@@ -384,12 +391,14 @@ def verify_execution_permit_v2(
     issued = _parse_execution_utc(permit["issued_at"])
     expires = _parse_execution_utc(permit["expires_at"])
     _validate_execution_lifetime(issued, expires)
+    if type(now) is not datetime:
+        raise _execution_error()
     if now.tzinfo is None or now.utcoffset() is None or now < issued or now >= expires:
         raise _execution_error(ReasonCode.EXEC_PROTOCOL_EXPIRED)
 
     expected = build_execution_permit_v2(context)
     for field in _EXECUTION_PERMIT_FIELDS:
-        if _thaw(permit[field]) == expected[field]:
+        if _canonical_equal(permit[field], expected[field]):
             continue
         if field == "required_privileges":
             raise _execution_error(ReasonCode.EXEC_PRIVILEGE_MISMATCH)

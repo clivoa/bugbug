@@ -16,6 +16,11 @@ from hackbot.engagement_v2.errors import ContractError, ReasonCode
 from hackbot.engagement_v2.loader import EngagementSnapshot
 from hackbot.engagement_v2.manifest import CAPABILITY_TO_FIELD
 from hackbot.engagement_v2.policy import DecisionKind
+from hackbot.engagement_v2.projection import (
+    engagement_identity,
+    projection_digest,
+    security_projection,
+)
 
 from ._engagement_builders import program_doc, scope_doc
 
@@ -52,19 +57,22 @@ def _snapshot(
     for capability, field in CAPABILITY_TO_FIELD.items():
         if capability not in omitted:
             testing_rules[field] = capability in enabled
-    authority_digest = "sha256:" + "a" * 64
+    scope = scope_doc()
+    authority_digest = projection_digest(
+        security_projection(program=program, scope=scope, runner=None)
+    )
     authorization = {
         "confirmed": confirmed,
         "confirmed_authority_digest": authority_digest,
     }
     return EngagementSnapshot(
         program=MappingProxyType(program),
-        scope=MappingProxyType(scope_doc()),
+        scope=MappingProxyType(scope),
         authorization=MappingProxyType(authorization),
         runner=None,
         profile=profile,
         authority_digest=authority_digest,
-        identity="engagement-v2:synthetic-authority",
+        identity=engagement_identity(authority_digest),
     )
 
 
@@ -114,6 +122,18 @@ def test_complete_definition_mutation_denies(section: str, replacement: object) 
     contracts_module = importlib.import_module("hackbot.engagement_v2.l3_contracts")
     document = json.loads(_GOLDEN.read_text(encoding="utf-8"))
     document["actions"][0][section] = replacement
+
+    with pytest.raises(ContractError) as excinfo:
+        contracts_module.validate_complete_catalog(document, project_root=Path.cwd())
+    assert excinfo.value.reason_code is ReasonCode.INVALID_ACTION_MANIFEST
+
+
+def test_complete_definition_rejects_boolean_integer_alias() -> None:
+    """Catch Python's ``True == 1`` weakening an exact catalog contract."""
+
+    contracts_module = importlib.import_module("hackbot.engagement_v2.l3_contracts")
+    document = json.loads(_GOLDEN.read_text(encoding="utf-8"))
+    document["actions"][0]["rate_policy"]["max_concurrency"] = True
 
     with pytest.raises(ContractError) as excinfo:
         contracts_module.validate_complete_catalog(document, project_root=Path.cwd())
@@ -245,6 +265,23 @@ def test_snapshot_change_after_activation_denies_stale(field: str) -> None:
     assert excinfo.value.reason_code is ReasonCode.DENY_AUTHORIZATION_STALE
 
 
+def test_nested_snapshot_mutation_after_activation_denies_stale() -> None:
+    """Catch mutable nested authority changing without changing stored identifiers."""
+
+    contracts_module = importlib.import_module("hackbot.engagement_v2.l3_contracts")
+    snapshot = _snapshot(enabled={"payload-execution", "state-changing"})
+    activation = contracts_module.activate_catalog(
+        snapshot,
+        internal_recon_confirmed=True,
+        project_root=Path.cwd(),
+    )
+    snapshot.program["testing_rules"]["state_changing_allowed"] = False
+
+    with pytest.raises(ContractError) as excinfo:
+        contracts_module.decide_l3(_request(), snapshot, activation, platform="linux")
+    assert excinfo.value.reason_code is ReasonCode.DENY_AUTHORIZATION_STALE
+
+
 @pytest.mark.parametrize(
     ("profile", "confirmed", "internal_confirmed"),
     [
@@ -299,6 +336,14 @@ def test_profile_never_grants_a_missing_capability(missing_kind: str) -> None:
     )
     if missing_kind == "non-boolean":
         snapshot.program["testing_rules"][CAPABILITY_TO_FIELD[missing]] = "true"
+        with pytest.raises(ContractError) as excinfo:
+            contracts_module.activate_catalog(
+                snapshot,
+                internal_recon_confirmed=True,
+                project_root=Path.cwd(),
+            )
+        assert excinfo.value.reason_code is ReasonCode.DENY_AUTHORIZATION_STALE
+        return
     activation = contracts_module.activate_catalog(
         snapshot,
         internal_recon_confirmed=True,

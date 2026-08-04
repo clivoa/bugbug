@@ -10,8 +10,9 @@ from datetime import datetime
 import pytest
 
 from hackbot.engagement_v2.canonical import canonical_bytes, execution_digest
-from hackbot.engagement_v2.constants import PROTOCOL_VERSION, FrameType
+from hackbot.engagement_v2.constants import L3_PROTOCOL_VERSION, FrameType
 from hackbot.engagement_v2.errors import ContractError, ReasonCode
+from hackbot.engagement_v2.l3_deployment import validate_l3_deployment
 from hackbot.engagement_v2.protocol import Frame, FramedMessage
 from hackbot.engagement_v2.remote_permit import (
     build_execution_permit_v2,
@@ -55,7 +56,7 @@ def _message(
     )
     frames = (Frame(FrameType.EXECUTION_PERMIT, payload),) if include_permit else ()
     header: dict[str, object] = {
-        "protocol_version": PROTOCOL_VERSION,
+        "protocol_version": L3_PROTOCOL_VERSION,
         "run_id": permit["run_id"],
         "nonce": permit["nonce"],
         "issued_at": permit["issued_at"],
@@ -95,6 +96,30 @@ def _verification_context(permit_context: object):
         signer_public_key=public_key(_SEED),
         pinned_signer_fingerprint=_fingerprint(public_key(_SEED)),
         now=_NOW,
+        deployment=validate_l3_deployment(
+            {
+                "schema_version": 1,
+                "broker_path": "/usr/local/libexec/hackbot-l3-runner",
+                "broker_sha256": "sha256:" + "d" * 64,
+                "broker_owner_uid": 0,
+                "broker_mode": 493,
+                "broker_regular_file": True,
+                "broker_symlink": False,
+                "ssh_user": "hackbot-l3",
+                "forced_command": "/usr/local/libexec/hackbot-l3-runner",
+                "interactive_shell": False,
+                "tty": False,
+                "port_forwarding": False,
+                "agent_forwarding": False,
+                "x11_forwarding": False,
+                "authorized_keys_restrict": True,
+                "permitted_signer_sha256": _fingerprint(public_key(_SEED)),
+            }
+        ),
+        architecture="x86_64",
+        timeout_seconds=60,
+        stdout_cap_bytes=4096,
+        stderr_cap_bytes=4096,
     )
 
 
@@ -116,7 +141,10 @@ def test_valid_request_reserves_replay_before_inert_resource_factory() -> None:
         events.append("reserve")
 
     def create(validated: object) -> str:
-        assert validated.request is request
+        assert not hasattr(validated, "request")
+        assert validated.execution.action_id == permit_context.request["action_id"]
+        assert validated.execution.executable_path == "/usr/local/libexec/hackbot-l3-runner"
+        assert validated.execution.execution_digest == request.header["execution_digest"]
         events.append("resource")
         return "inert-validation-token"
 
@@ -130,7 +158,7 @@ def test_valid_request_reserves_replay_before_inert_resource_factory() -> None:
     assert events == ["reserve", "resource"]
 
 
-@pytest.mark.parametrize("failure", ["missing", "signature", "authority", "action", "run", "nonce"])
+@pytest.mark.parametrize("failure", ["signature", "authority", "run", "nonce"])
 def test_invalid_request_calls_neither_reservation_nor_resource(failure: str) -> None:
     """Catch callbacks running after any invalid permit/header binding."""
 
@@ -138,14 +166,10 @@ def test_invalid_request_calls_neither_reservation_nor_resource(failure: str) ->
     header_changes: dict[str, object] | None = None
     include_permit = True
     corrupt_signature = False
-    if failure == "missing":
-        include_permit = False
-    elif failure == "signature":
+    if failure == "signature":
         corrupt_signature = True
     elif failure == "authority":
         header_changes = {"authority_digest": "sha256:" + "f" * 64}
-    elif failure == "action":
-        header_changes = {"action_id": "operator.fixture"}
     elif failure == "run":
         header_changes = {"run_id": "22222222-2222-4222-8222-222222222222"}
     else:
@@ -188,3 +212,49 @@ def test_reservation_failure_prevents_resource_factory() -> None:
         )
     assert excinfo.value.reason_code is ReasonCode.EXEC_PROTOCOL_REPLAY
     assert events == ["reserve"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("argv", ["/bin/sh"]),
+        ("executable", {"path": "/bin/sh", "sha256": "sha256:" + "d" * 64}),
+        ("operating_system", "darwin"),
+        ("architecture", "arm64"),
+        ("timeout_seconds", 61),
+        ("stdout_cap_bytes", 8192),
+        ("stderr_cap_bytes", 8192),
+    ],
+)
+def test_untrusted_execution_envelope_drift_denies_before_callbacks(
+    field: str, value: object
+) -> None:
+    request, permit_context = _message(header_changes={field: value})
+    events: list[str] = []
+    gate_module = importlib.import_module("hackbot.engagement_v2.l3_gate")
+
+    with pytest.raises(ContractError) as excinfo:
+        gate_module.validate_l3_request(
+            request,
+            _verification_context(permit_context),
+            replay_reserver=lambda *_args: events.append("reserve"),
+            resource_factory=lambda _validated: events.append("resource"),
+        )
+    assert excinfo.value.reason_code is ReasonCode.EXEC_PROTOCOL_INVALID
+    assert events == []
+
+
+def test_false_replay_result_denies_before_resource() -> None:
+    request, permit_context = _message()
+    events: list[str] = []
+    gate_module = importlib.import_module("hackbot.engagement_v2.l3_gate")
+
+    with pytest.raises(ContractError) as excinfo:
+        gate_module.validate_l3_request(
+            request,
+            _verification_context(permit_context),
+            replay_reserver=lambda *_args: False,
+            resource_factory=lambda _validated: events.append("resource"),
+        )
+    assert excinfo.value.reason_code is ReasonCode.EXEC_PROTOCOL_INVALID
+    assert events == []

@@ -15,6 +15,10 @@ _FIELDS = frozenset(
         "schema_version",
         "broker_path",
         "broker_sha256",
+        "broker_owner_uid",
+        "broker_mode",
+        "broker_regular_file",
+        "broker_symlink",
         "ssh_user",
         "forced_command",
         "interactive_shell",
@@ -22,6 +26,7 @@ _FIELDS = frozenset(
         "port_forwarding",
         "agent_forwarding",
         "x11_forwarding",
+        "authorized_keys_restrict",
         "permitted_signer_sha256",
     }
 )
@@ -40,9 +45,14 @@ class L3DeploymentContract:
 
     broker_path: str
     broker_sha256: str
+    broker_owner_uid: int
+    broker_mode: int
+    broker_regular_file: bool
+    broker_symlink: bool
     ssh_user: str
     forced_command: str
     permitted_signer_sha256: str
+    authorized_keys_restrict: bool
 
 
 def _invalid() -> ContractError:
@@ -64,6 +74,16 @@ def validate_l3_deployment(document: Mapping[str, object]) -> L3DeploymentContra
         raise _invalid()
     if document["ssh_user"] != _SSH_USER:
         raise _invalid()
+    if (
+        type(document["broker_owner_uid"]) is not int
+        or document["broker_owner_uid"] != 0
+        or type(document["broker_mode"]) is not int
+        or document["broker_mode"] != 0o755
+        or document["broker_regular_file"] is not True
+        or document["broker_symlink"] is not False
+        or document["authorized_keys_restrict"] is not True
+    ):
+        raise _invalid()
     if any(document[field] is not False for field in _DISABLED_BOOLEAN_FIELDS):
         raise _invalid()
     if not _valid_digest(document["broker_sha256"]) or not _valid_digest(
@@ -73,9 +93,14 @@ def validate_l3_deployment(document: Mapping[str, object]) -> L3DeploymentContra
     return L3DeploymentContract(
         broker_path=_BROKER_PATH,
         broker_sha256=str(document["broker_sha256"]),
+        broker_owner_uid=0,
+        broker_mode=0o755,
+        broker_regular_file=True,
+        broker_symlink=False,
         ssh_user=_SSH_USER,
         forced_command=_BROKER_PATH,
         permitted_signer_sha256=str(document["permitted_signer_sha256"]),
+        authorized_keys_restrict=True,
     )
 
 

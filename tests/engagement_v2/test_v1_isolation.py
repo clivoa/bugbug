@@ -291,30 +291,35 @@ def test_l3_activation_and_stale_rejection_leave_v1_bytes_and_globals_unchanged(
     from hackbot.engagement_v2.errors import ContractError, ReasonCode
     from hackbot.engagement_v2.l3_contracts import activate_catalog, decide_l3
     from hackbot.engagement_v2.loader import EngagementSnapshot
+    from hackbot.engagement_v2.projection import (
+        engagement_identity,
+        projection_digest,
+        security_projection,
+    )
 
     fixture_root = Path("tests/fixtures/engagement_v2_loader/v1-source")
     before_bytes = {
         path.name: path.read_bytes() for path in sorted(fixture_root.iterdir()) if path.is_file()
     }
     before_globals = (v1_schema.SCHEMA_VERSION, frozenset(vars(v1_schema)))
-    authority_digest = "sha256:" + "a" * 64
+    program = {
+        "profile": "local-lab",
+        "testing_rules": {
+            "payload_execution_allowed": True,
+            "state_changing_allowed": True,
+        },
+    }
+    scope = {
+        "schema_version": 2,
+        "in_scope": {"urls": ["https://app.corp.example/admin"]},
+        "out_of_scope": {},
+    }
+    authority_digest = projection_digest(
+        security_projection(program=program, scope=scope, runner=None)
+    )
     snapshot = EngagementSnapshot(
-        program=MappingProxyType(
-            {
-                "profile": "local-lab",
-                "testing_rules": {
-                    "payload_execution_allowed": True,
-                    "state_changing_allowed": True,
-                },
-            }
-        ),
-        scope=MappingProxyType(
-            {
-                "schema_version": 2,
-                "in_scope": {"urls": ["https://app.corp.example/admin"]},
-                "out_of_scope": {},
-            }
-        ),
+        program=MappingProxyType(program),
+        scope=MappingProxyType(scope),
         authorization=MappingProxyType(
             {
                 "confirmed": True,
@@ -324,7 +329,7 @@ def test_l3_activation_and_stale_rejection_leave_v1_bytes_and_globals_unchanged(
         runner=None,
         profile="local-lab",
         authority_digest=authority_digest,
-        identity="engagement-v2:synthetic-authority",
+        identity=engagement_identity(authority_digest),
     )
     activation = activate_catalog(
         snapshot,

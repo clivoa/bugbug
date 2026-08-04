@@ -13,13 +13,18 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TypeAlias
 
-from hackbot.engagement_v2.canonical import digest_value
+from hackbot.engagement_v2.canonical import canonical_bytes, digest_value
 from hackbot.engagement_v2.constants import ACTIONS_SCHEMA_VERSION, Profile
 from hackbot.engagement_v2.errors import ContractError, ReasonCode
 from hackbot.engagement_v2.l3_catalog import _SPECS, _catalog_manifest
 from hackbot.engagement_v2.loader import EngagementSnapshot
 from hackbot.engagement_v2.manifest import ActionDefinition, validate_manifest
 from hackbot.engagement_v2.policy import PolicyDecision, decide
+from hackbot.engagement_v2.projection import (
+    engagement_identity,
+    projection_digest,
+    security_projection,
+)
 
 _CONTRACT_SCHEMA_VERSION = 1
 _DEFINITION_DIGEST_DOMAIN = "hackbot-l3-action-definition-v1"
@@ -447,6 +452,13 @@ def _fail() -> ContractError:
     return ContractError(ReasonCode.INVALID_ACTION_MANIFEST)
 
 
+def _canonical_equal(left: object, right: object) -> bool:
+    try:
+        return canonical_bytes(left) == canonical_bytes(right)
+    except ContractError:
+        return False
+
+
 def _freeze(value: object) -> object:
     if isinstance(value, Mapping):
         return MappingProxyType({str(key): _freeze(item) for key, item in value.items()})
@@ -476,7 +488,7 @@ def validate_complete_catalog(
 ) -> Mapping[str, L3ActionContract]:
     """Validate the exact catalog and return immutable ordered contracts."""
 
-    if document != complete_catalog_document():
+    if not _canonical_equal(document, complete_catalog_document()):
         raise _fail()
     actions = document.get("actions")
     if not isinstance(actions, Sequence) or isinstance(actions, str | bytes):
@@ -521,6 +533,27 @@ def _snapshot_binding(snapshot: object) -> SnapshotBinding:
     if type(snapshot) is not EngagementSnapshot:
         raise ContractError(ReasonCode.INVALID_REQUEST)
     assert isinstance(snapshot, EngagementSnapshot)
+    try:
+        computed_digest = projection_digest(
+            security_projection(
+                program=snapshot.program,
+                scope=snapshot.scope,
+                runner=snapshot.runner,
+            )
+        )
+        computed_identity = engagement_identity(computed_digest)
+    except (ContractError, TypeError, ValueError) as exc:
+        raise ContractError(ReasonCode.DENY_AUTHORIZATION_STALE) from exc
+    if (
+        type(snapshot.profile) is not str
+        or type(snapshot.authority_digest) is not str
+        or type(snapshot.identity) is not str
+        or snapshot.program.get("profile") != snapshot.profile
+        or snapshot.authorization.get("confirmed_authority_digest") != computed_digest
+        or snapshot.authority_digest != computed_digest
+        or snapshot.identity != computed_identity
+    ):
+        raise ContractError(ReasonCode.DENY_AUTHORIZATION_STALE)
     return SnapshotBinding(
         snapshot_identity=snapshot.identity,
         profile=snapshot.profile,
