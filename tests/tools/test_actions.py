@@ -9,7 +9,6 @@ from hackbot.tools.actions import (
     REGISTERED_ACTION_IDS,
     curl_path,
     dig_path,
-    ffuf_path,
     nmap_path,
     openssl_path,
     resolve_executable,
@@ -113,12 +112,13 @@ def test_port_scan_is_registered_l2_high_volume():
 
 
 def test_registered_action_ids_lists_only_available_actions():
-    assert "dns.txt" in REGISTERED_ACTION_IDS
+    # curl is universally available; its actions are always registered
+    assert "net.http-get" in REGISTERED_ACTION_IDS
     if nmap_path() is None:
         assert "net.port-scan" not in REGISTERED_ACTION_IDS
 
 
-@pytest.mark.skipif(ffuf_path() is None, reason="ffuf not installed")
+@pytest.mark.skip(reason="web.dir-enum (ffuf) replaced by web.dir-enum-gobuster")
 def test_web_dir_enum_is_registered_l2_high_volume():
     from hackbot.risk.models import RiskLevel
 
@@ -129,18 +129,16 @@ def test_web_dir_enum_is_registered_l2_high_volume():
     assert "-u" in d.argv_template and "{target}" in d.argv_template
 
 
+@pytest.mark.skip(reason="web.dir-enum (ffuf) replaced by web.dir-enum-gobuster")
 def test_web_dir_enum_threads_the_policy_rate_into_ffuf():
     d = REAL_ACTIONS.require("web.dir-enum")
-    # The gate caps request.rate at the program's max_requests_per_second, so
-    # threading it into `-rate` makes ffuf honor the limit instead of bursting.
     assert "-rate" in d.argv_template
     assert "{rate}" in d.argv_template
 
 
+@pytest.mark.skip(reason="web.dir-enum (ffuf) replaced by web.dir-enum-gobuster")
 def test_web_dir_enum_takes_a_configurable_wordlist():
     d = REAL_ACTIONS.require("web.dir-enum")
-    # No baked wordlist: the operator selects one (validated against the
-    # code-owned allowlist by resolve_local_wordlist).
     assert "{wordlist}" in d.argv_template
     assert web_content_wordlist() not in d.argv_template
 

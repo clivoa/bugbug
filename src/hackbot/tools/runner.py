@@ -101,7 +101,7 @@ def _join_readers(
 
 def _child_exited_without_reap(pid: int) -> bool:
     return (
-        os.waitid(  # type: ignore[attr-defined]
+        os.waitid(
             os.P_PID,
             pid,
             os.WEXITED | os.WNOHANG | os.WNOWAIT,

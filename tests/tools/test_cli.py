@@ -260,6 +260,7 @@ def test_approval_grant_works_for_a_real_tool_action(lab_engagement, tmp_path, c
     assert granted["approval_status"] == "granted"
 
 
+@pytest.mark.skip(reason="web.dir-enum (ffuf) action replaced by web.dir-enum-gobuster")
 def test_tool_run_web_dir_enum_rejects_non_bundled_wordlist(lab_engagement, tmp_path, capsys):
     evil = tmp_path / "evil.txt"
     evil.write_text("admin\n")
@@ -274,6 +275,7 @@ def test_tool_run_web_dir_enum_rejects_non_bundled_wordlist(lab_engagement, tmp_
 
 
 @pytest.mark.skipif(ffuf_path() is None, reason="ffuf not installed")
+@pytest.mark.skip(reason="web.dir-enum (ffuf) action replaced by web.dir-enum-gobuster")
 def test_tool_run_web_dir_enum_approve_executes(
     lab_engagement, tmp_path, capsys, monkeypatch, local_server
 ):
@@ -361,7 +363,23 @@ def test_tool_run_remote_uses_remote_runner(lab_engagement, tmp_path, capsys, mo
 
 
 def _write_gobuster_request(path: Path, *, wordlist: str | None) -> Path:
-    argv = ["gobuster", "dir", "-u", "http://127.0.0.1/", "-w", wordlist or "", "-q"]
+    # The argv must exactly match web.dir-enum-gobuster's code-owned template:
+    # ('gobuster', 'dir', '-u', '{target}', '-w', '{wordlist}', '-q',
+    #  '--delay', '500ms', '-t', '{concurrency}')
+    wl = wordlist or ""
+    argv = [
+        "gobuster",
+        "dir",
+        "-u",
+        "http://127.0.0.1/",
+        "-w",
+        wl,
+        "-q",
+        "--delay",
+        "500ms",
+        "-t",
+        "1",
+    ]
     body = {
         "action_id": "web.dir-enum-gobuster",
         "target": "http://127.0.0.1/",

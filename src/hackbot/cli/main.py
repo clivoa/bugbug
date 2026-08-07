@@ -358,6 +358,40 @@ def _cmd_finding(args: argparse.Namespace) -> int:
     return 2
 
 
+def _cmd_recon(args: argparse.Namespace) -> int:
+    from hackbot.cli.hunt_cmd import cmd_recon
+
+    return cmd_recon(args.engagement, mode=args.mode, as_json=args.json)
+
+
+def _cmd_surface(args: argparse.Namespace) -> int:
+    from hackbot.cli.hunt_cmd import cmd_surface
+
+    return cmd_surface(args.engagement, as_json=args.json)
+
+
+def _cmd_hypothesis(args: argparse.Namespace) -> int:
+    from hackbot.cli.hunt_cmd import cmd_hypothesis
+
+    return cmd_hypothesis(
+        args.engagement,
+        action=args.haction,
+        vulnerability_class=args.vuln_class,
+        as_json=args.json,
+    )
+
+
+def _cmd_profile(args: argparse.Namespace) -> int:
+    from hackbot.cli.hunt_cmd import cmd_profile_list, cmd_profile_show
+
+    if args.paction == "show":
+        return cmd_profile_show(args.engagement, as_json=args.json)
+    if args.paction == "list":
+        return cmd_profile_list(as_json=args.json)
+    print(f"error: unknown profile action {args.paction!r}", file=sys.stderr)
+    return 2
+
+
 def _cmd_engagement(args: argparse.Namespace) -> int:
     from hackbot.cli.engagement_cmd import run_migrate
 
@@ -527,6 +561,47 @@ def build_parser() -> argparse.ArgumentParser:
     )
     eng_migrate.add_argument("--json", action="store_true")
     eng.set_defaults(func=_cmd_engagement)
+
+    # -- recon ---------------------------------------------------------------
+    rc = sub.add_parser("recon", help="run reconnaissance (passive or active-low)")
+    rc.add_argument("--engagement", required=True, help="engagement directory")
+    rc.add_argument(
+        "--mode",
+        choices=["passive", "active-low", "plan"],
+        default="plan",
+        help="recon mode (default: plan — shows what would run)",
+    )
+    rc.add_argument("--json", action="store_true")
+    rc.set_defaults(func=_cmd_recon)
+
+    # -- surface -------------------------------------------------------------
+    sf = sub.add_parser("surface", help="map and classify the attack surface")
+    sf.add_argument("--engagement", required=True, help="engagement directory")
+    sf.add_argument("--json", action="store_true")
+    sf.set_defaults(func=_cmd_surface)
+
+    # -- hypothesis ----------------------------------------------------------
+    hp = sub.add_parser("hypothesis", help="generate and manage vulnerability hypotheses")
+    hp_sub = hp.add_subparsers(dest="haction", required=True)
+    hp_gen = hp_sub.add_parser("generate", help="generate hypotheses from the attack surface")
+    hp_gen.add_argument("--engagement", required=True, help="engagement directory")
+    hp_gen.add_argument("--class", dest="vuln_class", help="filter by vulnerability class")
+    hp_gen.add_argument("--json", action="store_true")
+    hp_list = hp_sub.add_parser("list", help="list existing hypotheses")
+    hp_list.add_argument("--engagement", required=True, help="engagement directory")
+    hp_list.add_argument("--class", dest="vuln_class", help="filter by vulnerability class")
+    hp_list.add_argument("--json", action="store_true")
+    hp.set_defaults(func=_cmd_hypothesis)
+
+    # -- profile -------------------------------------------------------------
+    pf = sub.add_parser("profile", help="show/select program and surface profiles")
+    pf_sub = pf.add_subparsers(dest="paction", required=True)
+    pf_show = pf_sub.add_parser("show", help="show active profile for engagement")
+    pf_show.add_argument("--engagement", required=True, help="engagement directory")
+    pf_show.add_argument("--json", action="store_true")
+    pf_list = pf_sub.add_parser("list", help="list available profiles")
+    pf_list.add_argument("--json", action="store_true")
+    pf.set_defaults(func=_cmd_profile)
 
     v = sub.add_parser("version", help="print version")
     v.set_defaults(func=_cmd_version)

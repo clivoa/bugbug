@@ -31,24 +31,24 @@ def test_every_promotion_maps_to_a_real_reviewed_skill():
 # Action IDs that derive from the recon bundle and must have provenance.
 # Other registered actions (remote arsenal, cloud, web3, etc.) are not
 # bundle-derived and are not expected in PROMOTED_ACTIONS.
-_BUNDLE_DERIVED_PREFIXES = frozenset({
-    "dns.",           # dns.lookup, dns.txt, dns.mx, dns.ns
-    "net.http-get",   # core HTTP probe
-    "net.http-head",  # core HTTP probe
-    "net.http-options",
-    "net.port-scan",  # recon bundle port scanning
-    "tls.cert",       # recon bundle TLS
-    "web.dir-enum",   # recon bundle directory enumeration
-    "web.dir-enum-gobuster",
-})
+_BUNDLE_DERIVED_PREFIXES = frozenset(
+    {
+        "dns.",  # dns.lookup, dns.txt, dns.mx, dns.ns
+        "net.http-get",  # core HTTP probe
+        "net.http-head",  # core HTTP probe
+        "net.http-options",
+        "net.port-scan",  # recon bundle port scanning
+        "tls.cert",  # recon bundle TLS
+        "web.dir-enum",  # recon bundle directory enumeration
+        "web.dir-enum-gobuster",
+    }
+)
 
 
 def _is_bundle_derived(action_id: str) -> bool:
     """Check if an action ID is bundle-derived (exact match or prefix)."""
     for prefix in _BUNDLE_DERIVED_PREFIXES:
-        if action_id == prefix or (
-            prefix.endswith(".") and action_id.startswith(prefix)
-        ):
+        if action_id == prefix or (prefix.endswith(".") and action_id.startswith(prefix)):
             return True
     return False
 
