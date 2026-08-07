@@ -1,0 +1,163 @@
+# hackbot — task-based model routing
+# Stable task names mapped to preferred providers and model tiers.
+# Resolved dynamically at execution time against providers.yaml.
+
+tasks:
+  # Reconnaissance & analysis
+  passive_recon_analysis:
+    description: "Analyze passive recon output — subdomains, certs, DNS, WHOIS"
+    preferred:
+      provider: deepseek
+      tier: fast
+    fallback:
+      provider: kimi3
+      tier: fast
+    sensitivity: low
+    cloud_safe: true
+
+  tool_output_classification:
+    description: "Classify tool output — categorize HTTP responses, banners, errors"
+    preferred:
+      provider: deepseek
+      tier: fast
+    fallback:
+      provider: local
+      tier: fast
+    sensitivity: low
+    cloud_safe: true
+
+  attack_surface_ranking:
+    description: "Rank discovered attack surface by exploitability and impact"
+    preferred:
+      provider: kimi3
+      tier: balanced
+    fallback:
+      provider: claude
+      tier: balanced
+    sensitivity: low
+    cloud_safe: true
+
+  hypothesis_generation:
+    description: "Generate testable vulnerability hypotheses from surface map"
+    preferred:
+      provider: claude
+      tier: balanced
+    fallback:
+      provider: kimi3
+      tier: balanced
+    sensitivity: medium
+    cloud_safe: true
+
+  # Code and deep analysis
+  source_code_review:
+    description: "Review source code for vulnerabilities — SAST augmentation"
+    preferred:
+      provider: claude
+      tier: balanced
+    fallback:
+      provider: deepseek
+      tier: reasoning
+    sensitivity: high
+    cloud_safe: true
+
+  web3_contract_review:
+    description: "Review smart contracts — Solidity, Rust, Move"
+    preferred:
+      provider: claude
+      tier: powerful
+    fallback:
+      provider: kimi3
+      tier: powerful
+    sensitivity: high
+    cloud_safe: true
+
+  complex_business_logic:
+    description: "Analyze complex multi-step business logic for flaws"
+    preferred:
+      provider: claude
+      tier: powerful
+    fallback:
+      provider: kimi3
+      tier: reasoning
+    sensitivity: medium
+    cloud_safe: true
+
+  # Validation
+  finding_validation:
+    description: "Validate a finding — verify reproducibility, scope, impact"
+    preferred:
+      provider: claude
+      tier: balanced
+    second_opinion:
+      provider: kimi3
+      tier: balanced
+    sensitivity: medium
+    cloud_safe: true
+
+  evidence_sanitization:
+    description: "Check evidence for secrets, PII, and unnecessary data"
+    preferred:
+      provider: local
+      tier: fast
+    fallback:
+      provider: deepseek
+      tier: fast
+    sensitivity: high
+    cloud_safe: false   # prefer local for secret-containing content
+
+  # Reporting
+  report_writing:
+    description: "Generate structured vulnerability report from findings"
+    preferred:
+      provider: claude
+      tier: balanced
+    fallback:
+      provider: kimi3
+      tier: balanced
+    sensitivity: medium
+    cloud_safe: true
+
+  report_review:
+    description: "Review report for accuracy, exaggeration, completeness"
+    preferred:
+      provider: claude
+      tier: balanced
+    fallback:
+      provider: deepseek
+      tier: balanced
+    sensitivity: medium
+    cloud_safe: true
+
+  # Sensitive (local preferred)
+  sensitive_local_analysis:
+    description: "Analyze data that should never leave the machine"
+    preferred:
+      provider: local
+      tier: balanced
+    sensitivity: critical
+    cloud_fallback: disabled   # never send to cloud
+
+  engagement_config_analysis:
+    description: "Parse and normalize program rules, scope, policies"
+    preferred:
+      provider: deepseek
+      tier: fast
+    fallback:
+      provider: local
+      tier: fast
+    sensitivity: low
+    cloud_safe: true
+
+# Routing policy
+policy:
+  # Auto-select model if none specified
+  auto_select: true
+
+  # Warn before switching to a more expensive model
+  warn_on_cost_escalation: true
+
+  # Require confirmation for cloud models with sensitive data
+  require_confirmation_for_sensitive: true
+
+  # Second-opinion tasks: run on a different provider
+  second_opinion_different_provider: true

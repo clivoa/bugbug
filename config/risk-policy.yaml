@@ -1,0 +1,138 @@
+# hackbot — risk policy
+# Action levels and their automatic/manual approval requirements.
+
+# ---------------------------------------------------------------------------
+# Risk Level Definitions
+# ---------------------------------------------------------------------------
+levels:
+  L0:
+    label: "Passive"
+    description: "No direct interaction with target infrastructure"
+    approval: auto
+    examples:
+      - "Certificate transparency queries"
+      - "Passive DNS lookups"
+      - "WHOIS and public ASN metadata"
+      - "Public GitHub/search engine discovery"
+      - "Shodan host lookups (read-only)"
+      - "Local analysis of collected data"
+      - "Technology classification from headers"
+
+  L1:
+    label: "Low-Impact Active"
+    description: "Minimal interaction indistinguishable from normal traffic"
+    approval: auto_conditionally
+    conditions:
+      - "Asset confirmed in scope"
+      - "Automated testing allowed by program"
+      - "Rate limits configured and obeyed"
+      - "Action matches the code-owned allowlist"
+    examples:
+      - "Conservative DNS resolution"
+      - "Low-rate HTTP GET/HEAD probes"
+      - "TLS certificate retrieval"
+      - "Public HTTP header retrieval"
+      - "Safe web crawling with strict scope enforcement"
+      - "Retrieval of public robots.txt / security.txt"
+      - "Conservative Nuclei safe-template scans"
+
+  L2:
+    label: "Intrusive / State-Changing"
+    description: "Actions that modify state, consume resources, or test active vulnerabilities"
+    approval: explicit_required
+    approval_display:
+      - "Program name and asset"
+      - "Exact command or request"
+      - "Rationale: why this action is needed"
+      - "Expected impact"
+      - "Rate and concurrency"
+      - "Data that may be accessed"
+      - "Stop condition"
+      - "Authorizing program rule"
+      - "Rollback / cleanup plan"
+    examples:
+      - "Authenticated endpoint testing"
+      - "Account creation (second test account)"
+      - "IDOR testing between owned accounts"
+      - "Parameter mutation affecting stored state"
+      - "File upload testing"
+      - "Race condition testing"
+      - "SQL injection validation (minimal proof only)"
+      - "SSRF validation (minimal proof only)"
+      - "Directory enumeration (ffuf, feroxbuster)"
+      - "Port scanning"
+      - "Active cloud-service interaction"
+      - "Smart-contract PoC on fork"
+      - "Non-GET HTTP methods without prior approval"
+
+  L3:
+    label: "Prohibited by Default"
+    description: "Actions that are never automatically executable"
+    approval: profile_required
+    required_profiles:
+      - "private-pentest"
+      - "local-lab"
+    conditions:
+      - "Every exact capability flag must be Boolean true"
+      - "Profile name alone grants nothing"
+      - "Ad-hoc L3 commands remain prohibited"
+    prohibited_always:
+      - "Denial of service"
+      - "Resource exhaustion"
+      - "Credential stuffing / password spraying at scale"
+      - "Phishing / social engineering"
+      - "Malware / persistence / lateral movement"
+      - "EDR/WAF evasion"
+      - "CAPTCHA bypass at scale"
+      - "Mass account creation"
+      - "Destructive file operations"
+      - "Production database modification"
+      - "Unnecessary PII/customer data access"
+      - "Cloud credential extraction"
+      - "Internet-wide scanning"
+      - "Autonomous multi-target exploitation"
+      - "Continuing after block/rate-limit"
+      - "VPN endpoint switching to bypass controls"
+
+# ---------------------------------------------------------------------------
+# Approval workflow
+# ---------------------------------------------------------------------------
+approval:
+  # Challenge expiration (minutes)
+  challenge_ttl_minutes: 15
+
+  # Maximum pending challenges per engagement
+  max_pending_challenges: 5
+
+  # Require /dev/tty for grant (no scripted approvals)
+  require_tty: true
+
+  # Challenge is scoped to exact (action, target, scope_digest, policy_digest)
+  binding_fields:
+    - engagement_id
+    - action_id
+    - target
+    - argv
+    - scope_digest
+    - policy_digest
+    - rate
+    - concurrency
+
+# ---------------------------------------------------------------------------
+# Program policy enforcement (deny wins)
+# ---------------------------------------------------------------------------
+program_enforcement:
+  # These are always prohibited regardless of program policy
+  immutable_prohibitions:
+    - social_engineering
+    - denial_of_service
+    - unauthorized_data_exfiltration
+    - destructive_testing
+
+  # Unknown/missing policy values = denied (never interpret absence as permission)
+  default_deny_missing:
+    - automated_scanning_allowed
+    - authenticated_testing_allowed
+    - account_creation_allowed
+    - multiple_accounts_allowed
+    - out_of_band_testing_allowed

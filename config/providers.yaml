@@ -1,0 +1,106 @@
+# hackbot — provider definitions
+# Stable aliases are mapped to current model IDs at setup and periodically refreshed.
+
+providers:
+  claude:
+    display_name: "Anthropic Claude"
+    base_url: "https://api.anthropic.com"
+    api_key_secret: "ANTHROPIC_API_KEY"
+    gateway_only: false
+    default_model: "claude-sonnet-4-20250514"
+    models:
+      fast:
+        - "claude-haiku-4-5-20251001"
+      balanced:
+        - "claude-sonnet-4-20250514"
+      powerful:
+        - "claude-opus-4-20250514"
+      reasoning:
+        - "claude-sonnet-4-20250514"
+        - "claude-opus-4-20250514"
+
+  deepseek:
+    display_name: "DeepSeek"
+    base_url: "https://api.deepseek.com"
+    api_key_secret: "DEEPSEEK_API_KEY"
+    gateway_only: false
+    default_model: "deepseek-chat"
+    models:
+      fast:
+        - "deepseek-chat"
+      balanced:
+        - "deepseek-chat"
+      reasoning:
+        - "deepseek-reasoner"
+
+  kimi3:
+    display_name: "Moonshot Kimi K3"
+    base_url: "https://api.moonshot.cn"
+    api_key_secret: "MOONSHOT_API_KEY"
+    gateway_only: false
+    default_model: "moonshot-v1-auto"
+    models:
+      fast:
+        - "moonshot-v1-8k"
+      balanced:
+        - "moonshot-v1-auto"
+      powerful:
+        - "moonshot-v1-128k"
+      reasoning:
+        - "moonshot-v1-128k"
+
+  openrouter:
+    display_name: "OpenRouter (multi-provider gateway)"
+    base_url: "https://openrouter.ai/api/v1"
+    api_key_secret: "OPENROUTER_API_KEY"
+    gateway_only: false
+    default_model: "anthropic/claude-sonnet-4"
+    models:
+      fast:
+        - "anthropic/claude-haiku-4-5"
+        - "deepseek/deepseek-chat"
+      balanced:
+        - "anthropic/claude-sonnet-4"
+      powerful:
+        - "anthropic/claude-opus-4"
+      reasoning:
+        - "deepseek/deepseek-reasoner"
+
+  local:
+    display_name: "Local (Ollama / LiteLLM)"
+    base_url: "http://127.0.0.1:11434"
+    api_key_secret: ""   # local models — no API key
+    gateway_only: false
+    default_model: "llama3.1"
+    models:
+      fast:
+        - "llama3.1:8b"
+        - "qwen2.5:7b"
+      balanced:
+        - "llama3.1:70b"
+      reasoning:
+        - "deepseek-r1:latest"
+
+  liteLLM:
+    display_name: "Local LiteLLM Gateway"
+    base_url: "http://127.0.0.1:4000"
+    api_key_secret: "LITELLM_MASTER_KEY"
+    gateway_only: true
+    default_model: "claude-sonnet-4"
+    models:
+      fast: []
+      balanced: []
+      powerful: []
+      reasoning: []
+
+# Default provider priority for auto-routing
+auto_routing:
+  order:
+    - claude
+    - deepseek
+    - kimi3
+    - local
+  # Never auto-route to a more expensive model
+  prevent_cost_escalation: true
+  # Never send sensitive data to a different provider silently
+  prevent_provider_switch_with_sensitive_data: true

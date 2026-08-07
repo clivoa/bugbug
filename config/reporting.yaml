@@ -1,0 +1,143 @@
+# hackbot — reporting configuration
+
+# ---------------------------------------------------------------------------
+# Platform report formats
+# ---------------------------------------------------------------------------
+platforms:
+  hackerone:
+    accepted_languages: [en]
+    cvss_required: true
+    cwe_required: true
+    severity_scale:
+      - none
+      - low
+      - medium
+      - high
+      - critical
+    template: "hackerone/report.md"
+    finding_template: "hackerone/finding.md"
+
+  bugcrowd:
+    accepted_languages: [en]
+    cvss_required: false
+    cwe_required: false
+    severity_scale:
+      - P5  # informational
+      - P4
+      - P3
+      - P2
+      - P1  # critical
+    template: "bugcrowd/report.md"
+    finding_template: "bugcrowd/finding.md"
+
+  intigriti:
+    accepted_languages: [en]
+    cvss_required: false
+    cwe_required: false
+    severity_scale:
+      - informational
+      - low
+      - medium
+      - high
+      - critical
+    template: "intigriti/report.md"
+    finding_template: "intigriti/finding.md"
+
+  yeswehack:
+    accepted_languages: [en, fr]
+    cvss_required: false
+    cwe_required: false
+    severity_scale:
+      - informative
+      - low
+      - medium
+      - high
+      - critical
+    template: "yeswehack/report.md"
+    finding_template: "yeswehack/finding.md"
+
+  immunefi:
+    accepted_languages: [en]
+    cvss_required: false
+    cwe_required: false
+    severity_scale:
+      - none
+      - low
+      - medium
+      - high
+      - critical
+    note: "Requires proof-of-concept code and economic impact analysis"
+    template: "immunefi/report.md"
+    finding_template: "immunefi/finding.md"
+
+  generic:
+    accepted_languages: [en]
+    cvss_required: false
+    cwe_required: false
+    template: "generic/report.md"
+    finding_template: "generic/finding.md"
+
+# ---------------------------------------------------------------------------
+# CVSS 3.1 default mappings (override per-finding)
+# ---------------------------------------------------------------------------
+cvss:
+  # Default values by severity — adjusted per-finding with rationale
+  defaults:
+    critical:
+      AV: "N"   # network
+      AC: "L"   # low
+      PR: "N"   # none
+      UI: "N"   # none
+      S: "C"    # changed
+      C: "H"    # high
+      I: "H"    # high
+      A: "H"    # high
+    high:
+      AV: "N"
+      AC: "L"
+      PR: "N"
+      UI: "N"
+      S: "U"    # unchanged
+      C: "H"
+      I: "H"
+      A: "N"
+    medium:
+      AV: "N"
+      AC: "L"
+      PR: "L"   # low
+      UI: "N"
+      S: "U"
+      C: "L"    # low
+      I: "L"
+      A: "N"
+    low:
+      AV: "N"
+      AC: "H"   # high
+      PR: "L"
+      UI: "R"   # required
+      S: "U"
+      C: "L"
+      I: "N"
+      A: "N"
+
+# ---------------------------------------------------------------------------
+# Report quality requirements
+# ---------------------------------------------------------------------------
+quality:
+  required_sections:
+    - summary
+    - asset
+    - vulnerability_class
+    - reproduction_steps
+    - demonstrated_impact
+    - remediation
+
+  required_separations:
+    - demonstrated_vs_plausible_impact
+    - untested_assumptions
+
+  prohibited:
+    - exaggeration
+    - unverified_claims
+    - secret_values
+    - customer_data_beyond_minimal_proof

