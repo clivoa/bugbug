@@ -94,5 +94,5 @@ def test_original_file_not_modified(notes):
 
 def test_attribution_available(notes):
     meta = bundle_metadata(BUNDLE)
-    assert "reeshasx" in meta["author"].lower() or "reeshasx" in meta["author_link"].lower()
+    assert "cyberneon" in meta["author"].lower()
     assert meta["license_declared"] == "none-found"  # drives reference-only handling

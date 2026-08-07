@@ -2,8 +2,8 @@
 # Maps each normalized skill back to its immutable source note.
 # GENERATED — do not edit by hand. Regenerate via scripts/generate_recon_bundle.py
 bundle_title: "Recon — CyberNeon Bundle"
-bundle_author: "by @reeshasx"
-bundle_author_link: "https://x.com/reeshasx"
+bundle_author: "CyberNeon Recon Bundle (public source; no formal license)"
+bundle_author_link: ""
 bundle_license_declared: "none-found"
 bundle_authorization: "local private use with attribution (operator 2026-07-24); redistribution NOT authorized"
 source_file: "references/recon/Recon-bundle.html"
@@ -32,7 +32,7 @@ skills:
     commands_excluded:
       - "5. cloud & cdn (cuidado com escopo)"
       - "scan nos ranges descobertos"
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/service-fingerprinting"
     skill_name: "service-fingerprinting"
     source_file: "references/recon/Recon-bundle.html"
@@ -51,7 +51,7 @@ skills:
       - "active sections require explicit approval (L2)"
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/tls-certificate-recon"
     skill_name: "tls-certificate-recon"
     source_file: "references/recon/Recon-bundle.html"
@@ -69,7 +69,7 @@ skills:
     risk_changes: []
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/dns-recon"
     skill_name: "dns-recon"
     source_file: "references/recon/Recon-bundle.html"
@@ -87,7 +87,7 @@ skills:
     risk_changes: []
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "internal-recon/internal-host-discovery"
     skill_name: "internal-host-discovery"
     source_file: "references/recon/Recon-bundle.html"
@@ -110,7 +110,7 @@ skills:
       - "moved to internal-recon; disabled by default"
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/parameter-discovery"
     skill_name: "parameter-discovery"
     source_file: "references/recon/Recon-bundle.html"
@@ -130,7 +130,7 @@ skills:
       - "active sections require explicit approval (L2)"
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "internal-recon/ldap-enumeration"
     skill_name: "ldap-enumeration"
     source_file: "references/recon/Recon-bundle.html"
@@ -151,7 +151,7 @@ skills:
       - "moved to internal-recon; disabled by default"
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "internal-recon/linux-enumeration"
     skill_name: "linux-enumeration"
     source_file: "references/recon/Recon-bundle.html"
@@ -171,7 +171,7 @@ skills:
       - "moved to internal-recon; disabled by default"
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/github-recon"
     skill_name: "github-recon"
     source_file: "references/recon/Recon-bundle.html"
@@ -189,7 +189,7 @@ skills:
     risk_changes: []
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/osint"
     skill_name: "osint"
     source_file: "references/recon/Recon-bundle.html"
@@ -207,7 +207,7 @@ skills:
     risk_changes: []
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/javascript-analysis"
     skill_name: "javascript-analysis"
     source_file: "references/recon/Recon-bundle.html"
@@ -225,7 +225,7 @@ skills:
     risk_changes: []
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/osint"
     skill_name: "osint"
     source_file: "references/recon/Recon-bundle.html"
@@ -243,7 +243,7 @@ skills:
     risk_changes: []
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/parameter-discovery"
     skill_name: "parameter-discovery"
     source_file: "references/recon/Recon-bundle.html"
@@ -262,7 +262,7 @@ skills:
       - "active sections require explicit approval (L2)"
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/service-fingerprinting"
     skill_name: "service-fingerprinting"
     source_file: "references/recon/Recon-bundle.html"
@@ -285,7 +285,7 @@ skills:
       - "active sections require explicit approval (L2)"
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/recon-pipeline"
     skill_name: "recon-pipeline"
     source_file: "references/recon/Recon-bundle.html"
@@ -303,7 +303,7 @@ skills:
     risk_changes: []
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/subdomain-discovery"
     skill_name: "subdomain-discovery"
     source_file: "references/recon/Recon-bundle.html"
@@ -322,7 +322,7 @@ skills:
     risk_changes: []
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/service-fingerprinting"
     skill_name: "service-fingerprinting"
     source_file: "references/recon/Recon-bundle.html"
@@ -343,7 +343,7 @@ skills:
       - "active sections require explicit approval (L2)"
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/waf-cdn-detection"
     skill_name: "waf-cdn-detection"
     source_file: "references/recon/Recon-bundle.html"
@@ -364,7 +364,7 @@ skills:
     commands_excluded:
       - "origin ip discovery (bypass do cdn)"
       - "bypass via host header"
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"
   - skill: "recon/web-crawling"
     skill_name: "web-crawling"
     source_file: "references/recon/Recon-bundle.html"
@@ -382,4 +382,4 @@ skills:
     risk_changes: []
     commands_rewritten: "all commands converted to validated tool adapters (see src/hackbot/tools)"
     commands_excluded: []
-    attribution: "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: "CyberNeon Recon Bundle (public source; no formal license)"

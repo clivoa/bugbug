@@ -89,7 +89,7 @@
     "scope_risk": "low",
     "third_party_impact": "none"
   },
-  "attribution": "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx",
+  "attribution": "CyberNeon Recon Bundle (public source; no formal license)",
   "source_file": "references/recon/Recon-bundle.html",
   "source_sha256": "9c658ec57fcf88cbf78cbea52edf001d392f62d82b7398b3760aad463967f445"
 }

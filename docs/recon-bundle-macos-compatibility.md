@@ -1,6 +1,6 @@
 # Recon Bundle — macOS / Portability Compatibility
 
-> GENERATED from the immutable bundle via `scripts/generate_recon_docs.py`. The bundle is parsed as inert data; no command is executed. Source attribution: @reeshasx (CyberNeon Recon Bundle).
+> GENERATED from the immutable bundle via `scripts/generate_recon_docs.py`. The bundle is parsed as inert data; no command is executed. Source attribution: CyberNeon Recon Bundle (public source; no formal license).
 
 
 Hackbot targets macOS **and** Linux. GNU-only and Linux-only commands from the bundle are adapted by a platform shim or routed to the optional Linux SSH runner; a few are excluded. Findings below are detected by `detect_portability()` over the captured command strings.

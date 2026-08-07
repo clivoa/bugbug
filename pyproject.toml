@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "bugbug — a local, modular, auditable, safety-controlled bug bounty research workstation"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "TBD (see docs/licenses-and-attribution.md)" }
-authors = [{ name = "operator" }]
+license = { text = "MIT" }
+authors = [{ name = "Caio" }]
 
 # Core CLI (doctor / scope / secrets orchestration / version) is stdlib-only, so
 # it installs and runs with no third-party runtime deps. Feature areas pull their

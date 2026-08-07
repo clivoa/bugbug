@@ -7,9 +7,9 @@ profile gate into a category with per-action risk/capability classification and
 removes the old "internal notes can never be promoted" invariant. P5a delivers
 the first reviewed, non-credential slice.
 
-The recon bundle (`references/recon/Recon-bundle.html`, @reeshasx, unlicensed)
-remains inert data: only a reviewed generic single-tool argv subset is promoted,
-with attribution, never a copied pipeline. Internal recon stays disabled by
+The recon bundle (`references/recon/Recon-bundle.html`, CyberNeon Recon Bundle,
+unlicensed) remains inert data: only a reviewed generic single-tool argv subset
+is promoted, with attribution, never a copied pipeline. Internal recon stays disabled by
 default; P5a ships definitions, provenance, fixtures, and tests, not live scans.
 
 ## Goals / Non-Goals

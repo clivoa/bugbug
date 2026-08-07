@@ -2,9 +2,10 @@
 #
 # hackbot publication-guard (pre-push).
 #
-# The recon bundle (references/recon/Recon-bundle.html, author @reeshasx) has NO
-# license. It and every artifact derived from it are authorized for LOCAL, PRIVATE
-# use only. They must not be pushed or distributed without the author's permission.
+# The recon bundle (references/recon/Recon-bundle.html, CyberNeon Recon Bundle)
+# has NO license. It and every artifact derived from it are authorized for
+# LOCAL, PRIVATE use only. They must not be pushed or distributed without
+# further authorization.
 #
 # This hook blocks any push while those tracked artifacts exist, unless the
 # operator explicitly acknowledges permission via HACKBOT_ALLOW_PUBLISH_RECON=1.
@@ -29,7 +30,7 @@ if [ -n "$protected" ]; then
     echo "  ✋ BLOCKED by hackbot publication-guard"
     echo ""
     echo "  These tracked artifacts derive from the UNLICENSED recon bundle"
-    echo "  (@reeshasx) and must NOT be pushed/distributed without permission:"
+    echo "  and must NOT be pushed/distributed without permission:"
     echo "$protected" | sed 's/^/      - /'
     echo ""
     echo "  If you have the author's permission and intend to publish, re-run:"

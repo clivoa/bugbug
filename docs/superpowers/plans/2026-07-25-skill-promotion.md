@@ -22,7 +22,7 @@ PyYAML (tests only, to read the manifest), pytest, Ruff, mypy. Tools: dig
   approval; runs only in-scope.
 - Recon only. No internal-recon, no exploitation, nothing L3.
 - The raw bundle HTML is never read; only the generated manifest/notes.
-- Attribution `@reeshasx (CyberNeon Recon Bundle)` recorded for every
+- Attribution `CyberNeon Recon Bundle (public source; no formal license)` recorded for every
   bundle-derived action.
 - Test-first; each test observed failing for the intended reason first.
 
@@ -216,7 +216,7 @@ def test_every_promotion_maps_to_a_real_reviewed_skill():
     for action_id, prov in PROMOTED_ACTIONS.items():
         assert (prov.skill_id, prov.source_note) in pairs, action_id
         assert prov.skill_id not in internal  # internal-recon is never promoted
-        assert "@reeshasx" in prov.attribution
+        assert "CyberNeon Recon Bundle" in prov.attribution
 
 
 def test_every_registered_bundle_action_has_provenance():
@@ -237,7 +237,7 @@ Expected: `ModuleNotFoundError: hackbot.skills.promotion`.
 """Provenance linking code-owned actions to reviewed recon-bundle skills.
 
 Bundle commands stay data; only generic single-tool argv subsets become
-code-owned actions. Attribution to @reeshasx is recorded per the bundle's
+code-owned actions. Attribution to CyberNeon Recon Bundle is recorded per the bundle's
 local-reuse-with-attribution terms. internal-recon skills are never promoted.
 """
 
@@ -245,7 +245,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-ATTRIBUTION = "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+ATTRIBUTION = "CyberNeon Recon Bundle (public source; no formal license)"
 
 
 @dataclass(frozen=True, slots=True)
@@ -316,7 +316,7 @@ def test_skills_list_shows_attribution_and_availability(capsys):
     dns = by_id["dns.txt"]
     assert dns["available"] is True
     assert dns["skill"] == "recon/dns-recon"
-    assert "@reeshasx" in dns["attribution"]
+    assert "CyberNeon Recon Bundle" in dns["attribution"]
     assert dns["bundle_risk_level"] == "1"
 
 

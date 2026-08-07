@@ -6,7 +6,7 @@ explicitly confirmed. Every action still requires confirmed engagement
 authority, an in-scope target, and every declared `testing_rules` capability.
 
 This note records a reviewed single-action subset inspired by the CyberNeon
-Recon Bundle (`@reeshasx`, local reuse with attribution). It does not execute or
+Recon Bundle (local reuse, no redistribution). It does not execute or
 parse the raw bundle and does not reproduce any multi-tool pipeline. Shells,
 inline evaluation, command strings, DoS, destruction, bulk exfiltration, and
 evasion are excluded.

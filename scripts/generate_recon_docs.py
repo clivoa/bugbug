@@ -23,7 +23,7 @@ from hackbot.skills.bundle_parser import bundle_metadata, parse_bundle  # noqa: 
 
 BUNDLE = ROOT / "references/recon/Recon-bundle.html"
 DOCS = ROOT / "docs"
-ATTRIB = "@reeshasx (CyberNeon Recon Bundle)"
+ATTRIB = "CyberNeon Recon Bundle (public source; no formal license)"
 GEN_NOTE = (
     "> GENERATED from the immutable bundle via "
     "`scripts/generate_recon_docs.py`. The bundle is parsed as inert data; "

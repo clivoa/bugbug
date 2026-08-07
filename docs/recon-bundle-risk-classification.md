@@ -1,6 +1,6 @@
 # Recon Bundle — Risk Classification
 
-> GENERATED from the immutable bundle via `scripts/generate_recon_docs.py`. The bundle is parsed as inert data; no command is executed. Source attribution: @reeshasx (CyberNeon Recon Bundle).
+> GENERATED from the immutable bundle via `scripts/generate_recon_docs.py`. The bundle is parsed as inert data; no command is executed. Source attribution: CyberNeon Recon Bundle (public source; no formal license).
 
 
 Risk levels follow the Hackbot risk model. A note's **highest-risk section governs** its level. Discovering an asset never authorizes testing it: ASN/CIDR/Shodan/cert/favicon/SPF/PTR/DNS-history are **hypothesis evidence only** and never auto-expand scope.

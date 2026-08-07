@@ -1,9 +1,9 @@
 # Recon-bundle skill promotion
 
-The recon bundle (`references/recon/Recon-bundle.html`, author @reeshasx) is an
-immutable, unlicensed reference. Its commands are **data** — never executed as
-written. This phase promotes *reviewed* bundle skills into code-owned, gated
-actions, recording provenance and attribution.
+The recon bundle (`references/recon/Recon-bundle.html`, CyberNeon Recon Bundle)
+is an immutable, unlicensed reference. Its commands are **data** — never
+executed as written. This phase promotes *reviewed* bundle skills into
+code-owned, gated actions, recording provenance and source attribution.
 
 ## What "promotion" means
 
@@ -22,10 +22,10 @@ actions, recording provenance and attribution.
 
 `src/hackbot/skills/promotion.py` maps each bundle-derived action to a
 `SkillProvenance` (source skill, source note, the bundle's risk level, approval
-level, and attribution `@reeshasx (CyberNeon Recon Bundle)`). A test validates
-every entry against the generated manifest and asserts no `internal_pack` skill
-is ever promoted. This satisfies the bundle's *local reuse with attribution, no
-redistribution* terms and makes each promotion auditable.
+level, and source attribution `CyberNeon Recon Bundle (public source; no formal
+license)`). A test validates every entry against the generated manifest and
+asserts no `internal_pack` skill is ever promoted. This satisfies the bundle's
+*local reuse, no redistribution* terms and makes each promotion auditable.
 
 ## Promoted actions
 

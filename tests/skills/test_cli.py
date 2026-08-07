@@ -13,7 +13,7 @@ def test_skills_list_shows_attribution_and_availability(capsys):
     dns = by_id["dns.txt"]
     assert dns["available"] is True
     assert dns["skill"] == "recon/dns-recon"
-    assert "@reeshasx" in dns["attribution"]
+    assert "CyberNeon" in dns["attribution"]
     assert dns["bundle_risk_level"] == "1"
 
 

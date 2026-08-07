@@ -1,4 +1,31 @@
+```
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║                                                                  ║
+  ║    ██████╗ ██╗   ██╗ ██████╗ ██████╗ ██╗   ██╗ ██████╗         ║
+  ║    ██╔══██╗██║   ██║██╔════╝ ██╔══██╗██║   ██║██╔════╝         ║
+  ║    ██████╔╝██║   ██║██║  ███╗██████╔╝██║   ██║██║  ███╗        ║
+  ║    ██╔══██╗██║   ██║██║   ██║██╔══██╗██║   ██║██║   ██║        ║
+  ║    ██████╔╝╚██████╔╝╚██████╔╝██████╔╝╚██████╔╝╚██████╔╝        ║
+  ║    ╚═════╝  ╚═════╝  ╚═════╝ ╚═════╝  ╚═════╝  ╚═════╝        ║
+  ║                                                                  ║
+  ║     ██╗  ██╗ █████╗  ██████╗██╗  ██╗██████╗  ██████╗ ████████╗ ║
+  ║     ██║  ██║██╔══██╗██╔════╝██║ ██╔╝██╔══██╗██╔═══██╗╚══██╔══╝ ║
+  ║     ███████║███████║██║     █████╔╝ ██████╔╝██║   ██║   ██║    ║
+  ║     ██╔══██║██╔══██║██║     ██╔═██╗ ██╔══██╗██║   ██║   ██║    ║
+  ║     ██║  ██║██║  ██║╚██████╗██║  ██╗██████╔╝╚██████╔╝   ██║    ║
+  ║     ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═════╝  ╚═════╝    ╚═╝    ║
+  ║                                                                  ║
+  ║        local · modular · auditable · safety-controlled           ║
+  ║              AI-assisted bug bounty workstation                  ║
+  ║                                                                  ║
+  ╚══════════════════════════════════════════════════════════════════╝
+```
+
 # bugbug — AI-assisted bug bounty research workstation
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Python](https://img.shields.io/badge/python-%E2%89%A53.11-blue.svg)](#requirements)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](#requirements)
 
 A **local, modular, auditable, safety-controlled** bug-bounty research workstation
 for macOS **and** Linux, operated primarily through the Claude Code CLI with
@@ -8,6 +35,17 @@ multi-provider model support behind a local gateway. Primary command: `hackbot`.
 > in-scope bug-bounty assets · local labs / CTFs / research. Never for
 > unauthorized scanning, persistence, evasion, DoS, phishing, or mass exploitation.
 > See [`SECURITY.md`](./SECURITY.md) and [`CLAUDE.md`](./CLAUDE.md).
+
+## Contents
+
+- [Status](#status)
+- [Design principles](#design-principles)
+- [Layout](#layout)
+- [Requirements](#requirements)
+- [Quick start](#quick-start-read-only-installs-nothing-system-wide)
+- [Recon bundle pipeline](#recon-bundle-pipeline)
+- [Documentation](#documentation)
+- [License](#license)
 
 ## Status
 
@@ -151,3 +189,14 @@ python3.11 -m venv .venv                # or any >=3.11 interpreter
 - `CLAUDE.md`, `SECURITY.md` — operating rules and safety model
 
 Roadmap and architecture: `docs/architecture.md` (next).
+
+## License
+
+Hackbot's own source is released under the [MIT License](./LICENSE).
+
+Some material referenced or adapted from third-party projects retains its
+original license and attribution terms — see
+[`docs/licenses-and-attribution.md`](docs/licenses-and-attribution.md) for the
+full ledger. Notably, the local reconnaissance bundle
+(`references/recon/Recon-bundle.html`) is unlicensed upstream material
+authorized for **local, private use only** and must **not** be redistributed.

@@ -1,10 +1,10 @@
 # Publication Guard
 
-The local recon bundle `references/recon/Recon-bundle.html` (author **@reeshasx**,
-"CyberNeon Recon Bundle") carries **no license**. Per the operator's decision it may
-be used for **local, private** purposes with attribution, but **redistribution is
-not authorized**. This guard prevents the bundle and its derived artifacts from
-being pushed or distributed accidentally.
+The local recon bundle `references/recon/Recon-bundle.html` ("CyberNeon Recon
+Bundle") carries **no license**. Per the operator's decision it may be used
+for **local, private** purposes, but **redistribution is not authorized**.
+This guard prevents the bundle and its derived artifacts from being pushed or
+distributed accidentally.
 
 ## Protected artifacts
 - `references/recon/Recon-bundle.html` (immutable source)

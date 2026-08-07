@@ -29,7 +29,7 @@ from hackbot.engagement_v2.projection import (
 _CONTRACT_SCHEMA_VERSION = 1
 _DEFINITION_DIGEST_DOMAIN = "hackbot-l3-action-definition-v1"
 _PROVENANCE_PATH = "skills/internal-recon/credential-l3-catalog.md"
-_ATTRIBUTION = "@reeshasx (CyberNeon Recon Bundle), reviewed single-action subset"
+_ATTRIBUTION = "CyberNeon Recon Bundle (public source; no formal license), reviewed single-action subset"
 _COMPLETE_FIELDS = frozenset(
     {
         "manifest",

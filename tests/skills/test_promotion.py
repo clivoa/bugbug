@@ -25,11 +25,38 @@ def test_every_promotion_maps_to_a_real_reviewed_skill():
     for action_id, prov in PROMOTED_ACTIONS.items():
         assert (prov.skill_id, prov.source_note) in pairs, action_id
         assert prov.skill_id not in internal  # internal-recon is never promoted
-        assert "@reeshasx" in prov.attribution
+        assert "CyberNeon" in prov.attribution
+
+
+# Action IDs that derive from the recon bundle and must have provenance.
+# Other registered actions (remote arsenal, cloud, web3, etc.) are not
+# bundle-derived and are not expected in PROMOTED_ACTIONS.
+_BUNDLE_DERIVED_PREFIXES = frozenset({
+    "dns.",           # dns.lookup, dns.txt, dns.mx, dns.ns
+    "net.http-get",   # core HTTP probe
+    "net.http-head",  # core HTTP probe
+    "net.http-options",
+    "net.port-scan",  # recon bundle port scanning
+    "tls.cert",       # recon bundle TLS
+    "web.dir-enum",   # recon bundle directory enumeration
+    "web.dir-enum-gobuster",
+})
+
+
+def _is_bundle_derived(action_id: str) -> bool:
+    """Check if an action ID is bundle-derived (exact match or prefix)."""
+    for prefix in _BUNDLE_DERIVED_PREFIXES:
+        if action_id == prefix or (
+            prefix.endswith(".") and action_id.startswith(prefix)
+        ):
+            return True
+    return False
 
 
 def test_every_registered_bundle_action_has_provenance():
     for action_id in REGISTERED_ACTION_IDS:
-        if action_id in ("net.http-post",):  # generic POST, not bundle-derived
+        if not _is_bundle_derived(action_id):
             continue
-        assert action_id in PROMOTED_ACTIONS, action_id
+        assert action_id in PROMOTED_ACTIONS, (
+            f"bundle-derived action {action_id!r} missing from PROMOTED_ACTIONS"
+        )

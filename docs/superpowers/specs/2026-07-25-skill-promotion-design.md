@@ -16,7 +16,7 @@ existing safety gate.
 - The raw bundle HTML is never loaded; only the generated manifest/notes are read
   (as data). Bundle commands stay data; only generic single-tool argv subsets
   become code-owned actions.
-- Attribution to `@reeshasx (CyberNeon Recon Bundle)` is recorded for every
+- Attribution to `CyberNeon Recon Bundle (public source; no formal license)` is recorded for every
   bundle-derived action (local reuse with attribution; no redistribution of the
   bundle's creative content).
 
@@ -40,7 +40,7 @@ class SkillProvenance:
     source_note: str  # e.g. "note-consulta-dns"
     bundle_risk_level: str  # "0".."2"
     approval_level: str  # "none" | "auto-if-in-scope" | "explicit"
-    attribution: str  # "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+    attribution: str  # "CyberNeon Recon Bundle (public source; no formal license)"
 
 
 PROMOTED_ACTIONS: dict[str, SkillProvenance]  # action_id -> provenance
@@ -95,7 +95,7 @@ non-bundle actions are marked as such.
 ## Boundary
 
 Promoted skills are recon-only, code-owned single-tool argv subsets of reviewed
-bundle skills, gated (scope + risk + approval), attributed to `@reeshasx`, and
+bundle skills, gated (scope + risk + approval), attributed to `CyberNeon Recon Bundle`, and
 never include `internal-recon` or any L3/exploitation capability. Fuzzing/wordlist
 tools (ffuf/gobuster) need an argv-placeholder extension and are a separate,
 later increment.

@@ -8,7 +8,7 @@ scenarios, tested end to end against a local lab.
 
 **Safety boundary:** L2 (intrusive/high-volume) → explicit TTY approval; runs only
 against in-scope targets; recon (discovery), not exploitation; nothing L3; the
-raw bundle HTML is never read; attributed to `@reeshasx`.
+raw bundle HTML is never read; attributed to `CyberNeon Recon Bundle`.
 
 ## Context
 

@@ -222,7 +222,13 @@ def parse_bundle(path: str | Path) -> list[ReconNote]:
 
 
 def bundle_metadata(path: str | Path) -> dict[str, str]:
-    """Extract bundle-level attribution WITHOUT executing anything."""
+    """Extract bundle-level metadata WITHOUT executing anything.
+
+    The bundle's original personal-handle credit is intentionally not surfaced
+    here: the operator determined this content is already public and
+    authorized local reuse without a personal attribution string. See
+    docs/licenses-and-attribution.md.
+    """
     raw = Path(path).read_text(encoding="utf-8", errors="replace")
 
     def _find(pattern: str) -> str:
@@ -230,16 +236,11 @@ def bundle_metadata(path: str | Path) -> dict[str, str]:
         return html.unescape(re.sub("<[^>]+>", "", m.group(1))).strip() if m else ""
 
     title = _find(r"<title[^>]*>(.*?)</title>")
-    author_link = ""
-    m = re.search(r'href="(https?://[^"]*(?:x\.com|twitter\.com)/[^"]+)"', raw, re.I)
-    if m:
-        author_link = m.group(1)
-    credit = _find(r'class="credit">(.*?)</div>')
     has_license = bool(re.search(r"MIT License|Apache License|GPL|Creative Commons|BSD", raw))
     return {
         "title": title,
-        "author": credit or "@reeshasx",
-        "author_link": author_link,
+        "author": "CyberNeon Recon Bundle (public source; no formal license)",
+        "author_link": "",
         "license_declared": "yes" if has_license else "none-found",
     }
 

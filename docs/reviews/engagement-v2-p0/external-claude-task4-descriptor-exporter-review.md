@@ -1,58 +1,60 @@
-# Revisão de segurança (somente-leitura) — exporter de schemas engagement-v2
+# Security review (read-only) — engagement-v2 schema exporter
 
-Escopo: `scripts/export_engagement_v2_schemas.py`, com apoio de
-`src/hackbot/engagement_v2/schemas.py`, `tests/engagement_v2/test_schemas.py` e
-`.superpowers/sdd/2026-07-26-engagement-v2-security-contracts/task-4-report.md`.
-Worktree: `.worktrees/engagement-v2-security-contracts`. Nenhum arquivo foi
-editado; nenhum comando ofensivo/destrutivo foi executado.
+Scope: `scripts/export_engagement_v2_schemas.py`, supported by
+`src/hackbot/engagement_v2/schemas.py`, `tests/engagement_v2/test_schemas.py`,
+and `.superpowers/sdd/2026-07-26-engagement-v2-security-contracts/task-4-report.md`.
+Worktree: `.worktrees/engagement-v2-security-contracts`. No file was edited; no
+offensive/destructive command was executed.
 
 ---
 
-## Veredicto
+## Verdict
 
-A confirmação do review anterior procede: **todas as defesas contra symlink do
-exporter são baseadas em caminho (`lstat` via `Path.is_symlink`) e são
-re-resolvidas por caminho no momento do uso** (`tempfile.mkstemp(dir=...)`,
+The previous review's confirmation stands: **all of the exporter's symlink
+defenses are path-based (`lstat` via `Path.is_symlink`) and are re-resolved by
+path at the moment of use** (`tempfile.mkstemp(dir=...)`,
 `os.replace(temporary, target)`, `path.read_bytes()`, `os.open(destination)`).
-Entre o check e o use existe uma janela TOCTOU clássica: um componente do caminho
-(tipicamente o próprio diretório `destination` ou um pai) pode ser trocado por um
-symlink depois da verificação e antes da operação. **Não há um único `O_NOFOLLOW`
-nem uma única operação relativa a `dir_fd` no arquivo.**
+Between the check and the use there is a classic TOCTOU window: a path
+component (typically the `destination` directory itself, or a parent) can be
+swapped for a symlink after the check and before the operation. **There is not
+a single `O_NOFOLLOW`, nor a single `dir_fd`-relative operation, anywhere in
+the file.**
 
-Na configuração normal — `SCHEMA_ROOT` derivado de `Path(__file__).resolve()`
-sob um repositório de propriedade do operador — a explorabilidade é baixa
-(exige um pai gravável e hostil). Mas o contrato desta task é *drift-proof e
-symlink-safe*, e a garantia atual é probabilística (largura da janela), não
-estrutural. **Recomendo reimplementar write e `--check` com diretórios
-descriptor-pinned (openat encadeado com `O_DIRECTORY|O_NOFOLLOW`), operações
-relativas a `dir_fd`, `os.replace` com `src_dir_fd/dst_dir_fd` e `fsync` do fd de
-diretório**, com **fail-closed rígido** quando a plataforma não oferece
-`dir_fd`/`O_NOFOLLOW`.
+Under the normal configuration — `SCHEMA_ROOT` derived from
+`Path(__file__).resolve()` under an operator-owned repository — exploitability
+is low (it requires a writable, hostile parent directory). But this task's
+contract is *drift-proof and symlink-safe*, and the current guarantee is
+probabilistic (window width), not structural. **I recommend reimplementing
+write and `--check` with descriptor-pinned directories (chained `openat` with
+`O_DIRECTORY|O_NOFOLLOW`), `dir_fd`-relative operations, `os.replace` with
+`src_dir_fd/dst_dir_fd`, and `fsync` of the directory fd**, with **strict
+fail-closed** behavior when the platform doesn't offer `dir_fd`/`O_NOFOLLOW`.
 
-Além do TOCTOU, encontrei duas lacunas funcionais de segurança que o TOCTOU
-ofuscou: **`--check` não detecta arquivos extras** e **write não remove arquivos
-obsoletos** — ou seja, um arquivo de schema injetado passa despercebido pelo
-drift-gate.
+Beyond the TOCTOU, I found two functional security gaps that the TOCTOU had
+obscured: **`--check` does not detect extra files** and **write does not
+remove stale files** — meaning an injected schema file passes the drift gate
+unnoticed.
 
-Severidade agregada: **1 Critical, 3 Important, 4 Minor.** Nada bloqueia o uso
-como ferramenta local de dev/CI, mas o Critical deve ser corrigido antes de
-qualquer execução em diretório de destino não-exclusivamente-confiável.
+Aggregate severity: **1 Critical, 3 Important, 4 Minor.** Nothing blocks use
+as a local dev/CI tool, but the Critical finding should be fixed before any
+run against a destination directory that isn't exclusively trusted.
 
 ---
 
-## Desenho recomendado (o menor desenho seguro)
+## Recommended design (the smallest safe design)
 
-Princípio: **fixar o inode do diretório de destino em um descritor e nunca mais
-tocar no caminho por string.** Depois que `dir_fd` aponta para o inode real,
-qualquer troca posterior do *nome* `schemas/engagement-v2` por um symlink não
-tem efeito — as escritas continuam indo para o inode fixado.
+Principle: **pin the destination directory's inode to a descriptor and never
+touch the path by string again.** Once `dir_fd` points at the real inode, any
+later swap of the *name* `schemas/engagement-v2` for a symlink has no effect —
+writes keep going to the pinned inode.
 
-Restrições respeitadas: Python 3.11+, zero dependências runtime, apenas
-`os`/`stdlib`. `tempfile.mkstemp` **não** aceita `dir_fd`, então o temporário é
-criado à mão com `os.open(..., O_CREAT|O_EXCL|O_NOFOLLOW, 0o600, dir_fd=...)` e um
-sufixo aleatório de `secrets.token_hex` (stdlib).
+Constraints respected: Python 3.11+, zero runtime dependencies, stdlib
+(`os`) only. `tempfile.mkstemp` **does not** accept `dir_fd`, so the temporary
+file is created by hand with
+`os.open(..., O_CREAT|O_EXCL|O_NOFOLLOW, 0o600, dir_fd=...)` and a random
+suffix from `secrets.token_hex` (stdlib).
 
-### 1. Gate de capacidade (fail-closed, uma vez, no início de `main`)
+### 1. Capability gate (fail-closed, once, at the start of `main`)
 
 ```python
 _REQUIRED_DIR_FD = (os.open, os.mkdir, os.replace, os.unlink, os.stat)
@@ -68,21 +70,22 @@ def _require_secure_fs() -> None:
         )
 ```
 
-Chave: **remover o `getattr(os, "O_DIRECTORY", 0)`** de hoje (linha 89). Aquele
-fallback silencioso é o oposto de fail-closed.
+Key point: **remove today's `getattr(os, "O_DIRECTORY", 0)`** (line 89). That
+silent fallback is the opposite of fail-closed.
 
-### 2. Fixar o caminho por componentes (openat encadeado)
+### 2. Pin the path by component (chained openat)
 
-`SCHEMA_ROOT` = `REPOSITORY_ROOT / "schemas" / "engagement-v2"`. `REPOSITORY_ROOT`
-já é canonicalizado por `.resolve()` no import, então é a raiz de confiança.
-Abrir cada componente relativo abaixo dela com `O_NOFOLLOW|O_DIRECTORY` elimina
-symlink em *qualquer* componente e o TOCTOU de pai:
+`SCHEMA_ROOT` = `REPOSITORY_ROOT / "schemas" / "engagement-v2"`.
+`REPOSITORY_ROOT` is already canonicalized by `.resolve()` at import time, so
+it is the trust root. Opening each relative component below it with
+`O_NOFOLLOW|O_DIRECTORY` eliminates a symlink at *any* component, and the
+parent TOCTOU:
 
 ```python
 def _open_pinned_dir(root_fd: int, name: str, *, create: bool) -> int:
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     try:
-        return os.open(name, flags, dir_fd=root_fd)      # ELOOP se symlink
+        return os.open(name, flags, dir_fd=root_fd)      # ELOOP if symlink
     except FileNotFoundError:
         if not create:
             raise
@@ -90,13 +93,14 @@ def _open_pinned_dir(root_fd: int, name: str, *, create: bool) -> int:
         return os.open(name, flags, dir_fd=root_fd)
 ```
 
-Encadeia-se `schemas` → `engagement-v2` a partir de um fd aberto em
-`REPOSITORY_ROOT`. `O_NOFOLLOW` faz `open` falhar com `ELOOP` se o componente
-final for symlink; `O_DIRECTORY` garante que é diretório (ou `ENOTDIR`).
-Traduzir `ELOOP`/`ENOTDIR`/`FileExistsError` em `RuntimeError("symlink
-destination rejected: ...")` para preservar o contrato de mensagem já testado.
+Chain `schemas` → `engagement-v2` starting from an fd opened on
+`REPOSITORY_ROOT`. `O_NOFOLLOW` makes `open` fail with `ELOOP` if the final
+component is a symlink; `O_DIRECTORY` guarantees it is a directory (or
+`ENOTDIR`). Translate `ELOOP`/`ENOTDIR`/`FileExistsError` into
+`RuntimeError("symlink destination rejected: ...")` to preserve the
+already-tested message contract.
 
-### 3. Write atômico relativo ao fd fixado
+### 3. Atomic write relative to the pinned fd
 
 ```python
 def _write_one(dir_fd: int, name: str, content: bytes) -> None:
@@ -104,7 +108,7 @@ def _write_one(dir_fd: int, name: str, content: bytes) -> None:
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
                  0o600, dir_fd=dir_fd)
     try:
-        os.fchmod(fd, 0o600)          # mantém: O_CREAT mode sofre umask
+        os.fchmod(fd, 0o600)          # keep: O_CREAT mode is subject to umask
         with os.fdopen(fd, "wb", closefd=True) as stream:
             stream.write(content)
             stream.flush()
@@ -116,42 +120,45 @@ def _write_one(dir_fd: int, name: str, content: bytes) -> None:
         raise
     finally:
         pass
-os.fsync(dir_fd)   # uma vez, após todos os replaces
+os.fsync(dir_fd)   # once, after all replaces
 ```
 
-`O_EXCL` impede seguir/reutilizar um temporário plantado. `os.replace` com
-ambos `src_dir_fd`/`dst_dir_fd` faz `renameat` dentro do inode fixado — o pai não
-é re-resolvido por caminho, e `rename(2)` não segue symlink no componente final
-de destino. `fsync(dir_fd)` torna os renames duráveis.
+`O_EXCL` prevents following/reusing a planted temporary file. `os.replace`
+with both `src_dir_fd`/`dst_dir_fd` performs a `renameat` within the pinned
+inode — the parent is not re-resolved by path, and `rename(2)` does not follow
+a symlink at the final destination component. `fsync(dir_fd)` makes the
+renames durable.
 
-### 4. Poda de arquivos obsoletos/extras (write)
+### 4. Prune stale/extra files (write)
 
-Depois de escrever o conjunto esperado, listar o diretório pelo fd e remover o
-que não pertence — senão um schema injetado sobrevive a re-exports:
+After writing the expected set, list the directory via the fd and remove
+anything that doesn't belong — otherwise an injected schema survives
+re-exports:
 
 ```python
 expected = set(rendered)
 for entry in os.listdir(dir_fd):
     if entry not in expected and not entry.endswith(".tmp"):
-        os.unlink(entry, dir_fd=dir_fd)   # ou reportar e falhar, ver decisão
+        os.unlink(entry, dir_fd=dir_fd)   # or report and fail, see decision
 ```
 
-Decisão de produto: podar automaticamente **ou** recusar com erro. Para uma
-ferramenta *drift-proof* eu recomendaria podar em write e **reportar como drift**
-em `--check` (ver §5) — mas isso é uma escolha de contrato; sinalizo, não decido.
+Product decision: prune automatically **or** refuse with an error. For a
+*drift-proof* tool I would recommend pruning on write and **reporting it as
+drift** in `--check` (see §5) — but that's a contract choice; I'm flagging it,
+not deciding it.
 
-### 5. `--check` sem nenhuma escrita
+### 5. `--check` with zero writes
 
-Mesmo pin, porém **nunca** cria diretório, nunca abre com flag de escrita, nunca
-faz `mkstemp`/`replace`/`fsync`:
+Same pin, but it **never** creates the directory, never opens with a write
+flag, never calls `mkstemp`/`replace`/`fsync`:
 
 ```python
 def _check(root_fd) -> tuple[str, ...]:
     try:
         dir_fd = _open_pinned_dir(root_fd, "engagement-v2", create=False)
     except FileNotFoundError:
-        return tuple(sorted(rendered))          # tudo drift, sem criar
-    # ELOOP -> RuntimeError (symlink) propaga
+        return tuple(sorted(rendered))          # everything is drift, don't create
+    # ELOOP -> RuntimeError (symlink) propagates
     drifted = []
     present = set(os.listdir(dir_fd))
     for name, expected in sorted(rendered.items()):
@@ -166,92 +173,95 @@ def _check(root_fd) -> tuple[str, ...]:
     return tuple(drifted)
 ```
 
-`O_RDONLY|O_NOFOLLOW` no read fecha o redirecionamento por symlink que a leitura
-atual (`path.read_bytes()`, que **segue** symlink) permite.
+`O_RDONLY|O_NOFOLLOW` on the read closes the symlink-redirection hole that the
+current read (`path.read_bytes()`, which **follows** symlinks) leaves open.
 
 ---
 
-## Matriz de plataforma
+## Platform matrix
 
-| Recurso | Linux | macOS (darwin) | POSIX geral (BSD/Solaris) | Windows |
+| Capability | Linux | macOS (darwin) | General POSIX (BSD/Solaris) | Windows |
 |---|---|---|---|---|
-| `os.O_NOFOLLOW` | ✔ | ✔ | ✔ | **ausente** |
-| `os.O_DIRECTORY` | ✔ | ✔ | ✔ | **ausente** |
-| `dir_fd` em `open/mkdir/unlink/stat` (`os.supports_dir_fd`) | ✔ | ✔ | ✔ (POSIX.1-2008 `*at`) | **não** |
-| `os.replace` com `src_dir_fd`/`dst_dir_fd` | ✔ | ✔ | ✔ (`renameat`) | **não** |
-| `os.listdir(fd)` (`os.supports_fd`) | ✔ | ✔ | ✔ | **não** |
-| `fsync` em fd de diretório | ✔ | ✔ (sem F_FULLFSYNC; ver nota) | ✔ | **não permitido** em handle de dir |
-| Modo `0600` significativo | ✔ | ✔ | ✔ | parcial (ACL, não bits POSIX) |
+| `os.O_NOFOLLOW` | ✔ | ✔ | ✔ | **absent** |
+| `os.O_DIRECTORY` | ✔ | ✔ | ✔ | **absent** |
+| `dir_fd` on `open/mkdir/unlink/stat` (`os.supports_dir_fd`) | ✔ | ✔ | ✔ (POSIX.1-2008 `*at`) | **no** |
+| `os.replace` with `src_dir_fd`/`dst_dir_fd` | ✔ | ✔ | ✔ (`renameat`) | **no** |
+| `os.listdir(fd)` (`os.supports_fd`) | ✔ | ✔ | ✔ | **no** |
+| `fsync` on a directory fd | ✔ | ✔ (no F_FULLFSYNC; see note) | ✔ | **not permitted** on a dir handle |
+| `0600` mode meaningful | ✔ | ✔ | ✔ | partial (ACL, not POSIX bits) |
 
-Notas relevantes:
+Relevant notes:
 
-- **`O_NOFOLLOW` só protege o componente final** do `open`. Por isso o desenho
-  encadeia um `openat` por componente a partir de `REPOSITORY_ROOT` — é o que a
-  ausência de `O_RESOLVE_BENEATH`/`RESOLVE_NO_SYMLINKS` (não expostos pelo
-  `os` do CPython em 3.11) exige. Não há necessidade de dependência: o
-  encadeamento manual cobre.
-- **macOS**: `fsync` não força flush até o prato (precisaria de `fcntl F_FULLFSYNC`
-  via `fcntl.fcntl`, stdlib). Para um artefato de repositório isso é aceitável;
-  a ordenação (dados→rename→fsync do dir) permanece correta. Risco residual de
-  durabilidade só em queda de energia; não afeta o modelo de ameaça symlink.
-- **Windows**: falta tudo que sustenta o pin. O código atual "funciona" por
-  acidente (`getattr(...,0)` + `os.open` de diretório falhando de qualquer modo),
-  o que é frágil. Recomendação: **fail-closed explícito** (o gate da §1). O
-  exporter é ferramenta de dev/CI POSIX; recusar no Windows com mensagem clara é
-  preferível a um caminho path-based inseguro.
+- **`O_NOFOLLOW` only protects the final component** of `open`. That's why the
+  design chains one `openat` per component starting from `REPOSITORY_ROOT` —
+  this is what the absence of `O_RESOLVE_BENEATH`/`RESOLVE_NO_SYMLINKS` (not
+  exposed by CPython's `os` module in 3.11) requires. No new dependency is
+  needed: manual chaining covers it.
+- **macOS**: `fsync` does not force a flush to platter (would need
+  `fcntl F_FULLFSYNC` via `fcntl.fcntl`, stdlib). For a repository artifact
+  this is acceptable; the ordering (data → rename → dir fsync) remains
+  correct. The residual durability risk only shows up on power loss; it does
+  not affect the symlink threat model.
+- **Windows**: everything the pin relies on is missing. The current code
+  "works" by accident (`getattr(...,0)` plus `os.open` on a directory failing
+  anyway), which is fragile. Recommendation: **explicit fail-closed** (the §1
+  gate). The exporter is a POSIX dev/CI tool; refusing on Windows with a clear
+  message is preferable to an insecure path-based fallback.
 
 ---
 
-## Testes determinísticos (race/symlink nos boundaries check→use)
+## Deterministic tests (race/symlink at the check→use boundary)
 
-Threads reais tornam o teste flaky. Torne a corrida determinística injetando a
-troca **exatamente** no boundary, via monkeypatch, e prove que o pin a neutraliza.
+Real threads make the test flaky. Make the race deterministic by injecting the
+swap **exactly** at the boundary, via monkeypatch, and prove the pin
+neutralizes it.
 
-1. **Symlink no destino, aberto com `O_NOFOLLOW`** (substitui os testes de
-   `lstat`): pré-criar `engagement-v2` como symlink → `_open_pinned_dir` deve
-   levantar `RuntimeError("symlink destination rejected")` por `ELOOP`, tanto em
-   `[]` quanto em `["--check"]`. Idem para pai (`schemas` → symlink) e para
-   arquivo final (`program.schema.json` → symlink) — este último provado agora
-   por `open(O_NOFOLLOW)` falhar, não por `lstat`.
+1. **Symlink at the destination, opened with `O_NOFOLLOW`** (replaces the
+   `lstat` tests): pre-create `engagement-v2` as a symlink → `_open_pinned_dir`
+   must raise `RuntimeError("symlink destination rejected")` via `ELOOP`, both
+   with `[]` and with `["--check"]`. Same for the parent (`schemas` →
+   symlink) and for the final file (`program.schema.json` → symlink) — the
+   latter now proven by `open(O_NOFOLLOW)` failing, not by `lstat`.
 
-2. **Corrida vencida, neutralizada pelo pin (o teste-chave)**: envolver o
-   helper de nome de temporário (ou `os.replace`) com um wrapper que, na
-   primeira chamada, executa a troca maliciosa do *caminho* `SCHEMA_ROOT` por um
-   symlink para um `attacker_dir`, e então delega. Assert: os bytes esperados
-   aparecem no inode originalmente fixado e **`attacker_dir` permanece vazio**.
-   Isso demonstra que ganhar a corrida não redireciona a escrita — é a prova
-   positiva do descriptor-pin (o teste que o desenho path-based não consegue
-   passar).
+2. **Race won, neutralized by the pin (the key test)**: wrap the temp-name
+   helper (or `os.replace`) with a wrapper that, on the first call, performs
+   the malicious swap of the `SCHEMA_ROOT` *path* for a symlink pointing at an
+   `attacker_dir`, then delegates. Assert: the expected bytes appear in the
+   originally pinned inode and **`attacker_dir` stays empty**. This
+   demonstrates that winning the race does not redirect the write — it is the
+   positive proof of the descriptor pin (the test a path-based design cannot
+   pass).
 
-3. **Fail-closed de capacidade**: `monkeypatch.delattr(os, "O_NOFOLLOW")` e,
-   separadamente, `monkeypatch.setattr(os, "supports_dir_fd", set())` →
-   `main([])` e `main(["--check"])` levantam `RuntimeError` e **nada** é escrito
-   (assert diretório inalterado / inexistente).
+3. **Capability fail-closed**: `monkeypatch.delattr(os, "O_NOFOLLOW")` and,
+   separately, `monkeypatch.setattr(os, "supports_dir_fd", set())` →
+   `main([])` and `main(["--check"])` raise `RuntimeError` and **nothing** is
+   written (assert the directory is unchanged / does not exist).
 
-4. **Zero escrita em `--check` (fd-spy)**: envolver `os.open` para levantar se
-   qualquer flag de escrita (`O_CREAT|O_WRONLY|O_RDWR`) for usada durante
-   `--check`, e envolver `os.replace`/`os.mkdir`/`os.fsync` para falhar se
-   chamados. Rodar `--check` em (a) destino idêntico, (b) com drift, (c) com
-   arquivo extra, (d) destino ausente. Assert exit codes e que os wrappers
-   nunca dispararam. Reforça os testes atuais de mtime before/after.
+4. **Zero writes during `--check` (fd-spy)**: wrap `os.open` to raise if any
+   write flag (`O_CREAT|O_WRONLY|O_RDWR`) is used during `--check`, and wrap
+   `os.replace`/`os.mkdir`/`os.fsync` to fail if called. Run `--check` against
+   (a) an identical destination, (b) one with drift, (c) one with an extra
+   file, (d) a missing destination. Assert exit codes and that the wrappers
+   never fired. Reinforces the current mtime-before/after tests.
 
-5. **Detecção de arquivo extra**: colocar `rogue.schema.json` no destino →
-   `--check` retorna exit 1 listando `drift: rogue.schema.json` (ordenado); e
-   (conforme decisão §4) write o remove. Cobre a lacuna que os testes atuais não
-   exercem (eles só testam modificado/removido).
+5. **Extra-file detection**: place a `rogue.schema.json` in the destination →
+   `--check` returns exit 1 listing `drift: rogue.schema.json` (sorted); and
+   (per the §4 decision) write removes it. Covers the gap the current tests
+   don't exercise (they only test modified/removed).
 
-6. **Cleanup de temporário em falha de `replace`** (adaptar o teste existente):
-   `os.replace` falha → assert `os.listdir(dir_fd)` não contém nenhum `*.tmp`
-   (via fd, não `glob` de caminho) e que `os.fsync` do arquivo ocorreu.
+6. **Temp-file cleanup on `replace` failure** (adapt the existing test):
+   `os.replace` fails → assert `os.listdir(dir_fd)` contains no `*.tmp` entry
+   (via fd, not path `glob`) and that `os.fsync` on the file occurred.
 
-7. **Spy de flags**: assert que `os.open` do arquivo recebeu
-   `O_CREAT|O_EXCL|O_NOFOLLOW` e `dir_fd` não-nulo, e que `os.replace` recebeu
-   `src_dir_fd` e `dst_dir_fd` — garante que a implementação não regrida para
-   caminhos.
+7. **Flag spy**: assert that the file's `os.open` received
+   `O_CREAT|O_EXCL|O_NOFOLLOW` and a non-null `dir_fd`, and that `os.replace`
+   received `src_dir_fd` and `dst_dir_fd` — guards against the implementation
+   regressing to path-based operations.
 
-8. **`--check` não cria destino ausente** (manter o teste atual) e não segue
-   symlink de leitura: destino com symlink de arquivo apontando para fora →
-   `--check` marca drift/rejeita, sem ler o alvo externo.
+8. **`--check` does not create a missing destination** (keep the current
+   test) and does not follow a symlink on read: a destination with a file
+   symlink pointing outside → `--check` flags drift/rejects, without reading
+   the external target.
 
 ---
 
@@ -259,112 +269,121 @@ troca **exatamente** no boundary, via monkeypatch, e prove que o pin a neutraliz
 
 ### Critical
 
-**C1 — TOCTOU nas escritas: verificação e uso ambos por caminho, sem
+**C1 — TOCTOU on writes: both the check and the use are path-based, without
 `O_NOFOLLOW`/`dir_fd`.**
-`scripts/export_engagement_v2_schemas.py:51-74` (`_write_one`) e `:77-94`
-(`_write_files`). `_reject_symlink_components(target)` (l.53) faz `lstat` por
-caminho; em seguida `tempfile.mkstemp(dir=destination)` (l.54) e
-`os.replace(temporary, target)` (l.67) re-resolvem `destination`/pais por string.
-`_write_files` mitiga com dupla checagem (l.78 e l.80) mas não fecha a janela.
-Cenário de falha: em um `SCHEMA_ROOT` cujo pai seja gravável por outro
-usuário/processo (tmp compartilhado, diretório de engagement multiusuário, CI
-com workspace hostil), trocar `engagement-v2` (ou `schemas`) por um symlink
-entre a checagem e o `replace` faz a escrita `0600` — inclusive `manifest.json`
-— cair fora da árvore pretendida, no inode escolhido pelo atacante.
-Correção mínima: descriptor-pin (Desenho §2–§3): `openat` encadeado com
-`O_DIRECTORY|O_NOFOLLOW`, temporário com `O_CREAT|O_EXCL|O_NOFOLLOW` +
+`scripts/export_engagement_v2_schemas.py:51-74` (`_write_one`) and `:77-94`
+(`_write_files`). `_reject_symlink_components(target)` (l.53) does an `lstat`
+by path; then `tempfile.mkstemp(dir=destination)` (l.54) and
+`os.replace(temporary, target)` (l.67) re-resolve `destination`/parents by
+string. `_write_files` mitigates with a double check (l.78 and l.80) but does
+not close the window.
+Failure scenario: in a `SCHEMA_ROOT` whose parent is writable by another
+user/process (shared tmp, multi-user engagement directory, CI with a hostile
+workspace), swapping `engagement-v2` (or `schemas`) for a symlink between the
+check and the `replace` makes the `0600` write — including `manifest.json` —
+land outside the intended tree, at an inode of the attacker's choosing.
+Minimal fix: descriptor pin (Design §2–§3): chained `openat` with
+`O_DIRECTORY|O_NOFOLLOW`, temp file with `O_CREAT|O_EXCL|O_NOFOLLOW` +
 `dir_fd`, `os.replace(..., src_dir_fd, dst_dir_fd)`, `fsync(dir_fd)`.
 
 ### Important
 
-**I1 — `--check` verifica symlink por caminho e depois lê seguindo symlink.**
-`:33-48` (`_drifted_files`) e `:112-114`. `destination.is_symlink()`/
-`_reject_symlink(path)` são `lstat`; `path.read_bytes()` (l.42) **segue**
-symlink. Cenário: trocar um componente ou o arquivo final por symlink entre
-`_reject_symlink` (l.40) e `read_bytes` (l.42) faz o `--check` ler o alvo
-apontado pelo atacante, influenciando o resultado de drift/exit code (e lendo
-conteúdo de fora da árvore). Não escreve, mas corrói a confiabilidade do gate.
-Correção mínima: pin + `os.open(name, O_RDONLY|O_NOFOLLOW, dir_fd=...)`
-(Desenho §5).
+**I1 — `--check` verifies the symlink by path, then reads by following the
+symlink.**
+`:33-48` (`_drifted_files`) and `:112-114`. `destination.is_symlink()`/
+`_reject_symlink(path)` are `lstat`; `path.read_bytes()` (l.42) **follows**
+symlinks. Scenario: swapping a component or the final file for a symlink
+between `_reject_symlink` (l.40) and `read_bytes` (l.42) makes `--check` read
+the attacker-controlled target, influencing the drift result/exit code (and
+reading content from outside the tree). It doesn't write, but it undermines
+the reliability of the gate.
+Minimal fix: pin + `os.open(name, O_RDONLY|O_NOFOLLOW, dir_fd=...)`
+(Design §5).
 
-**I2 — Arquivos extras/obsoletos não são detectados nem removidos.**
-`:33-48` (check itera só `rendered.items()`) e `:84-87` (write só grava o
-conjunto esperado, nunca poda). Cenário: um `injected.schema.json` (plantado por
-qualquer meio) sobrevive indefinidamente a `--check` (exit 0, "sem drift") e a
-re-exports; um loader que faça `glob` do diretório o carrega como contrato
-válido. O manifest lista só os esperados, mas o diretório vira superconjunto
-silencioso. Confirmado pelos testes: `test_exporter_check_..._drift` só cobre
-modificado/removido; nenhum teste cobre arquivo extra.
-Correção mínima: em `--check`, comparar `set(os.listdir(dir_fd))` com
-`set(rendered)` e reportar extras como drift; em write, podar (Desenho §4).
-Decisão de contrato (podar vs. recusar) fica com o time.
+**I2 — Extra/stale files are neither detected nor removed.**
+`:33-48` (check only iterates `rendered.items()`) and `:84-87` (write only
+writes the expected set, never prunes). Scenario: an `injected.schema.json`
+(planted by any means) survives indefinitely through `--check` (exit 0, "no
+drift") and through re-exports; a loader that `glob`s the directory loads it
+as a valid contract. The manifest lists only the expected files, but the
+directory becomes a silent superset. Confirmed by the tests:
+`test_exporter_check_..._drift` only covers modified/removed; no test covers
+an extra file.
+Minimal fix: in `--check`, compare `set(os.listdir(dir_fd))` against
+`set(rendered)` and report extras as drift; in write, prune (Design §4). The
+contract decision (prune vs. refuse) belongs to the team.
 
-**I3 — Degradação silenciosa de capacidade em vez de fail-closed.**
-`:89` `directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)`. O
-`getattr(..., 0)` transforma ausência de `O_DIRECTORY` em no-op em vez de recusa.
-Como o desenho seguro passa a *depender* de `O_NOFOLLOW`/`dir_fd`, qualquer
-plataforma sem esses recursos precisa **recusar**, não cair para path-based.
-Cenário: rodar em ambiente sem `dir_fd` (Windows/embarcado) executaria o caminho
-inseguro sem aviso.
-Correção mínima: gate de capacidade fail-closed no início de `main` (Desenho §1)
-e remover o fallback `getattr`.
+**I3 — Silent capability degradation instead of fail-closed.**
+`:89` `directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)`. The
+`getattr(..., 0)` turns the absence of `O_DIRECTORY` into a no-op instead of a
+refusal. Since the secure design now *depends* on `O_NOFOLLOW`/`dir_fd`, any
+platform lacking those must **refuse**, not fall back to path-based behavior.
+Scenario: running in an environment without `dir_fd` (Windows/embedded) would
+silently execute the insecure path.
+Minimal fix: fail-closed capability gate at the start of `main` (Design §1)
+and remove the `getattr` fallback.
 
 ### Minor
 
-**M1 — `mkdir(exist_ok=True)` aceita destino que já é symlink-para-diretório.**
-`:79`. `Path.mkdir(exist_ok=True)` suprime `FileExistsError` quando o alvo
-resolve para diretório (segue symlink), então um `engagement-v2` que já seja
-symlink-para-dir passa; só a re-checagem `lstat` da l.80 pega. Depende da ordem
-de duas chamadas `lstat` — frágil. O descriptor-pin (`os.mkdir(..., dir_fd=)` +
-reabrir com `O_NOFOLLOW`) elimina a ambiguidade.
+**M1 — `mkdir(exist_ok=True)` accepts a destination that is already a
+symlink-to-directory.**
+`:79`. `Path.mkdir(exist_ok=True)` suppresses `FileExistsError` when the
+target resolves to a directory (follows the symlink), so an `engagement-v2`
+that is already a symlink-to-dir passes; only the re-check `lstat` at l.80
+catches it. Depends on the ordering of two `lstat` calls — fragile. The
+descriptor pin (`os.mkdir(..., dir_fd=)` + reopening with `O_NOFOLLOW`)
+eliminates the ambiguity.
 
-**M2 — Sem atomicidade global do conjunto.** `:84-94`. Cada arquivo é
-`replace`-ado individualmente; uma queda no meio deixa conjunto parcial. O
-`manifest.json` é escrito por último (aparece por último em `rendered`,
-`schemas.py:1200`), o que ajuda consumidores que validam via manifest, mas não
-há barreira transacional. Aceitável para a ferramenta; anotar como residual.
+**M2 — No global atomicity across the set.** `:84-94`. Each file is
+`replace`d individually; a crash mid-way leaves a partial set. `manifest.json`
+is written last (it appears last in `rendered`, `schemas.py:1200`), which
+helps consumers that validate via the manifest, but there is no transactional
+barrier. Acceptable for the tool; note it as residual.
 
-**M3 — `fchmod` é redundante com o `0600` do `mkstemp`, porém correto — manter.**
-`:61`. `tempfile.mkstemp` já cria `0600`; no desenho novo, `O_CREAT` sofre
-`umask`, então **manter o `fchmod` explícito** garante exatamente `0600`
-independente de `umask`. Informacional: não remover na refatoração.
+**M3 — `fchmod` is redundant with `mkstemp`'s `0600`, but correct — keep it.**
+`:61`. `tempfile.mkstemp` already creates with `0600`; in the new design,
+`O_CREAT` is subject to `umask`, so **keeping the explicit `fchmod`**
+guarantees exactly `0600` regardless of `umask`. Informational: do not remove
+it during the refactor.
 
-**M4 — Mensagens de erro incluem o caminho do destino.** `:24`,`:82`. Baixo
-impacto (ferramenta local de operador), mas em logs de CI compartilhados expõe
-layout de diretório. Aceitável; anotar.
-
----
-
-## Riscos residuais (após o desenho recomendado)
-
-- **Raiz de confiança = `REPOSITORY_ROOT`.** O pin encadeia a partir de
-  `Path(__file__).resolve()`, que segue symlinks no import. Se o próprio
-  checkout viver sob um pai hostil, isso é canonicalizado uma vez no import —
-  há uma janela minúscula nos pais *acima* de `REPOSITORY_ROOT` antes de abrir o
-  fd de raiz, equivalente à confiança de simplesmente executar o script.
-  **Severidade: baixa**; mitigável abrindo `REPOSITORY_ROOT` com `O_NOFOLLOW` e
-  validando `st_dev/st_ino`, mas provavelmente overkill.
-- **Durabilidade em macOS** (F_FULLFSYNC ausente): perda só em queda de energia;
-  não afeta a propriedade anti-symlink. **Baixa.**
-- **Não-atomicidade multi-arquivo (M2):** conjunto parcial após crash; próximo
-  `--check` detecta e próximo write conserta. **Baixa.**
-- **Decisão de poda (I2):** se optarem por *reportar* em vez de *remover* extras,
-  operadores precisam agir no drift; se *remover*, um arquivo legítimo não-gerado
-  colocado no diretório é apagado. Escolha de contrato, não defeito. **Baixa,
-  depende da política.**
-- **Sinais fora do FS:** o exporter confia em `render_schema_files()` como fonte
-  da verdade; a integridade dos bytes gerados (não o transporte para disco) está
-  fora do escopo desta task e já é coberta por `schemas.py` +
-  `test_schema_rendering_and_manifest_hashes_are_deterministic`. Sem achado.
+**M4 — Error messages include the destination path.** `:24`,`:82`. Low
+impact (a local operator tool), but in shared CI logs it exposes directory
+layout. Acceptable; note it.
 
 ---
 
-### Nota de procedência
+## Residual risks (after the recommended design)
 
-O caminho do relatório indicado no prompt
-(`.superpowers/sdd/2026-07-26-.../task-4-report.md`) estava correto; a primeira
-tentativa de leitura falhou por um caminho relativo. Li o report e o
-`task-4-recovery.md` no worktree. O report declara "No open Task 4 concerns" e
-observa que um review read-only externo foi solicitado mas não retornou dentro
-da janela — este documento é essa revisão, e ela **reabre** o item TOCTOU (C1)
-mais três lacunas (I1–I3) não cobertas pela self-review nem pelos testes atuais.
+- **Trust root = `REPOSITORY_ROOT`.** The pin chains starting from
+  `Path(__file__).resolve()`, which follows symlinks at import time. If the
+  checkout itself lives under a hostile parent, that gets canonicalized once
+  at import — there is a tiny window in the parents *above* `REPOSITORY_ROOT`
+  before the root fd is opened, equivalent to the trust of simply running the
+  script. **Severity: low**; mitigable by opening `REPOSITORY_ROOT` with
+  `O_NOFOLLOW` and validating `st_dev/st_ino`, but likely overkill.
+- **macOS durability** (no F_FULLFSYNC): loss only on power failure; does not
+  affect the anti-symlink property. **Low.**
+- **Multi-file non-atomicity (M2):** partial set after a crash; the next
+  `--check` detects it and the next write fixes it. **Low.**
+- **Pruning decision (I2):** if the team chooses to *report* extras instead of
+  *removing* them, operators need to act on the drift; if *removing*, a
+  legitimate non-generated file placed in the directory gets deleted.
+  Contract choice, not a defect. **Low, policy-dependent.**
+- **Signals outside the filesystem:** the exporter trusts
+  `render_schema_files()` as the source of truth; the integrity of the
+  generated bytes (not their transport to disk) is out of scope for this task
+  and is already covered by `schemas.py` +
+  `test_schema_rendering_and_manifest_hashes_are_deterministic`. No finding.
+
+---
+
+### Provenance note
+
+The report path given in the prompt
+(`.superpowers/sdd/2026-07-26-.../task-4-report.md`) was correct; the first
+read attempt failed due to a relative path. I read the report and
+`task-4-recovery.md` in the worktree. The report states "No open Task 4
+concerns" and notes that an external read-only review was requested but did
+not return within the window — this document is that review, and it
+**reopens** the TOCTOU item (C1) plus three gaps (I1–I3) not covered by the
+self-review or by the current tests.

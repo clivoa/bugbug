@@ -249,7 +249,7 @@ def test_every_action_has_reviewed_non_excluded_provenance() -> None:
         assert record.source_skill.startswith("internal-recon/")
         assert record.category
         assert record.classification
-        assert "reeshasx" in record.attribution
+        assert "cyberneon" in record.attribution.lower()
         normalized = " ".join(
             (record.source_skill, record.category, record.classification, *record.labels)
         ).lower()

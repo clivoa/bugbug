@@ -21,19 +21,18 @@ inspected against or derives patterns from, plus the local recon bundle.
 |---|---|
 | File | `references/recon/Recon-bundle.html` (immutable reference) |
 | Title | "Recon — CyberNeon Bundle" |
-| Author | **@reeshasx** — <https://x.com/reeshasx> |
 | Contents | 19 reconnaissance notes (pt-BR) |
 | License | **NONE found** in the file (no MIT/GPL/Apache/CC/copyright string) |
-| Operator authorization | **Granted for LOCAL, PRIVATE use with attribution retained** (operator decision, 2026-07-24). **Redistribution NOT authorized.** |
+| Operator authorization | **Granted for LOCAL, PRIVATE use** — content was already circulating publicly (operator decision, 2026-08-07, revising the 2026-07-24 attribution-retained decision). **Redistribution NOT authorized.** |
 
 **Handling.** Per operator authorization we normalize the bundle's *methodology*
 into Hackbot skills for local use. The original HTML is never modified. Every
 skill or adapter materially derived from a note carries
-`attribution: "@reeshasx (CyberNeon Recon Bundle)"` and a back-reference in
-`generated/recon-bundle/manifest.yaml`. Because no license grants redistribution,
-**derived skills must not be published or shared** outside this machine without
-further permission from the author. If that permission is unavailable, the derived
-skills remain local-only artifacts.
+`attribution: "CyberNeon Recon Bundle (public source; no formal license)"` and
+a back-reference in `generated/recon-bundle/manifest.yaml`. Because no license
+grants redistribution, **derived skills must not be published or shared**
+outside this machine without further authorization. The derived skills remain
+local-only artifacts.
 
 External resources merely *linked* by the bundle (crt.sh, dnsdumpster,
 hackertarget, censys, securitytrails, viewdns, Google Transparency Report,
@@ -78,10 +77,12 @@ As additional files are adapted, add a row here and a header comment in the file
 
 ## 3. Hackbot's own license
 
-To be finalized by the operator. Given AGPL/GPL/BY-SA constraints above, Hackbot's
-own code stays clean-room or attributed-MIT/Apache so the operator may choose a
-permissive license (MIT/Apache-2.0) without conflict. **No AGPL/GPL/BY-SA code is
-incorporated**, so those obligations do not attach to Hackbot's source.
+**MIT** (see [`LICENSE`](../LICENSE)). Given the AGPL/GPL/BY-SA constraints above,
+Hackbot's own code stays clean-room or attributed-MIT/Apache, so MIT applies
+without conflict. **No AGPL/GPL/BY-SA code is incorporated**, so those
+obligations do not attach to Hackbot's source. The MIT grant does not extend to
+the local reconnaissance bundle (`references/recon/Recon-bundle.html`), which
+remains unlicensed upstream material authorized for local, private use only.
 
 ---
 

@@ -129,10 +129,10 @@ def test_manifest_maps_all_notes(manifest):
 
 
 def test_manifest_preserves_attribution(manifest):
-    assert "reeshasx" in manifest["bundle_author"].lower()
+    assert "cyberneon" in manifest["bundle_author"].lower()
     assert manifest["bundle_license_declared"] == "none-found"
     for s in manifest["skills"]:
-        assert "reeshasx" in s["attribution"].lower()
+        assert "cyberneon" in s["attribution"].lower()
         assert s["source_note"]
         assert s["source_file"] == "references/recon/Recon-bundle.html"
 

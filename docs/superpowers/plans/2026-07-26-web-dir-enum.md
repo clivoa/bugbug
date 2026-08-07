@@ -17,7 +17,7 @@ pytest, Ruff, mypy. ffuf installed at `/opt/homebrew/bin/ffuf`.
 
 - `web.dir-enum` is L2 (high_volume) → TTY approval; in-scope only; recon only.
 - No reviewed risk-model change (FUZZ lives in `{target}`; wordlist is bundled).
-- Attribution `@reeshasx`; no internal-recon; nothing L3.
+- Attribution `CyberNeon Recon Bundle`; no internal-recon; nothing L3.
 - Test-first.
 
 ---

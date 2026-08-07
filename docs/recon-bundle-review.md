@@ -1,9 +1,9 @@
 # Recon Bundle Review
 
-> GENERATED from the immutable bundle via `scripts/generate_recon_docs.py`. The bundle is parsed as inert data; no command is executed. Source attribution: @reeshasx (CyberNeon Recon Bundle).
+> GENERATED from the immutable bundle via `scripts/generate_recon_docs.py`. The bundle is parsed as inert data; no command is executed. Source attribution: CyberNeon Recon Bundle (public source; no formal license).
 
 
-**Bundle:** Recon — CyberNeon Bundle · **Author:** by @reeshasx (https://x.com/reeshasx) · **License:** none-found → reference-only, local reuse authorized with attribution.
+**Bundle:** Recon — CyberNeon Bundle · **Author:** CyberNeon Recon Bundle (public source; no formal license) () · **License:** none-found → reference-only, local reuse authorized with attribution.
 
 
 **Notes:** 19 · **External/applicable:** 16 · **Internal (disabled):** 3
@@ -45,7 +45,7 @@
 - **Excluded sections:** 5. cloud & cdn (cuidado com escopo), scan nos ranges descobertos
 - **macOS notes:** xargs-parallel
 - **Policy:** ASN/netblock is a HYPOTHESIS source; probing ranges = L2; CDN/cloud ranges DISABLED; favicon-hash is L0 evidence only
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### banner scanning  ·  `note-banner-scanning`
 - **Skill target:** `skills/recon/service-fingerprinting`  ·  **Tags:** #hacking #recon #banner-grabbing #fingerprinting
@@ -55,7 +55,7 @@
 - **Required tools:** nc, nmap, httpx
 - **Required API keys:** none
 - **Policy:** active banner grabbing across ports needs explicit approval
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### consulta de certificado tls  ·  `note-consulta-certificado-tls`
 - **Skill target:** `skills/recon/tls-certificate-recon`  ·  **Tags:** #hacking #recon #tls #subdomain-enumeration #passive-recon
@@ -65,7 +65,7 @@
 - **Required tools:** curl, openssl, tlsx, certspotter
 - **Required API keys:** censys(optional)
 - **Policy:** CT logs / crt.sh / censys are passive; live openssl fetch to in-scope host is L1
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### consulta de dns  ·  `note-consulta-dns`
 - **Skill target:** `skills/recon/dns-recon`  ·  **Tags:** #hacking #recon #dns #passive-recon
@@ -75,7 +75,7 @@
 - **Required tools:** dig, dnsx, dog, massdns
 - **Required API keys:** none
 - **Policy:** passive DNS/DoH is L0; active resolution/brute is L1; zone-transfer against 3rd parties excluded
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### descoberta de hosts numa rede interna  ·  `note-descoberta-hosts-rede-interna`
 - **Skill target:** `skills/internal-recon/internal-host-discovery`  ·  **Tags:** #hacking #recon #network #host-discovery #internal-network
@@ -86,7 +86,7 @@
 - **Required API keys:** none
 - **macOS notes:** proc-net-arp; p0f; arp-scan; responder
 - **Policy:** internal network host discovery; requires private-pentest/local-lab profile + explicit auth
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### enumeracao de diretorios  ·  `note-enumeracao-diretorios`
 - **Skill target:** `skills/recon/parameter-discovery`  ·  **Tags:** #hacking #recon #directory-enumeration #fuzzing #web
@@ -97,7 +97,7 @@
 - **Required API keys:** none
 - **macOS notes:** gnu-timeout
 - **Policy:** directory brute-force = L2 high-volume; low-rate limited discovery may be L1 if program allows
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### enumeracao ldap  ·  `note-enumeracao-ldap`
 - **Skill target:** `skills/internal-recon/ldap-enumeration`  ·  **Tags:** #hacking #recon #ldap #active-directory
@@ -108,7 +108,7 @@
 - **Required API keys:** none
 - **macOS notes:** netexec; ad-tooling
 - **Policy:** AD/LDAP enumeration; internal only; never enabled by an internal hostname appearing in data
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### enumeracao de rede em linux  ·  `note-enumeracao-linux`
 - **Skill target:** `skills/internal-recon/linux-enumeration`  ·  **Tags:** #hacking #recon #linux #networking #nmap
@@ -119,7 +119,7 @@
 - **Required API keys:** none
 - **macOS notes:** proc-net-arp
 - **Policy:** internal Linux host/network enumeration; internal profile only
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### github recon & leaked secrets  ·  `note-github-recon`
 - **Skill target:** `skills/recon/github-recon`  ·  **Tags:** #hacking #recon #github #git #secrets #osint #passive-recon
@@ -129,7 +129,7 @@
 - **Required tools:** gh, trufflehog, gitleaks, github-subdomains
 - **Required API keys:** GITHUB_TOKEN
 - **Policy:** public code search/secret discovery is L0; exposed .git fetch to in-scope host is L1
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### google dorking  ·  `note-google-dorking`
 - **Skill target:** `skills/recon/osint`  ·  **Tags:** #hacking #recon #osint #google-dorking #passive-recon
@@ -139,7 +139,7 @@
 - **Required tools:** browser, curl
 - **Required API keys:** none
 - **Policy:** search-engine dorking is fully passive
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### js analysis & secrets extraction  ·  `note-js-analysis`
 - **Skill target:** `skills/recon/javascript-analysis`  ·  **Tags:** #hacking #recon #javascript #secrets #api-discovery #active-recon
@@ -149,7 +149,7 @@
 - **Required tools:** katana, gau, subjs, linkfinder, jsluice
 - **Required API keys:** none
 - **Policy:** collecting JS from in-scope host is L1; local secret extraction is L0
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### ferramentas de osint  ·  `note-osint-tools`
 - **Skill target:** `skills/recon/osint`  ·  **Tags:** #hacking #recon #osint #passive-recon #tools
@@ -159,7 +159,7 @@
 - **Required tools:** shodan, theHarvester, amass
 - **Required API keys:** SHODAN_API_KEY, censys(optional)
 - **Policy:** OSINT aggregation; Shodan/censys via adapters; no active probing
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### fuzzing de parametros & api discovery  ·  `note-param-fuzzing`
 - **Skill target:** `skills/recon/parameter-discovery`  ·  **Tags:** #hacking #recon #fuzzing #parametros #api
@@ -169,7 +169,7 @@
 - **Required tools:** arjun, ffuf, x8, paramspider
 - **Required API keys:** none
 - **Policy:** parameter/endpoint fuzzing = L2 (high request volume); only when program allows automated testing
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### port scanning com bash e /dev/tcp  ·  `note-port-scanning-bash`
 - **Skill target:** `skills/recon/service-fingerprinting`  ·  **Tags:** #hacking #recon #port-scanning #bash #no-tools
@@ -180,7 +180,7 @@
 - **Required API keys:** none
 - **macOS notes:** bash-dev-tcp; bash-dev-udp; gnu-timeout; xargs-parallel
 - **Policy:** port scanning is L2; /dev/tcp & /dev/udp need macOS adaptation or naabu/nmap adapter
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### recon pipeline completo  ·  `note-recon-pipeline`
 - **Skill target:** `skills/recon/recon-pipeline`  ·  **Tags:** #hacking #recon #pipeline #bug-bounty #automation
@@ -190,7 +190,7 @@
 - **Required tools:** subfinder, dnsx, httpx, katana, nuclei
 - **Required API keys:** SHODAN_API_KEY(optional)
 - **Policy:** passive pipeline L0; active pipeline L1; ASN+netblock stage inherits L2/disabled
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### subdomain discovery  ·  `note-subdomain-discovery`
 - **Skill target:** `skills/recon/subdomain-discovery`  ·  **Tags:** #hacking #recon #subdominios #dns #passive-recon
@@ -201,7 +201,7 @@
 - **Required API keys:** various-passive-sources(optional)
 - **macOS notes:** gnu-timeout
 - **Policy:** passive sources L0; DNS bruteforce L1 rate-limited; validation httpx L1
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### tcp fin fingerprint  ·  `note-tcp-fin-fingerprint`
 - **Skill target:** `skills/recon/service-fingerprinting`  ·  **Tags:** #hacking #recon #fingerprinting #tcp #networking
@@ -212,7 +212,7 @@
 - **Required API keys:** none
 - **macOS notes:** scapy; p0f
 - **Policy:** TCP FIN/JARM/JA3 active fingerprinting = L2; scapy needs root/Linux-runner; JA3/JARM passive-ish subset L1
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### waf & cdn detection  ·  `note-waf-cdn-detection`
 - **Skill target:** `skills/recon/waf-cdn-detection`  ·  **Tags:** #hacking #recon #waf #cdn #bypass #passive-recon
@@ -223,7 +223,7 @@
 - **Required API keys:** none
 - **Excluded sections:** origin ip discovery (bypass do cdn), bypass via host header
 - **Policy:** passive WAF/CDN detection L1; ORIGIN-IP BYPASS sections DISABLED (defeats protection)
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 
 ### web crawling & js analysis  ·  `note-web-crawling`
 - **Skill target:** `skills/recon/web-crawling`  ·  **Tags:** #hacking #recon #crawler #js-analysis #endpoints
@@ -233,5 +233,5 @@
 - **Required tools:** katana, gau, waybackurls, httpx, hakrawler
 - **Required API keys:** none
 - **Policy:** wayback/gau L0; live crawl (katana) L1 with strict scope + rate limit
-- **Source:** `references/recon/Recon-bundle.html` → @reeshasx (CyberNeon Recon Bundle)
+- **Source:** `references/recon/Recon-bundle.html` → CyberNeon Recon Bundle (public source; no formal license)
 

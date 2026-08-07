@@ -26,7 +26,7 @@ from hackbot.skills.bundle_parser import bundle_metadata, parse_bundle  # noqa: 
 
 BUNDLE = ROOT / "references/recon/Recon-bundle.html"
 OUT = ROOT / "generated/recon-bundle"
-ATTRIB = "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+ATTRIB = "CyberNeon Recon Bundle (public source; no formal license)"
 
 
 def _yaml_str(s: str) -> str:

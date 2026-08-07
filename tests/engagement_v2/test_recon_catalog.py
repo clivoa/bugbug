@@ -80,7 +80,7 @@ def test_every_action_has_provenance() -> None:
         record = records[action_id]
         assert record.risk == action.risk
         assert record.capabilities == action.capabilities
-        assert "reeshasx" in record.attribution
+        assert "cyberneon" in record.attribution.lower()
         assert not (record.capabilities & FORBIDDEN_CAPABILITIES)
 
 

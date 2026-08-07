@@ -1,16 +1,16 @@
 """Provenance linking code-owned actions to reviewed recon-bundle skills.
 
 Bundle commands stay data; only generic single-tool argv subsets become
-code-owned actions. Attribution to @reeshasx is recorded per the bundle's
-local-reuse-with-attribution terms (no redistribution of the bundle's creative
-content). ``internal-recon`` skills are never promoted.
+code-owned actions. Source attribution is recorded per the bundle's
+local-reuse terms (no redistribution of the bundle's creative content).
+``internal-recon`` skills are never promoted.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-ATTRIBUTION = "@reeshasx (CyberNeon Recon Bundle) — https://x.com/reeshasx"
+ATTRIBUTION = "CyberNeon Recon Bundle (public source; no formal license)"
 
 
 @dataclass(frozen=True, slots=True)

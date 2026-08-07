@@ -8,7 +8,7 @@ address / LDAP endpoint never enables it. Credential and L3 categories are P5b.
 
 Only a **reviewed generic single-tool argv subset** is promoted — never a copied
 multi-tool bundle pipeline, never a shell string. Attribution:
-`@reeshasx (CyberNeon Recon Bundle)`, local reuse with attribution, no
+`CyberNeon Recon Bundle (public source; no formal license)`, local reuse with attribution, no
 redistribution. The raw bundle HTML is never read.
 
 ## Actions
