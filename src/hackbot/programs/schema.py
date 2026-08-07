@@ -28,6 +28,7 @@ SUPPORTED_VERSIONS = {1}
 # security-critical sections whose unknown keys are rejected
 _SCOPE_KINDS = (
     "domains",
+    "hosts",
     "wildcard_domains",
     "urls",
     "cidrs",
@@ -63,6 +64,7 @@ _TESTING_KEYS = (
 )
 
 _DOMAIN_RE = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$")
+_HOST_LABEL_RE = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
 _MOBILE_RE = re.compile(r"^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*){2,}$")
 _REPO_RE = re.compile(r"^github\.com/[^/\s]+/[^/\s]+$", re.I)
 _CONTRACT_RE = re.compile(r"^([a-z0-9]+:)?0x[0-9a-fA-F]{40}$")
@@ -92,6 +94,10 @@ def _err(errors: list[str], msg: str) -> None:
     errors.append(msg)
 
 
+def _valid_hostname(value: str) -> bool:
+    return len(value) <= 253 and all(_HOST_LABEL_RE.fullmatch(label) for label in value.split("."))
+
+
 def _validate_entry(kind: str, value: object, errors: list[str], where: str) -> str | None:
     if not isinstance(value, str) or not value.strip():
         _err(errors, f"{where}: entry must be a non-empty string, got {value!r}")
@@ -109,6 +115,16 @@ def _validate_entry(kind: str, value: object, errors: list[str], where: str) -> 
             _err(errors, f"{where}: invalid domain {v!r}")
             return None
         return low
+    if kind == "hosts":
+        # An exact host: matches only this hostname, never its subdomains. Bare
+        # hostname in; an anchored regex rule out, which the engine matches exactly.
+        if "://" in v or "/" in v or "*" in v:
+            _err(errors, f"{where}: host must be a bare hostname, got {v!r}")
+            return None
+        if not _valid_hostname(low):
+            _err(errors, f"{where}: invalid host {v!r}")
+            return None
+        return "re:^" + re.escape(low) + "$"
     if kind == "wildcard_domains":
         if not low.startswith("*.") or not _DOMAIN_RE.match(low[2:]):
             _err(errors, f"{where}: wildcard must be '*.<domain>', got {v!r}")
