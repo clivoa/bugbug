@@ -172,7 +172,8 @@ def test_web_dir_enum_requires_approval(lab_engagement):
     context = load_policy_context(lab_engagement)
     definition = REAL_ACTIONS.require("web.dir-enum")
     target = "http://127.0.0.1/FUZZ"
-    argv = (ffuf_path(), "-s", "-rate", "1", "-u", target, "-w", web_content_wordlist())
+    # Match the current web.dir-enum argv template: ffuf -u {target} -w {wordlist} -rate {rate} -t {concurrency} -s -mc ...
+    argv = (ffuf_path(), "-u", target, "-w", web_content_wordlist(), "-rate", "1", "-t", "1", "-s", "-mc", "200,204,301,302,307,401,403,405")
     request = ActionRequest(
         engagement_id=context.engagement_id,
         engagement_path=context.engagement_path,

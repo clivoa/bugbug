@@ -316,7 +316,13 @@ class ActionDefinition:
             any(token in _SHELL_COMMAND_MODES for token in self.argv_template)
             and not self.shell_execution
         ):
-            raise ValueError("shell command modes require shell_execution=true")
+            # Only flag -c/--command when the executable IS a shell/interpreter.
+            # Tools like nuclei use -c for --concurrency, not shell command mode.
+            is_shell = self.executable is not None and (
+                PurePath(self.executable).name.lower() in _SHELL_EXECUTABLE_BASENAMES
+            )
+            if is_shell:
+                raise ValueError("shell command modes require shell_execution=true")
         _code_classifications(self.vulnerability_types, name="vulnerability_types")
         _code_classifications(self.impacts, name="impacts")
 

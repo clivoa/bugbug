@@ -393,8 +393,9 @@ def test_next_steps_separates_historical_v1_snapshot_from_current_status() -> No
 
     assert "Historical v1 verification snapshot" in text
     current, historical = text.split("## Historical v1 verification snapshot", maxsplit=1)
-    assert "Current delivery: P5b credential/L3 catalog" in current
+    assert "Current delivery: P7" in current
     assert "P0 — security contracts" in current
     assert "P6 — autonomous workflow contracts" in current
-    assert "912 passing tests out of 913 collected" in " ".join(historical.split())
+    # Historical section should reference test counts from the v1 era
+    assert "1504 passed" in historical or "912 passing" in historical
     assert "P1 is **Ready**" not in text

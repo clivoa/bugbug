@@ -1,202 +1,142 @@
-```
-  ╔══════════════════════════════════════════════════════════════════╗
-  ║                                                                  ║
-  ║    ██████╗ ██╗   ██╗ ██████╗ ██████╗ ██╗   ██╗ ██████╗         ║
-  ║    ██╔══██╗██║   ██║██╔════╝ ██╔══██╗██║   ██║██╔════╝         ║
-  ║    ██████╔╝██║   ██║██║  ███╗██████╔╝██║   ██║██║  ███╗        ║
-  ║    ██╔══██╗██║   ██║██║   ██║██╔══██╗██║   ██║██║   ██║        ║
-  ║    ██████╔╝╚██████╔╝╚██████╔╝██████╔╝╚██████╔╝╚██████╔╝        ║
-  ║    ╚═════╝  ╚═════╝  ╚═════╝ ╚═════╝  ╚═════╝  ╚═════╝        ║
-  ║                                                                  ║
-  ║     ██╗  ██╗ █████╗  ██████╗██╗  ██╗██████╗  ██████╗ ████████╗ ║
-  ║     ██║  ██║██╔══██╗██╔════╝██║ ██╔╝██╔══██╗██╔═══██╗╚══██╔══╝ ║
-  ║     ███████║███████║██║     █████╔╝ ██████╔╝██║   ██║   ██║    ║
-  ║     ██╔══██║██╔══██║██║     ██╔═██╗ ██╔══██╗██║   ██║   ██║    ║
-  ║     ██║  ██║██║  ██║╚██████╗██║  ██╗██████╔╝╚██████╔╝   ██║    ║
-  ║     ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═════╝  ╚═════╝    ╚═╝    ║
-  ║                                                                  ║
-  ║        local · modular · auditable · safety-controlled           ║
-  ║              AI-assisted bug bounty workstation                  ║
-  ║                                                                  ║
-  ╚══════════════════════════════════════════════════════════════════╝
-```
+# bugbug
 
-# bugbug — AI-assisted bug bounty research workstation
+A bug bounty workstation that runs on your machine. It's built to be auditable,
+puts safety checks in code (not prompts), and works through Claude Code. If
+you're doing pentests, bug bounties, CTFs, or security research on stuff you're
+allowed to test, this is for you.
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Python](https://img.shields.io/badge/python-%E2%89%A53.11-blue.svg)](#requirements)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](#requirements)
+**Only test what you own or have permission to test.** Never use this for
+anything unauthorized. The [`SECURITY.md`](./SECURITY.md) and
+[`CLAUDE.md`](./CLAUDE.md) spell out the rules in detail.
 
-A **local, modular, auditable, safety-controlled** bug-bounty research workstation
-for macOS **and** Linux, operated primarily through the Claude Code CLI with
-multi-provider model support behind a local gateway. Primary command: `hackbot`.
+## What it does
 
-> **Authorized use only.** Assets you own · explicitly authorized pentests ·
-> in-scope bug-bounty assets · local labs / CTFs / research. Never for
-> unauthorized scanning, persistence, evasion, DoS, phishing, or mass exploitation.
-> See [`SECURITY.md`](./SECURITY.md) and [`CLAUDE.md`](./CLAUDE.md).
+- Keeps your engagements organized under `engagements/<platform>/<program>/`
+- Checks scope in code before any network action leaves your box
+- Runs real security tools (nmap, ffuf, nuclei, sqlmap, subfinder, etc.) through a risk gate that can block, allow, or ask for approval
+- Records evidence and generates reports for HackerOne, Intigriti, Bugcrowd, and others
+- Connects to Burp Suite via MCP for proxy history, repeater, scanner, and spider
+- L3 actions (AD attacks, exploitation, lateral movement) are available when you confirm you're authorized. Your call, your responsibility
 
-## Contents
-
-- [Status](#status)
-- [Design principles](#design-principles)
-- [Layout](#layout)
-- [Requirements](#requirements)
-- [Quick start](#quick-start-read-only-installs-nothing-system-wide)
-- [Recon bundle pipeline](#recon-bundle-pipeline)
-- [Documentation](#documentation)
-- [License](#license)
-
-## Status
-
-Early build; **1376 automated tests passing** (**1378 collected; 2 expected
-offline-environment skips: nmap and keyring**) on **Python 3.14** (project minimum 3.11). Implemented and verified so
-far:
-- **Engagement v2 P0 security contracts** — merged and archived, with strict
-  canonical values/digests, safe patterns, generated schemas/fixtures, and
-  bounded protocol primitives. See
-  [`docs/engagement-v2-contracts.md`](docs/engagement-v2-contracts.md).
-- **Engagement v2 P1–P6 delivery** — atomic loader/scope, action manifest and
-  direct policy gate, local executor/evidence, pinned remote helper, reviewed
-  non-credential internal-recon catalog, and typed autonomous workflow state
-  machine are implemented in separately reviewed phases. P5b adds the disabled-
-  by-default credential/L3 catalog; see
-  [`docs/engagement-v2-l3-catalog.md`](docs/engagement-v2-l3-catalog.md).
-- **`hackbot` CLI** (`doctor`, `scope`, `secrets`, `program`, `risk`, `approval`,
-  `tool`, `finding`, `skills`, `version`) — stdlib-only core, runs offline; installable as a wheel
-  (`scripts/build_wheel.py` + `scripts/smoke_test.sh`, both fully offline).
-- **Risk & approval engine** (`src/hackbot/risk/`) — deterministic, fail-closed
-  L0–L3 policy gate and single-use, five-minute L2 approval lifecycle that every
-  future tool adapter must pass. Exposed through the **non-executing** commands
-  `hackbot risk evaluate`, `hackbot approval grant` (interactive TTY only), and
-  `hackbot approval status`. See [`docs/risk-and-approval.md`](docs/risk-and-approval.md).
-- **Tool execution substrate** (`src/hackbot/tools/`, `src/hackbot/audit/`) — a
-  validated, gate-bound subprocess runner that executes a code-owned argv array
-  (no shell, sanitized env, timeout, output caps enforced during streaming
-  capture) **only** after an `ALLOW`, plus a secret-free audit trail. Actions
-  promoted from reviewed recon-bundle skills
-  (with attribution): HTTP probes, DNS record lookups, TLS cert (L0),
-  `net.port-scan` (nmap) and `web.dir-enum` (ffuf directory fuzzing) (L2,
-  approval-gated). L2 needs `tool run --approve` (TTY, single-use); all in-scope
-  only. Actions can run **locally or on a remote SSH host** (`--runner remote`,
-  e.g. a Kali box with the full arsenal; the gate stays local — see
-  [`docs/remote-runner.md`](docs/remote-runner.md)). Executed runs persist
-  **redacted, run-linked evidence** (`src/hackbot/evidence/`) per engagement. See
-  [`docs/tool-execution.md`](docs/tool-execution.md) and
-  [`docs/skill-promotion.md`](docs/skill-promotion.md).
-- **Findings & reporting** (`src/hackbot/findings/`, `src/hackbot/reporting/`) —
-  typed findings that separate demonstrated from plausible impact and require
-  reproducible evidence (`hackbot finding add/report/list`); per-platform markdown
-  reports (`--platform generic|hackerone|bugcrowd|yeswehack|intigriti|immunefi`)
-  reference redacted evidence, never raw output, and may explicitly use strict
-  operator Markdown templates via `--templates-dir`. See
-  [`docs/findings-and-reporting.md`](docs/findings-and-reporting.md).
-- **Diagnostic** available two ways: packaged Python (`hackbot doctor [--json]`,
-  cross-platform, flags Python <3.11 as incompatible) and the pre-install shell
-  script (`scripts/doctor.sh`).
-- **Scope engine** (`src/hackbot/scope/`) — default-deny, deny-wins, frozen
-  instances (no runtime expansion), IPv4/IPv6 CIDRs, segment-aware URL/path rules,
-  redirect re-checking, shared-CDN/cloud rejection.
-- **Secrets** (`src/hackbot/security/`) — native keychain via `keyring`
-  (values never in argv/logs), case-insensitive aliases, existence-only disclosure.
-- **Reference review** of 17 upstream projects total (including the PortSwigger MCP
-  server) ([`docs/reference-review.md`](docs/reference-review.md),
-  [`docs/licenses-and-attribution.md`](docs/licenses-and-attribution.md)).
-- **Recon-bundle normalization** pipeline (parser → classifier → generated manifest
-  + review docs) with a 20-test safety suite, plus a **publication guard**
-  ([`docs/publication-guard.md`](docs/publication-guard.md)) that blocks pushing the
-  unlicensed bundle and its derivatives.
-
-## Design principles
-
-- **Scope enforced in code** (default-deny, deny-wins), not by the model.
-- **Four-level risk model** — the legacy v1 path keeps L3 prohibited and L2
-  approval-gated; engagement v2 permits only reviewed L3 actions under confirmed
-  internal authority and exact capability flags. Excluded impacts remain denied.
-- **Discovery ≠ authorization** — ASN/cert/Shodan/etc. are hypotheses, never scope.
-- **Secrets in the OS keychain**, never in files/args/logs.
-- **Untrusted target content** — treated as data, never instructions.
-- **Loopback-only** gateway and Burp MCP.
-- **OS-agnostic** with a Darwin/Linux focus; an optional Linux SSH runner handles
-  Linux-only / GPU tooling under an authorized profile.
-
-## Layout
-
-```
-config/      YAML policy (providers, routing, tool/risk policy, reporting)
-src/hackbot/ engine (cli, providers, gateway, scope, programs, workflows,
-             tools, mcp, skills, evidence, findings, reporting, audit, security)
-skills/      Agent-Skills packs (recon, internal-recon [disabled], web, api, ...)
-templates/   platform report templates (hackerone, bugcrowd, ...)
-engagements/ per-engagement state (git-ignored; only sanitized samples tracked)
-labs/        local vulnerable labs (Juice Shop, crAPI, ...)
-scripts/     bootstrap / install / doctor / generators
-docs/        architecture, threat model, guides, reviews
-generated/   normalized (reviewed) layer built from immutable references
-references/  immutable source material (recon bundle; external clones git-ignored)
-```
-
-## Requirements
-
-- **Python ≥ 3.11** (developed/tested on 3.14). The CLI core has no third-party
-  runtime deps and runs offline.
-- macOS or Linux.
-
-## Quick start (read-only; installs nothing system-wide)
+## Quick start
 
 ```bash
-# 1) diagnostic — pre-install shell version
-scripts/doctor.sh                       # human-readable
-scripts/doctor.sh --json                # machine-readable
+# Check your setup
+scripts/doctor.sh
 
-# 2) build + install the CLI offline into a local venv, then use it
-python3.11 -m venv .venv                # or any >=3.11 interpreter
+# Build and install
+python3 -m venv .venv
 .venv/bin/python scripts/build_wheel.py
 .venv/bin/python -m pip install --no-index --no-deps dist/hackbot-*.whl
-.venv/bin/hackbot doctor --json
-.venv/bin/hackbot scope explain https://api.example.com/v1 --in example.com
-.venv/bin/hackbot secrets list          # existence only; values never shown
-.venv/bin/hackbot risk evaluate request.json --engagement engagements/sample --json
-.venv/bin/hackbot approval status <challenge-id> --engagement engagements/sample --json
-.venv/bin/hackbot tool run net.http-get request.json --engagement engagements/local-lab --json
-.venv/bin/hackbot finding report --engagement engagements/local-lab \
-  --platform hackerone --templates-dir templates
+
+# See what's available
+.venv/bin/hackbot doctor
+.venv/bin/hackbot skills list
+
+# Create an engagement from a program file
+.venv/bin/hackbot program import program.yaml --engagements-dir engagements
+
+# Check if a target is in scope
+.venv/bin/hackbot scope check https://target.com --scope-file scope.yaml
 ```
 
-## Recon bundle pipeline
+## How it works
 
-```bash
-.venv/bin/python scripts/generate_recon_bundle.py   # -> generated/recon-bundle/
-.venv/bin/python scripts/generate_recon_docs.py     # -> docs/recon-bundle-*.md
-.venv/bin/python -m pytest tests -q                 # 1378 collected; 1376 pass + 2 expected skips
+Every action goes through the same pipeline:
+
+```
+hackbot tool run → scope check → risk gate → run command → audit + evidence
+```
+
+The risk gate has four levels:
+
+| Level | What it means | Runs when |
+|-------|---------------|-----------|
+| L0 | Passive, no touching the target | Always, after scope init |
+| L1 | Low impact, looks like normal traffic | In scope, rate limited, on the allowlist |
+| L2 | Intrusive or state-changing | You approve it first (TTY, single-use) |
+| L3 | Exploitation, cred access, AD attacks | You confirm authorization + capability flags |
+
+L3 used to be locked to `private-pentest` profiles. Now it's available under any
+profile as long as authorization is confirmed, the target is in scope, and the
+relevant capability flags are on. You're responsible for what you run.
+
+## Tools included
+
+The code knows about these tools and where to find them. If a tool isn't installed
+it's silently skipped when the action registry loads.
+
+```
+curl, dig, nmap, openssl, whois          # usually already on your system
+subfinder, httpx, katana, gau, dnsx      # recon: go install
+waybackurls, alterx, naabu               # more recon
+ffuf, feroxbuster                        # fuzzing
+nuclei, dalfox, sqlmap, wafw00f          # vuln scanning
+arjun, graphw00f                         # param / graphql discovery
+semgrep, gitleaks, trufflehog            # source analysis
+hydra, john, masscan, metasploit         # L3: exploitation (remote)
+impacket, crackmapexec, bloodhound       # L3: AD attacks (remote)
+```
+
+Tool paths live in `src/hackbot/tools/actions.py`. If you install via `go install`,
+the `~/go/bin/` paths are already in the allowlist.
+
+## What's where
+
+```
+config/         YAML configs (providers, tools, risk policy, reporting)
+src/hackbot/    the engine: CLI, scope, risk gate, tool adapters, MCP
+skills/         methodology guides for recon, web, api, auth, cloud, mobile
+docs/           architecture, threat model, how-tos, reviews
+templates/      report templates per platform (hackerone, intigriti, etc.)
+engagements/    your engagements live here (gitignored, except samples)
+scripts/        build, doctor, bootstrap
+references/     immutable source material (recon bundle)
+generated/      normalized output from references
+```
+
+## Burp Suite + MCP
+
+If you use Burp, install the MCP Server extension from the BApp Store. It listens on
+`127.0.0.1:9876` and exposes proxy history, repeater, scanner, and spider as MCP
+tools. The project ships with a `.mcp.json` that connects Claude Code to it.
+
+Full setup guide: [`docs/burp-mcp-integration.md`](docs/burp-mcp-integration.md)
+
+## Engagement structure
+
+```
+engagements/<platform>/<program>/<date>/
+  program.yaml       what program, what platform, testing rules
+  scope.yaml         what's in and out of scope
+  authorization.json confirmed or not, by whom, when
+  rules.md           program-specific rules (optional)
+  recon/             raw recon output
+  hypotheses/        what you think might be vulnerable
+  findings/          confirmed issues
+  evidence/          redacted proof
+  reports/           generated markdown reports
 ```
 
 ## Documentation
 
-- [`docs/risk-and-approval.md`](docs/risk-and-approval.md) — L0–L3 gate + L2 approval lifecycle
-- [`docs/tool-execution.md`](docs/tool-execution.md) — gate-bound subprocess substrate + actions
-- [`docs/skill-promotion.md`](docs/skill-promotion.md) — recon-bundle provenance + promoted skills
-- [`docs/remote-runner.md`](docs/remote-runner.md) — run gated actions on a remote SSH host
-- [`docs/findings-and-reporting.md`](docs/findings-and-reporting.md) — typed findings + markdown reports
-- [`docs/engagement-v2-contracts.md`](docs/engagement-v2-contracts.md) — archived P0 boundary + current contracts
-- [`docs/engagement-v2-l3-catalog.md`](docs/engagement-v2-l3-catalog.md) — controlled P5b credential/L3 catalog
-- [`docs/next-steps.md`](docs/next-steps.md) — current status and the roadmap for the next phase
-- [`docs/reference-review.md`](docs/reference-review.md) — upstream project analysis
-- [`docs/licenses-and-attribution.md`](docs/licenses-and-attribution.md) — license ledger
-- [`docs/recon-bundle-review.md`](docs/recon-bundle-review.md) — bundle inventory + classification
-- [`docs/recon-bundle-risk-classification.md`](docs/recon-bundle-risk-classification.md)
-- [`docs/recon-bundle-macos-compatibility.md`](docs/recon-bundle-macos-compatibility.md)
-- `CLAUDE.md`, `SECURITY.md` — operating rules and safety model
+- [`docs/risk-and-approval.md`](docs/risk-and-approval.md) — risk levels and the approval workflow
+- [`docs/tool-execution.md`](docs/tool-execution.md) — how tools get executed safely
+- [`docs/burp-mcp-integration.md`](docs/burp-mcp-integration.md) — Burp Suite MCP setup
+- [`docs/remote-runner.md`](docs/remote-runner.md) — running actions on a remote box
+- [`docs/findings-and-reporting.md`](docs/findings-and-reporting.md) — findings and report generation
+- [`docs/engagement-v2-contracts.md`](docs/engagement-v2-contracts.md) — engagement v2 contracts
+- [`docs/next-steps.md`](docs/next-steps.md) — what's next
 
-Roadmap and architecture: `docs/architecture.md` (next).
+## Requirements
+
+Python 3.11 or newer. macOS or Linux. The core CLI has no third-party runtime
+dependencies and works offline. Optional dependencies (keyring, yaml) are pulled
+in when you install the full package.
 
 ## License
 
-Hackbot's own source is released under the [MIT License](./LICENSE).
-
-Some material referenced or adapted from third-party projects retains its
-original license and attribution terms — see
-[`docs/licenses-and-attribution.md`](docs/licenses-and-attribution.md) for the
-full ledger. Notably, the local reconnaissance bundle
-(`references/recon/Recon-bundle.html`) is unlicensed upstream material
-authorized for **local, private use only** and must **not** be redistributed.
+MIT for the project's own code. Some referenced material has its own license
+terms — see [`docs/licenses-and-attribution.md`](docs/licenses-and-attribution.md).
+Notably the recon bundle in `references/recon/` is for local use only and can't
+be redistributed.

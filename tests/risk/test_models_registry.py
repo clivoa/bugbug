@@ -219,13 +219,24 @@ def test_shell_execution_requires_a_trusted_external_executable():
 
 
 def test_shell_command_mode_requires_shell_execution():
+    """-c/--command flags only raise when the executable IS a shell.
+    A non-shell tool like sqlmap with -c (for config) should NOT raise."""
+    # This should NOT raise — sqlmap uses -c for config, not shell command
+    ActionDefinition(
+        "fixture.command",
+        RiskLevel.L0,
+        uses_external_tool=True,
+        executable="/usr/bin/sqlmap",
+        argv_template=("/usr/bin/sqlmap", "-c", "{target}"),
+    )
+    # This SHOULD raise — bash with -c IS shell command mode
     with pytest.raises(ValueError, match="shell_execution"):
         ActionDefinition(
-            "fixture.command",
+            "fixture.shell_cmd",
             RiskLevel.L0,
             uses_external_tool=True,
-            executable="/usr/bin/sqlmap",
-            argv_template=("/usr/bin/sqlmap", "-c", "{target}"),
+            executable="/bin/bash",
+            argv_template=("/bin/bash", "-c", "{target}"),
         )
 
 

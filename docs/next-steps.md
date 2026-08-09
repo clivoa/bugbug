@@ -53,7 +53,7 @@ Exit criteria:
   action; real exercise is isolated-lab-only.
 - Stop on unexpected scope/egress change or a target block/rate limit.
 
-## Current verification snapshot
+## Historical v1 verification snapshot
 
 1504 passed, 16 skipped. Ruff clean. Mypy clean (88 source files).
 Last verified: 2026-08-07.

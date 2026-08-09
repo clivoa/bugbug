@@ -63,6 +63,7 @@ _TOOL_CANDIDATES: dict[str, tuple[str, ...]] = {
         "/opt/homebrew/bin/subfinder",
         "/usr/local/bin/subfinder",
         "/usr/bin/subfinder",
+        os.path.expanduser("~/go/bin/subfinder"),
     ),
     "amass": (
         "/opt/homebrew/bin/amass",
@@ -73,26 +74,31 @@ _TOOL_CANDIDATES: dict[str, tuple[str, ...]] = {
         "/opt/homebrew/bin/httpx",
         "/usr/local/bin/httpx",
         "/usr/bin/httpx",
+        os.path.expanduser("~/go/bin/httpx"),
     ),
     "katana": (
         "/opt/homebrew/bin/katana",
         "/usr/local/bin/katana",
         "/usr/bin/katana",
+        os.path.expanduser("~/go/bin/katana"),
     ),
     "gau": (
         "/opt/homebrew/bin/gau",
         "/usr/local/bin/gau",
         "/usr/bin/gau",
+        os.path.expanduser("~/go/bin/gau"),
     ),
     "waybackurls": (
         "/opt/homebrew/bin/waybackurls",
         "/usr/local/bin/waybackurls",
         "/usr/bin/waybackurls",
+        os.path.expanduser("~/go/bin/waybackurls"),
     ),
     "dnsx": (
         "/opt/homebrew/bin/dnsx",
         "/usr/local/bin/dnsx",
         "/usr/bin/dnsx",
+        os.path.expanduser("~/go/bin/dnsx"),
     ),
     "alterx": (
         "/opt/homebrew/bin/alterx",
@@ -103,12 +109,14 @@ _TOOL_CANDIDATES: dict[str, tuple[str, ...]] = {
         "/opt/homebrew/bin/naabu",
         "/usr/local/bin/naabu",
         "/usr/bin/naabu",
+        os.path.expanduser("~/go/bin/naabu"),
     ),
     # --- web fuzzing ---
     "ffuf": (
         "/opt/homebrew/bin/ffuf",
         "/usr/local/bin/ffuf",
         "/usr/bin/ffuf",
+        os.path.expanduser("~/go/bin/ffuf"),
     ),
     "feroxbuster": (
         "/opt/homebrew/bin/feroxbuster",
@@ -120,11 +128,13 @@ _TOOL_CANDIDATES: dict[str, tuple[str, ...]] = {
         "/opt/homebrew/bin/nuclei",
         "/usr/local/bin/nuclei",
         "/usr/bin/nuclei",
+        os.path.expanduser("~/go/bin/nuclei"),
     ),
     "dalfox": (
         "/opt/homebrew/bin/dalfox",
         "/usr/local/bin/dalfox",
         "/usr/bin/dalfox",
+        os.path.expanduser("~/go/bin/dalfox"),
     ),
     "sqlmap": (
         "/opt/homebrew/bin/sqlmap",
