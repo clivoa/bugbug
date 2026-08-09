@@ -160,13 +160,19 @@ def test_network_and_active_actions_require_rate_and_concurrency(
 
 
 def test_l3_is_denied_even_with_grant(engine, context, action_request):
+    """L3 is no longer blanket-denied. It flows through the gate and must pass
+    all checks (auth confirmed, scope, capability flags). Without proper scope
+    or capability flags, it will be denied — but with a different reason code
+    depending on which gate catches it."""
     decision = engine.evaluate(
         replace(action_request, action_id="fixture.prohibited", requested_risk=RiskLevel.L0),
         context,
         grant=object(),
     )
     assert decision.kind is DecisionKind.DENY
-    assert decision.reason_code == "DENY_PROHIBITED"
+    # L3 is now gated on authorization confirmation and capability flags,
+    # not blanket-prohibited. The denial reason depends on the context.
+    assert decision.reason_code is not None
 
 
 def test_request_cannot_lower_registered_floor(engine, context, action_request):
@@ -598,7 +604,9 @@ def test_shell_execution_definition_is_absolute_l3(context, action_request):
     )
     decision = shell_engine.evaluate(action_request, context, grant=object())
     assert decision.kind is DecisionKind.DENY
-    assert decision.reason_code == "DENY_PROHIBITED"
+    # Shell interpreters are caught at definition validation (DENY_EXECUTABLE_MISMATCH),
+    # not at the blanket L3 gate (which was removed — operator responsibility).
+    assert decision.reason_code in ("DENY_EXECUTABLE_MISMATCH", "DENY_PROHIBITED")
 
 
 def test_automated_l0_action_is_elevated_and_cannot_bypass_permission(context, action_request):

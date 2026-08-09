@@ -41,7 +41,7 @@ FORBIDDEN_CAPABILITIES = frozenset(
 
 # Profiles under which internal recon may load (still requires explicit operator
 # confirmation elsewhere; presence in a manifest never self-enables).
-_INTERNAL_PROFILES = frozenset({Profile.PRIVATE_PENTEST.value, Profile.LOCAL_LAB.value})
+_INTERNAL_PROFILES = frozenset({Profile.PRIVATE_PENTEST.value, Profile.LOCAL_LAB.value, Profile.BUG_BOUNTY.value})
 
 
 @dataclass(frozen=True)

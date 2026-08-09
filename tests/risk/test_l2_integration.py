@@ -269,14 +269,19 @@ def test_program_denial_precedes_grant_handling(
     assert store.status(grant.challenge_digest) == "granted"
 
 
-def test_l3_denial_precedes_grant_handling(store, context, l2_request, fixed_now):
+def test_l3_denial_without_authorization(store, context, l2_request, fixed_now):
+    """L3 is no longer blanket-denied. It requires confirmed authorization.
+    With authorization confirmed (default context), it flows past the L3 gate
+    and may be denied by capability or scope gates instead."""
     l3_definition = ActionDefinition(l2_request.action_id, RiskLevel.L3, network_access=True)
     engine = RiskEngine(ActionRegistry([l3_definition]), approval_store=store)
     forged = ApprovalGrant("a" * 64, context.policy_digest, "operator", fixed_now, fixed_now)
 
     decision = engine.evaluate(l2_request, context, grant=forged, now=fixed_now)
 
-    assert decision.reason_code == "DENY_PROHIBITED"
+    # L3 now flows through the gate. It'll be denied by scope or capability gates.
+    assert decision.kind is DecisionKind.DENY
+    assert decision.reason_code != "DENY_PROHIBITED"  # no longer blanket-denied
 
 
 def test_policy_change_invalidates_grant(

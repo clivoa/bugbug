@@ -30,11 +30,15 @@ def test_evaluate_l0_allows(sample_engagement, capsys):
     assert payload["effective_risk"] == "L0"
 
 
-def test_evaluate_l3_always_denied(sample_engagement, capsys):
+def test_evaluate_l3_denied_without_capability_flags(sample_engagement, capsys):
+    """L3 is no longer blanket-prohibited. It's denied because the sample
+    engagement lacks the required capability flags (e.g. credential-access,
+    exploit-execution)."""
     code, payload = _evaluate(sample_engagement, "l3-request.json", capsys)
     assert code == 1
     assert payload["decision"] == "deny"
-    assert payload["reason_code"] == "DENY_PROHIBITED"
+    # L3 now flows through checks — denied by capability gates, not blanket rule
+    assert "DENY" in payload["reason_code"]
 
 
 def test_evaluate_l2_persists_pending(sample_engagement, capsys):

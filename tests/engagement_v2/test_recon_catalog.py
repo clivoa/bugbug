@@ -85,10 +85,18 @@ def test_every_action_has_provenance() -> None:
 
 
 # --------------------------------------------------- disabled by default ---
-def test_catalog_disabled_without_internal_profile() -> None:
+def test_catalog_denied_for_unauthorized_profile() -> None:
+    """An unrecognized profile name still denies internal recon."""
     with pytest.raises(ContractError) as excinfo:
-        load_catalog(active_profile="bug-bounty", internal_recon_confirmed=True)
+        load_catalog(active_profile="nonexistent-profile", internal_recon_confirmed=True)
     assert excinfo.value.reason_code is ReasonCode.DENY_CAPABILITY_NOT_ALLOWED
+
+
+def test_catalog_enabled_for_bug_bounty_with_confirmation() -> None:
+    """bug-bounty profile NOW allows internal recon — operator responsibility."""
+    registry = load_catalog(active_profile="bug-bounty", internal_recon_confirmed=True)
+    assert len(registry) > 0
+    assert "operator.internal.discovery.arp-sweep" in registry
 
 
 def test_catalog_disabled_without_confirmation() -> None:

@@ -573,7 +573,7 @@ def activate_catalog(
 
     binding = _snapshot_binding(snapshot)
     assert isinstance(snapshot, EngagementSnapshot)
-    authorized_profiles = {Profile.PRIVATE_PENTEST.value, Profile.LOCAL_LAB.value}
+    authorized_profiles = {Profile.PRIVATE_PENTEST.value, Profile.LOCAL_LAB.value, Profile.BUG_BOUNTY.value}
     if (
         internal_recon_confirmed is not True
         or snapshot.authorization.get("confirmed") is not True

@@ -999,7 +999,7 @@ def _build_definitions() -> list[ActionDefinition]:
             ("hydra", "-l", "admin", "-P", "{wordlist}", "-t", "{concurrency}", "-f", "{target}"),
             authenticated=True,
             creates_account=False,
-            required_profile="private-pentest",
+            # required_profile removed — operator is responsible for L3 authorization
         )
     )
 
@@ -1010,7 +1010,7 @@ def _build_definitions() -> list[ActionDefinition]:
             RiskLevel.L3,
             "john",
             ("john", "--wordlist", "{wordlist}", "{target}"),
-            required_profile="private-pentest",
+            # required_profile removed — operator is responsible for L3 authorization
         )
     )
 
@@ -1022,7 +1022,7 @@ def _build_definitions() -> list[ActionDefinition]:
             "masscan",
             ("masscan", "{target}", "--rate", "{rate}"),
             high_volume=True,
-            required_profile="private-pentest",
+            # required_profile removed — operator is responsible for L3 authorization
         )
     )
 
@@ -1033,7 +1033,7 @@ def _build_definitions() -> list[ActionDefinition]:
             RiskLevel.L3,
             "msfconsole",
             ("msfconsole", "-q", "-x", "{target}"),
-            required_profile="private-pentest",
+            # required_profile removed — operator is responsible for L3 authorization
         )
     )
 
@@ -1044,7 +1044,7 @@ def _build_definitions() -> list[ActionDefinition]:
             RiskLevel.L3,
             "responder",
             ("responder", "-I", "{target}", "-A"),
-            required_profile="private-pentest",
+            # required_profile removed — operator is responsible for L3 authorization
             touches_third_party=True,
         )
     )
@@ -1068,7 +1068,8 @@ def _build_definitions() -> list[ActionDefinition]:
         ),
     ):
         defs.append(
-            _net(imp_id, RiskLevel.L3, imp_tool, imp_args, required_profile="private-pentest")
+            _net(imp_id, RiskLevel.L3, imp_tool, imp_args)
+        # L3 impacket actions — operator responsibility
         )
 
     # crackmapexec / nxc — network exploitation (REMOTE ONLY, L3)
@@ -1081,7 +1082,8 @@ def _build_definitions() -> list[ActionDefinition]:
         ("internal.nxc-rdp", "rdp", ("nxc", "rdp", "{target}")),
         ("internal.nxc-ftp", "ftp", ("nxc", "ftp", "{target}")),
     ):
-        defs.append(_net(nxc_id, RiskLevel.L3, "nxc", nxc_args, required_profile="private-pentest"))
+        defs.append(_net(nxc_id, RiskLevel.L3, "nxc", nxc_args))
+        # L3 nxc/crackmapexec actions — operator responsibility
 
     # bloodhound — AD graph analysis (REMOTE ONLY, L3)
     defs.append(
@@ -1090,7 +1092,7 @@ def _build_definitions() -> list[ActionDefinition]:
             RiskLevel.L3,
             "bloodhound-python",
             ("bloodhound-python", "-d", "{target}", "--collection-method", "All", "--zip"),
-            required_profile="private-pentest",
+            # required_profile removed — operator is responsible for L3 authorization
         )
     )
 
@@ -1101,7 +1103,7 @@ def _build_definitions() -> list[ActionDefinition]:
             RiskLevel.L3,
             "certipy",
             ("certipy", "find", "-u", "{target}", "-vulnerable", "-enabled"),
-            required_profile="private-pentest",
+            # required_profile removed — operator is responsible for L3 authorization
         )
     )
 
@@ -1112,7 +1114,7 @@ def _build_definitions() -> list[ActionDefinition]:
             RiskLevel.L3,
             "ldapsearch",
             ("ldapsearch", "-x", "-H", "{target}", "-b", "{wordlist}", "-s", "sub"),
-            required_profile="private-pentest",
+            # required_profile removed — operator is responsible for L3 authorization
             touches_third_party=True,
         )
     )
@@ -1124,7 +1126,7 @@ def _build_definitions() -> list[ActionDefinition]:
             RiskLevel.L3,
             "evil-winrm",
             ("evil-winrm", "-i", "{target}"),
-            required_profile="private-pentest",
+            # required_profile removed — operator is responsible for L3 authorization
         )
     )
 
@@ -1135,7 +1137,7 @@ def _build_definitions() -> list[ActionDefinition]:
             RiskLevel.L3,
             "chisel",
             ("chisel", "client", "{target}", "socks"),
-            required_profile="private-pentest",
+            # required_profile removed — operator is responsible for L3 authorization
         )
     )
 
@@ -1146,7 +1148,7 @@ def _build_definitions() -> list[ActionDefinition]:
             RiskLevel.L3,
             "ligolo-ng",
             ("ligolo-ng", "-connect", "{target}"),
-            required_profile="private-pentest",
+            # required_profile removed — operator is responsible for L3 authorization
         )
     )
 

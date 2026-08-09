@@ -66,30 +66,23 @@ levels:
       - "Non-GET HTTP methods without prior approval"
 
   L3:
-    label: "Prohibited by Default"
-    description: "Actions that are never automatically executable"
-    approval: profile_required
-    required_profiles:
-      - "private-pentest"
-      - "local-lab"
+    label: "Controlled — Operator Responsibility"
+    description: "High-impact actions available when the program authorizes them. The operator bears full responsibility."
+    approval: explicit_required
     conditions:
-      - "Every exact capability flag must be Boolean true"
-      - "Profile name alone grants nothing"
-      - "Ad-hoc L3 commands remain prohibited"
+      - "Engagement authorization MUST be confirmed"
+      - "Program rules MUST explicitly allow the capability"
+      - "Every exact capability flag must be Boolean true in testing_rules"
+      - "Rate limits and stop conditions must be configured"
+      - "Operator accepts full responsibility for all L3 actions"
     prohibited_always:
       - "Denial of service"
-      - "Resource exhaustion"
-      - "Credential stuffing / password spraying at scale"
+      - "Resource exhaustion at scale"
       - "Phishing / social engineering"
-      - "Malware / persistence / lateral movement"
-      - "EDR/WAF evasion"
-      - "CAPTCHA bypass at scale"
-      - "Mass account creation"
       - "Destructive file operations"
       - "Production database modification"
       - "Unnecessary PII/customer data access"
-      - "Cloud credential extraction"
-      - "Internet-wide scanning"
+      - "Internet-wide scanning (masscan without scope)"
       - "Autonomous multi-target exploitation"
       - "Continuing after block/rate-limit"
       - "VPN endpoint switching to bypass controls"

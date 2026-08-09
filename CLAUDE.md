@@ -38,12 +38,15 @@ mass exploitation.
      approval** immediately before execution, showing program, asset, exact
      command, rationale, expected impact, rate, data touched, stop condition,
      the authorizing program rule, and cleanup plan.
-   - **L3 controlled in engagement v2** — a reviewed P5b action may run only
-     under a confirmed `private-pentest`/`local-lab` engagement, in code-checked
-     scope, when every exact capability flag is Boolean `true`. A profile name
-     grants nothing and ad-hoc L3 commands remain prohibited. DoS, phishing,
-     evasion, destructive operations, and exfiltration beyond minimal proof are
-     excluded without exception. The legacy v1 path continues to prohibit L3.
+   - **L3 controlled — operator responsibility.** L3 actions (exploitation,
+     credential access, lateral movement, AD attacks) are available under ANY
+     confirmed engagement profile (bug-bounty, private-pentest, local-lab) when:
+     (a) authorization is confirmed, (b) the asset is in code-checked scope,
+     (c) every exact capability flag is Boolean `true` in testing_rules, and
+     (d) the operator explicitly confirms. A profile name grants nothing by
+     itself; ad-hoc L3 commands remain prohibited. DoS, phishing, evasion,
+     destructive operations, and exfiltration beyond minimal proof are excluded
+     without exception. The operator bears full responsibility.
 6. **Discovery ≠ authorization.** ASN/CIDR/cert/favicon/PTR/SPF/DNS-history/Shodan/
    GitHub/branding are hypothesis evidence only. They never auto-add an asset to
    scope.

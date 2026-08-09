@@ -285,15 +285,21 @@ def test_nested_snapshot_mutation_after_activation_denies_stale() -> None:
 @pytest.mark.parametrize(
     ("profile", "confirmed", "internal_confirmed"),
     [
-        ("bug-bounty", True, True),
+        # bug-bounty with both confirmations should now SUCCEED (L3 is operator responsibility)
         ("local-lab", False, True),
         ("private-pentest", True, False),
+        ("bug-bounty", False, True),   # auth NOT confirmed
+        ("bug-bounty", True, False),   # internal recon NOT confirmed
     ],
 )
 def test_activation_requires_internal_profile_and_both_confirmations(
     profile: str, confirmed: object, internal_confirmed: bool
 ) -> None:
-    """Catch source presence or a profile name enabling the catalog by itself."""
+    """Catch missing authorization or missing internal recon confirmation.
+
+    bug-bounty profile is now authorized for L3 (operator responsibility).
+    But BOTH confirmed authorization AND internal recon confirmation are still required.
+    """
 
     contracts_module = importlib.import_module("hackbot.engagement_v2.l3_contracts")
     snapshot = _snapshot(profile=profile, confirmed=confirmed)

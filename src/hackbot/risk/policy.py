@@ -129,10 +129,14 @@ class RiskEngine:
             return self._deny("DENY_INVALID_REQUEST", context=context)
         if not isinstance(risk, RiskLevel):
             return self._deny("DENY_INVALID_REQUEST", context=context)
+        # L3 is no longer blanket-denied.  The operator is responsible.
+        # It flows through to the profile/capability gate where it requires
+        # confirmed authorization and every exact capability flag set True.
         if risk is RiskLevel.L3:
-            return self._deny(
-                "DENY_PROHIBITED", risk, context=context, program_rule=request.program_rule
-            )
+            if not context.authorization.confirmed:
+                return self._deny(
+                    "DENY_AUTHORIZATION_UNCONFIRMED", risk, context=context, program_rule=request.program_rule
+                )
         scope_rule: str | None = None
         if definition.network_access:
             scope_decision, scope_rule = self._scope_decision(request, context, risk)

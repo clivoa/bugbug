@@ -1,9 +1,10 @@
 # Internal-recon: reviewed credential/L3 catalog (P5b)
 
-**Status:** code-owned, L3, disabled by default. The catalog is inert unless a
-`private-pentest` or `local-lab` profile is active **and** internal recon was
-explicitly confirmed. Every action still requires confirmed engagement
-authority, an in-scope target, and every declared `testing_rules` capability.
+**Status:** code-owned, L3, operator responsibility. The catalog loads under
+any confirmed profile (`bug-bounty`, `private-pentest`, `local-lab`) when
+internal recon is explicitly confirmed. Every action requires confirmed
+engagement authority, an in-scope target, and every declared `testing_rules`
+capability flag set to `true`. The operator bears full responsibility.
 
 This note records a reviewed single-action subset inspired by the CyberNeon
 Recon Bundle (local reuse, no redistribution). It does not execute or

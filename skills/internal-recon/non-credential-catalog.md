@@ -1,7 +1,7 @@
 # Internal-recon: reviewed non-credential catalog (P5a)
 
-**Status:** reviewed, code-owned, **disabled by default**. These actions load
-only under a `private-pentest` or `local-lab` profile with explicit operator
+**Status:** reviewed, code-owned. These actions load under a confirmed
+`bug-bounty`, `private-pentest`, or `local-lab` profile with explicit operator
 confirmation (`src/hackbot/engagement_v2/recon_catalog.py`). Presence in code
 never self-enables internal recon; a discovered internal hostname / RFC1918
 address / LDAP endpoint never enables it. Credential and L3 categories are P5b.
