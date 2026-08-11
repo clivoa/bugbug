@@ -1,3 +1,14 @@
+---
+name: web3-contract-review
+version: "1.0.0"
+description: "Smart contract auditing, Slither/Aderyn analysis, Foundry fork-based PoC"
+risk_level: "L0-L2"
+approval: "L0 auto, L2 requires explicit approval (mainnet fork PoC)"
+program_types: [web3]
+source: "reviewed from Trail of Bits, Solidity patterns, Immunefi reports"
+actions: []
+---
+
 # Web3 / Smart Contract Security Review
 
 **status:** active

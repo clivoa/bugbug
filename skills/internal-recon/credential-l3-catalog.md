@@ -1,3 +1,16 @@
+---
+name: internal-recon-credential-l3
+version: "1.0.0"
+description: "Reviewed credential and L3 offensive catalog (P5b)"
+risk_level: L3
+approval: "operator must confirm authorization + capability flags + scope match"
+program_types: [bug-bounty, private-pentest, local-lab]
+disabled_by_default: true
+source: "reviewed from , Impacket, NetExec, BloodHound, Certipy, Responder"
+code_catalog: src/hackbot/engagement_v2/l3_catalog.py
+notes: "Available under ANY confirmed engagement profile when authorization is confirmed, asset is in code-checked scope, and every exact capability flag is Boolean true. The operator bears full responsibility."
+---
+
 # Internal-recon: reviewed credential/L3 catalog (P5b)
 
 **Status:** code-owned, L3, operator responsibility. The catalog loads under
@@ -6,7 +19,7 @@ internal recon is explicitly confirmed. Every action requires confirmed
 engagement authority, an in-scope target, and every declared `testing_rules`
 capability flag set to `true`. The operator bears full responsibility.
 
-This note records a reviewed single-action subset inspired by the CyberNeon
+This note records a reviewed single-action subset 
 Recon Bundle (local reuse, no redistribution). It does not execute or
 parse the raw bundle and does not reproduce any multi-tool pipeline. Shells,
 inline evaluation, command strings, DoS, destruction, bulk exfiltration, and

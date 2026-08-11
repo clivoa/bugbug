@@ -1,3 +1,14 @@
+---
+name: evidence-and-reporting
+version: "1.0.0"
+description: "Evidence collection, sanitization, report generation for all major bug bounty platforms"
+risk_level: L0
+approval: auto
+program_types: [web2, api, mobile, cloud, source-code, ai-llm, web3, hybrid]
+source: "reviewed from bug bounty platform documentation and best practices"
+actions: []
+---
+
 # Evidence Hygiene & Reporting
 
 **status:** active

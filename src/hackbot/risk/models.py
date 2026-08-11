@@ -254,6 +254,7 @@ class ActionDefinition:
     out_of_band: bool = False
     honors_required_headers: bool = False
     shell_execution: bool = False
+    skill: str = ""  # maps to a skill name in skills/skills.yaml
 
     def __post_init__(self) -> None:
         if self.executable is not None:

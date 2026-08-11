@@ -1,3 +1,14 @@
+---
+name: mobile-static-analysis
+version: "1.0.0"
+description: "APK/IPA decompilation, manifest analysis, hardcoded secrets, deep link testing"
+risk_level: L0
+approval: auto
+program_types: [mobile]
+source: "reviewed from OWASP MASVS, APKTool, JADX, reference repositories"
+actions: []
+---
+
 # Mobile Application Static Analysis
 
 **status:** active

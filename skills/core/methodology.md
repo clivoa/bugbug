@@ -1,10 +1,21 @@
+---
+name: core-methodology
+version: "1.0.0"
+description: "Core bug bounty methodology — engagement lifecycle, hypothesis-driven testing"
+risk_level: L0
+approval: auto
+program_types: [web2, api, mobile, cloud, source-code, ai-llm, web3, hybrid]
+source: "reviewed from multiple reference repositories and "
+actions: []
+---
+
 # Core Bug Bounty Methodology
 
 **status:** active
 **risk:** L0
 **approval:** auto
 **program_types:** [all]
-**source:** reviewed from multiple reference repositories and recon bundle
+**source:** reviewed from multiple reference repositories 
 
 ## Engagement Lifecycle
 

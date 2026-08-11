@@ -69,18 +69,59 @@ explicit confirmation that internal network testing is authorized. An internal
 hostname / RFC1918 address / LDAP endpoint appearing in collected data does **not**
 enable it.
 
-## Recon bundle
+Each internal-recon subdirectory has its own `SKILL.md` with `disabled_by_default: true`
+and `profile_required: [private-pentest, local-lab]` in YAML frontmatter.
+Code-owned catalogs are in `src/hackbot/engagement_v2/recon_catalog.py` (non-credential)
+and `src/hackbot/engagement_v2/l3_catalog.py` (credential/L3).
 
-`references/recon/Recon-bundle.html` is an **immutable reference** (CyberNeon
-Recon Bundle; no license → local reuse only, no redistribution).
-Never load the raw HTML into context. Use the normalized skill index and load only
-the notes relevant to the current task. Only reviewed/normalized skills are
-executable; bundle commands are data until wrapped in a validated adapter.
+## Recon reference material
+
+Reconnaissance methodology is documented in `skills/recon/` across 14 categories.
+Skills reference code-owned actions in `src/hackbot/tools/actions.py` via the
+master registry at `skills/skills.yaml`. Only reviewed/normalized skills are
+executable; all recon commands are data until wrapped in a validated adapter.
 
 ## Where things live
 
-- Config: `config/*.yaml` · Skills: `skills/**` · Engine: `src/hackbot/**`
+- Config: `config/*.yaml` · Skills: `skills/**` · Skill registry: `skills/skills.yaml`
+- Engine: `src/hackbot/**` (CLI, scope, risk, tools, engagement_v2, MCP, evidence)
 - Engagements (git-ignored): `engagements/**` · Labs: `labs/**`
 - Docs: `docs/**` (start with `architecture.md`, `threat-model.md`, `safe-testing-policy.md`)
+
+### Skills structure
+
+Skills are organized per the original proposal with proper subdirectories:
+
+```
+skills/
+├── skills.yaml              # Master registry — maps skills → code-owned actions
+├── core/                    # Core methodology
+├── recon/                   # Reconnaissance (14 subdirectories)
+│   ├── recon-router/        ├── passive-recon/
+│   ├── dns-recon/           ├── tls-certificate-recon/
+│   ├── subdomain-discovery/ ├── asn-netblock-analysis/
+│   ├── github-recon/        ├── javascript-analysis/
+│   ├── web-crawling/        ├── waf-cdn-detection/
+│   ├── parameter-discovery/ ├── service-fingerprinting/
+│   ├── osint/               └── recon-pipeline/
+├── web/                     # Web app hunting (injection, business-logic, file-handling)
+├── api/                     # API security testing
+├── auth/                    # OAuth & SSO
+├── cloud/                   # Cloud exposure
+├── mobile/                  # Mobile static analysis
+├── source-review/           # SAST, secrets, dependencies
+├── ai-security/             # LLM application security
+├── web3/                    # Smart contract review
+├── reporting/               # Evidence hygiene & reporting
+└── internal-recon/          # DISABLED by default — requires private-pentest/local-lab
+    ├── internal-host-discovery/
+    ├── ldap-enumeration/
+    ├── linux-enumeration/
+    └── internal-service-discovery/
+```
+
+Each skill has a `SKILL.md` routing file with YAML frontmatter and links to
+code-owned actions in `src/hackbot/tools/actions.py`. The master registry at
+`skills/skills.yaml` is the single source of truth for skill-to-action mapping.
 
 Do not commit real engagement data. Only sanitized `sample-*` engagements are tracked.

@@ -85,15 +85,25 @@ the `~/go/bin/` paths are already in the allowlist.
 
 ```
 config/         YAML configs (providers, tools, risk policy, reporting)
-src/hackbot/    the engine: CLI, scope, risk gate, tool adapters, MCP
-skills/         methodology guides for recon, web, api, auth, cloud, mobile
+src/hackbot/    the engine: CLI, scope, risk gate, tool adapters, MCP, engagement v2
+skills/         methodology guides organized by domain with YAML frontmatter
+skills/skills.yaml  master registry — maps every skill to code-owned actions
 docs/           architecture, threat model, how-tos, reviews
 templates/      report templates per platform (hackerone, intigriti, etc.)
 engagements/    your engagements live here (gitignored, except samples)
 scripts/        build, doctor, bootstrap
-references/     immutable source material (recon bundle)
-generated/      normalized output from references
+schemas/        JSON schemas for engagement v2 contracts
 ```
+
+### Skills & actions
+
+Every skill in `skills/` links to code-owned actions in `src/hackbot/tools/actions.py`
+through the master registry `skills/skills.yaml`. Use `hackbot skills list` to see
+what's available.
+
+14 recon categories, 4 internal-recon (disabled by default), plus web, api, auth,
+cloud, mobile, source-review, ai-security, web3, and reporting skills — all with
+proper YAML frontmatter and cross-references.
 
 ## Burp Suite + MCP
 
@@ -138,5 +148,3 @@ in when you install the full package.
 
 MIT for the project's own code. Some referenced material has its own license
 terms — see [`docs/licenses-and-attribution.md`](docs/licenses-and-attribution.md).
-Notably the recon bundle in `references/recon/` is for local use only and can't
-be redistributed.

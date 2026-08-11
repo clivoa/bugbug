@@ -5,24 +5,26 @@ import json
 from hackbot.cli.main import app
 
 
-def test_skills_list_shows_attribution_and_availability(capsys):
+def test_skills_list_shows_skill_domains_and_availability(capsys):
+    code = app(["skills", "list", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["registry_loaded"] is True
+    by_id = {row["action_id"]: row for row in payload["skills"]}
+    # A DNS action should be available and mapped to a skill domain
+    dns = by_id["recon.dns.txt"]
+    assert dns["available"] is True
+    assert dns["skill_domain"] == "DNS Reconnaissance"
+
+
+def test_skills_list_marks_all_registered_actions(capsys):
     code = app(["skills", "list", "--json"])
     payload = json.loads(capsys.readouterr().out)
     assert code == 0
     by_id = {row["action_id"]: row for row in payload["skills"]}
-    dns = by_id["dns.txt"]
-    assert isinstance(dns["available"], bool)
-    assert dns["skill"] == "recon/dns-recon"
-    assert "CyberNeon" in dns["attribution"]
-    assert dns["bundle_risk_level"] == "1"
-
-
-def test_skills_list_marks_non_bundle_actions(capsys):
-    app(["skills", "list", "--json"])
-    payload = json.loads(capsys.readouterr().out)
-    by_id = {row["action_id"]: row for row in payload["skills"]}
+    # All registered actions should have available=True
     if "net.http-post" in by_id:
-        assert by_id["net.http-post"]["skill"] is None
+        assert by_id["net.http-post"]["available"] is True
 
 
 def test_skills_list_remote_without_engagement_is_invalid(capsys):
@@ -49,4 +51,4 @@ def test_skills_list_remote_marks_remote_availability(tmp_path, capsys, monkeypa
     assert code == 0
     by_id = {r["action_id"]: r for r in payload["skills"]}
     assert by_id["web.dir-enum-gobuster"]["remote_available"] is True
-    assert by_id["dns.txt"]["remote_available"] is not True  # dig not in the fake probe set
+    assert by_id["recon.dns.txt"]["remote_available"] is not True  # dig not in the fake probe set

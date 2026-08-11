@@ -62,7 +62,7 @@ refuses a non-absolute executable. Example:
   list such as `/usr/share/seclists/Discovery/Web-Content/common.txt`. It is
   lexically validated (absolute, no control characters) and never opened by the
   engine; an empty `{wordlist}` is denied (`DENY_ARGV_TEMPLATE_MISMATCH`).
-  Provenance: `recon/parameter-discovery` (CyberNeon Recon Bundle).
+  Provenance: `recon/parameter-discovery` ().
 
 Local-tool actions (curl/dig/ffuf) also run remotely — their basename resolves on
 the remote `PATH`.

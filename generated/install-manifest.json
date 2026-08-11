@@ -1,7 +1,0 @@
-{
-  "generated_by": "bootstrap-macos.sh",
-  "os": "Darwin",
-  "installed": [
-    {"formula": "uv", "version": "0.11.32"}
-  ]
-}

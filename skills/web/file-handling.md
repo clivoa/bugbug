@@ -1,10 +1,22 @@
+---
+name: file-handling
+version: "1.0.0"
+description: "File upload bypass, path traversal, LFI/RFI, XXE, zip slip methodology"
+risk_level: "L0-L2"
+approval: "L2 requires explicit approval"
+program_types: [web2, api]
+source: "reviewed from yaklang/hack-skills, BugBountySkills"
+actions:
+  - web.dir-enum-ext
+---
+
 # File Handling Vulnerabilities
 
 **status:** active
 **risk:** L0 (detection) – L2 (validation)
 **approval:** L2 requires explicit approval
 **program_types:** [web2, api]
-**source:** reviewed from yaklang/hack-skills, BugBountySkills, recon bundle
+**source:** reviewed from yaklang/hack-skills, BugBountySkills,
 
 ## LFI (Local File Inclusion)
 

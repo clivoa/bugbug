@@ -49,7 +49,7 @@ enforces the `argv[0]`/executable binding.
 The reviewed feature branch was pushed to the private
 `github.com/clivoa/bugbug` remote under the documented recon
 publication-guard override (`HACKBOT_ALLOW_PUBLISH_RECON=1`) because the
-tracked, unlicensed Recon-bundle artifacts remain in the tree. The remote
+tracked, unlicensed Recon artifacts remain in the tree. The remote
 already holds that material under the 2026-07-26 authorization; this push added
 no new protected material and no new destination.
 

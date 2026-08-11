@@ -16,7 +16,7 @@ dependencies = []
 # Production secrets storage in the OS keychain. Without this extra the CLI still
 # runs; `hackbot secrets` degrades gracefully with guidance (no traceback).
 secrets = ["keyring>=25.0"]
-# YAML config / manifest generation (used by the recon-bundle tooling).
+# YAML config / manifest generation.
 config = ["pyyaml>=6.0"]
 dev = [
     "pytest>=8.0",
@@ -61,14 +61,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S"]  # tests may use subprocess/tmp freely
-# data-heavy files: long policy-note / markdown-table string literals
-"src/hackbot/skills/bundle_classify.py" = ["E501"]
 "src/hackbot/cli/hunt_cmd.py" = ["E501", "S112"]
 "src/hackbot/gateway/client.py" = ["S310"]
 "src/hackbot/mcp/shodan.py" = ["S310"]
 "src/hackbot/mcp/burp.py" = ["S310"]
-"scripts/generate_recon_bundle.py" = ["E501", "E402"]
-"scripts/generate_recon_docs.py" = ["E501", "E402"]
 
 [tool.mypy]
 python_version = "3.11"

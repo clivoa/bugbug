@@ -1,3 +1,16 @@
+---
+name: oauth-and-sso
+version: "1.0.0"
+description: "OAuth 2.0, OIDC, SAML, and JWT security testing methodology"
+risk_level: "L0-L2"
+approval: "L0 auto, L1 auto, L2 requires explicit approval"
+program_types: [web2, api, mobile]
+source: "reviewed from reference repositories, PortSwigger research, OAuth 2.0 RFCs"
+actions:
+  - net.http-post
+  - net.http-headers
+---
+
 # OAuth 2.0 & SSO Security Testing
 
 **status:** active

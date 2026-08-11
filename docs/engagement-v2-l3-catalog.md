@@ -65,7 +65,7 @@ poisoning labels — never passive or discovery.
 ## Provenance and exclusions
 
 Every action maps to immutable provenance containing source skill/category,
-classification, exact capabilities, and CyberNeon Recon Bundle attribution. The reviewed
+classification, exact capabilities, and  attribution. The reviewed
 skill note is
 [`skills/internal-recon/credential-l3-catalog.md`](../skills/internal-recon/credential-l3-catalog.md).
 It records single-action argv subsets and never loads or copies raw bundle

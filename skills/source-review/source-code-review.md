@@ -1,3 +1,23 @@
+---
+name: source-code-review
+version: "1.0.0"
+description: "SAST, secret scanning, dependency analysis, code review methodology"
+risk_level: L0
+approval: auto
+program_types: [source-code, web3, web2, api, mobile]
+source: "reviewed from semgrep, gitleaks, trufflehog, trailofbits methodologies"
+actions:
+  - source.sast-semgrep
+  - source.sast-semgrep-owasp
+  - source.sast-semgrep-secrets
+  - source.sast-semgrep-rce
+  - source.sast-semgrep-jwt
+  - source.sast-semgrep-xss
+  - source.sast-semgrep-sql-injection
+  - source.secrets-gitleaks
+  - source.secrets-trufflehog
+---
+
 # Source Code Security Review
 
 **status:** active

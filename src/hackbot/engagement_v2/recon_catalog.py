@@ -18,7 +18,7 @@ from hackbot.engagement_v2.constants import ACTIONS_SCHEMA_VERSION, Profile
 from hackbot.engagement_v2.errors import ContractError, ReasonCode
 from hackbot.engagement_v2.manifest import ActionDefinition, validate_manifest
 
-_ATTRIBUTION = "CyberNeon Recon Bundle (public source; no formal license), reviewed generic subset"
+_ATTRIBUTION = "reviewed generic subset from reference methodologies"
 
 # Capabilities that must never appear in the non-credential catalog: every
 # capability whose policy risk floor is L3, plus sensitive-data access.

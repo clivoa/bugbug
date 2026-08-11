@@ -1,10 +1,24 @@
+---
+name: injection
+version: "1.0.0"
+description: "SQL injection, command injection, SSTI, LDAP injection, XPath injection methodology"
+risk_level: "L0-L2"
+approval: "L2 requires explicit approval"
+program_types: [web2, api]
+source: "reviewed from yaklang/hack-skills, BugBountySkills, OWASP Testing Guide"
+actions:
+  - web.scan-sqli-detect
+  - web.scan-sqli-time
+  - web.scan-xss
+---
+
 # Injection Attacks — Complete Methodology
 
 **status:** active
 **risk:** L0 (detection) – L2 (validation)
 **approval:** L2 requires explicit approval
 **program_types:** [web2, api]
-**source:** reviewed from yaklang/hack-skills, BugBountySkills, OWASP Testing Guide, recon bundle
+**source:** reviewed from yaklang/hack-skills, BugBountySkills, OWASP Testing Guide,
 
 ## SQL Injection
 

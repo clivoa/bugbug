@@ -1,0 +1,502 @@
+# Skills Registry — bugbug Hackbot
+#
+# Maps every skill domain to its code-owned actions, risk levels, and metadata.
+# Read by `hackbot skills list` and skill router. Single source of truth for
+# skill-to-action cross-referencing.
+#
+# Updated: 2026-08-11 (refactored from original proposal structure)
+
+version: "2.0.0"
+generated: "2026-08-11"
+
+skills:
+  # ===========================================================================
+  # CORE
+  # ===========================================================================
+  core/methodology:
+    path: skills/core
+    display: "Core Methodology"
+    description: "Engagement workflow, hypothesis-driven testing, scope-first approach"
+    risk_level: L0
+    approval: auto
+    program_types: [web2, api, mobile, cloud, source-code, ai-llm, web3, hybrid]
+    source: "reviewed from reference repositories and original design"
+    actions: []
+
+  # ===========================================================================
+  # RECON — Per original proposal subdirectory structure
+  # ===========================================================================
+  recon/passive-recon:
+    path: skills/recon/passive-recon
+    display: "Passive Reconnaissance"
+    description: "Map external footprint without sending packets to target infrastructure"
+    risk_level: L0
+    approval: auto
+    program_types: [web2, api, mobile, cloud, source-code, web3, hybrid]
+    source: "reviewed from Claude-BugHunter, BugBountySkills, hack-skills"
+    actions:
+      - recon.subfinder
+      - recon.amass-passive
+      - recon.gau
+      - recon.waybackurls
+      - recon.whois
+
+  recon/dns-recon:
+    path: skills/recon/dns-recon
+    display: "DNS Reconnaissance"
+    description: "DNS record enumeration, zone transfers, reverse DNS, and DNS-based discovery"
+    risk_level: L1
+    approval: auto
+    program_types: [web2, api, cloud]
+    source: "reviewed from reference repositories"
+    actions:
+      - recon.dns.a
+      - recon.dns.aaaa
+      - recon.dns.cname
+      - recon.dns.mx
+      - recon.dns.ns
+      - recon.dns.txt
+      - recon.dns.soa
+      - recon.dns.any
+      - recon.dns.reverse
+      - recon.dnsx-resolve
+
+  recon/tls-certificate-recon:
+    path: skills/recon/tls-certificate-recon
+    display: "TLS Certificate Reconnaissance"
+    description: "Certificate transparency, TLS handshake analysis, cipher enumeration"
+    risk_level: L0
+    approval: auto
+    program_types: [web2, api, cloud]
+    source: "reviewed from reference repositories"
+    actions:
+      - recon.tls.cert
+      - recon.tls.ciphers
+      - recon.tls-full
+
+  recon/subdomain-discovery:
+    path: skills/recon/subdomain-discovery
+    display: "Subdomain Discovery"
+    description: "DNS brute-force, permutation, and subdomain enumeration techniques"
+    risk_level: L1
+    approval: auto
+    program_types: [web2, api, cloud]
+    source: "reviewed from reference repositories"
+    actions:
+      - recon.subfinder
+      - recon.dnsx-brute
+      - recon.alterx
+
+  recon/asn-netblock-analysis:
+    path: skills/recon/asn-netblock-analysis
+    display: "ASN & Netblock Analysis"
+    description: "ASN ownership mapping, netblock enumeration, BGP data analysis"
+    risk_level: L0
+    approval: auto
+    program_types: [web2, api, cloud]
+    source: "reviewed from reference repositories"
+    actions:
+      - recon.amass-intel
+    notes: "ASN ownership is association evidence only — never auto-scope"
+
+  recon/github-recon:
+    path: skills/recon/github-recon
+    display: "GitHub Reconnaissance"
+    description: "Source code discovery, secret scanning, organization enumeration via GitHub"
+    risk_level: L0
+    approval: auto
+    program_types: [web2, api, cloud, source-code, web3]
+    source: "reviewed from BugBountySkills, claude-bug-bounty"
+    actions:
+      - source.secrets-gitleaks
+      - source.secrets-trufflehog
+
+  recon/javascript-analysis:
+    path: skills/recon/javascript-analysis
+    display: "JavaScript Analysis"
+    description: "JS source map recovery, endpoint extraction, API key discovery in client-side JS"
+    risk_level: L0
+    approval: auto
+    program_types: [web2, api]
+    source: "reviewed from Claude-BugHunter, BugBountySkills"
+    actions:
+      - net.http-download
+      - web.param-discover
+
+  recon/web-crawling:
+    path: skills/recon/web-crawling
+    display: "Web Crawling"
+    description: "Safe, scope-respecting web crawling for endpoint and parameter discovery"
+    risk_level: L1
+    approval: auto
+    program_types: [web2, api]
+    source: "reviewed from reference repositories"
+    actions:
+      - recon.katana-crawl
+      - recon.httpx-probe
+
+  recon/waf-cdn-detection:
+    path: skills/recon/waf-cdn-detection
+    display: "WAF & CDN Detection"
+    description: "Identify WAF, CDN, and reverse-proxy technologies in front of targets"
+    risk_level: L0
+    approval: auto
+    program_types: [web2, api]
+    source: "reviewed from reference repositories"
+    actions:
+      - web.detect-waf
+
+  recon/parameter-discovery:
+    path: skills/recon/parameter-discovery
+    display: "Parameter Discovery"
+    description: "Discover hidden HTTP parameters via arjun and manual techniques"
+    risk_level: L1
+    approval: auto
+    program_types: [web2, api]
+    source: "reviewed from BugBountySkills"
+    actions:
+      - web.param-discover
+
+  recon/service-fingerprinting:
+    path: skills/recon/service-fingerprinting
+    display: "Service Fingerprinting"
+    description: "Technology stack detection, HTTP response fingerprinting, server identification"
+    risk_level: L1
+    approval: auto
+    program_types: [web2, api, cloud]
+    source: "reviewed from reference repositories"
+    actions:
+      - recon.httpx-probe
+      - web.scan-nuclei-tech
+
+  recon/osint:
+    path: skills/recon/osint
+    display: "OSINT"
+    description: "Open-source intelligence gathering — WHOIS, search engines, public databases"
+    risk_level: L0
+    approval: auto
+    program_types: [web2, api, mobile, cloud, source-code, web3, hybrid]
+    source: "reviewed from reference repositories"
+    actions:
+      - recon.whois
+
+  recon/recon-router:
+    path: skills/recon/recon-router
+    display: "Recon Router"
+    description: "Master router that selects appropriate recon skills based on program profile and surface"
+    risk_level: L0
+    approval: auto
+    program_types: [web2, api, mobile, cloud, source-code, ai-llm, web3, hybrid]
+    source: "original design"
+    actions:
+      - net.http-get
+      - net.http-head
+      - net.http-headers
+
+  recon/recon-pipeline:
+    path: skills/recon/recon-pipeline
+    display: "Recon Pipeline"
+    description: "End-to-end reconnaissance pipeline orchestration with scope enforcement"
+    risk_level: L1
+    approval: auto
+    program_types: [web2, api, cloud]
+    source: "original design"
+    actions: []
+
+  # ===========================================================================
+  # WEB
+  # ===========================================================================
+  web/hunting-web:
+    path: skills/web
+    display: "Web Application Hunting"
+    description: "Full web vulnerability methodology: XSS, SQLi, CSRF, SSRF, SSTI, business logic"
+    risk_level: L0-L2
+    approval: "L0 auto, L1 auto, L2 requires explicit approval"
+    program_types: [web2]
+    source: "reviewed from Claude-BugHunter, BugBountySkills, hack-skills"
+    actions:
+      - web.dir-enum
+      - web.dir-enum-ext
+      - web.dir-enum-ferox
+      - web.dir-enum-gobuster
+      - web.scan-nuclei-safe
+      - web.scan-nuclei-all
+      - web.scan-nuclei-cve
+      - web.scan-nuclei-exposures
+      - web.scan-nuclei-misconfig
+      - web.scan-nuclei-tech
+      - web.scan-xss
+      - web.scan-sqli-detect
+      - web.scan-sqli-time
+      - web.scan-nikto
+      - web.scan-wpscan
+      - web.param-discover
+      - web.detect-waf
+
+  web/injection:
+    path: skills/web
+    display: "Injection Testing"
+    description: "SQL injection, command injection, SSTI, LDAP injection, XPath injection"
+    risk_level: L1-L2
+    approval: "L1 auto, L2 requires explicit approval"
+    program_types: [web2, api]
+    source: "reviewed from BugBountySkills, hack-skills, reference repositories"
+    actions:
+      - web.scan-sqli-detect
+      - web.scan-sqli-time
+      - web.scan-xss
+
+  web/business-logic:
+    path: skills/web
+    display: "Business Logic Testing"
+    description: "Race conditions, parameter pollution, IDOR, privilege escalation, workflow abuse"
+    risk_level: L1-L2
+    approval: "L1 auto, L2 requires explicit approval"
+    program_types: [web2, api]
+    source: "reviewed from Claude-BugHunter, BugBountySkills"
+    actions:
+      - web.param-discover
+      - net.http-post
+      - net.http-put
+      - net.http-delete
+      - net.http-patch
+
+  web/file-handling:
+    path: skills/web
+    display: "File Handling"
+    description: "File upload bypass, path traversal, LFI/RFI, XXE, zip slip"
+    risk_level: L1-L2
+    approval: "L1 auto, L2 requires explicit approval"
+    program_types: [web2, api]
+    source: "reviewed from BugBountySkills, Claude-BugHunter"
+    actions:
+      - web.dir-enum-ext
+
+  # ===========================================================================
+  # API
+  # ===========================================================================
+  api/hunting-api:
+    path: skills/api
+    display: "API Hunting"
+    description: "REST, GraphQL, and SOAP API security testing methodology"
+    risk_level: L1-L2
+    approval: "L1 auto, L2 requires explicit approval"
+    program_types: [api]
+    source: "reviewed from reference repositories"
+    actions:
+      - api.graphql-detect
+      - web.param-discover
+
+  # ===========================================================================
+  # AUTH
+  # ===========================================================================
+  auth/oauth-and-sso:
+    path: skills/auth
+    display: "OAuth & SSO Testing"
+    description: "OAuth 2.0, OIDC, SAML, and JWT security testing methodology"
+    risk_level: L1-L2
+    approval: "L1 auto, L2 requires explicit approval"
+    program_types: [web2, api]
+    source: "reviewed from reference repositories"
+    actions:
+      - net.http-post
+      - net.http-headers
+
+  # ===========================================================================
+  # CLOUD
+  # ===========================================================================
+  cloud/cloud-exposure:
+    path: skills/cloud
+    display: "Cloud Exposure"
+    description: "S3 bucket discovery, cloud metadata endpoints, IAM privilege analysis"
+    risk_level: L0-L2
+    approval: "L0 auto, L1 auto, L2 requires explicit approval"
+    program_types: [cloud]
+    source: "reviewed from reference repositories"
+    actions: []
+
+  # ===========================================================================
+  # MOBILE
+  # ===========================================================================
+  mobile/mobile-static-analysis:
+    path: skills/mobile
+    display: "Mobile Static Analysis"
+    description: "APK/IPA decompilation, manifest analysis, hardcoded secrets, deep link testing"
+    risk_level: L0
+    approval: auto
+    program_types: [mobile]
+    source: "reviewed from reference repositories"
+    actions: []
+
+  # ===========================================================================
+  # SOURCE REVIEW
+  # ===========================================================================
+  source-review/source-code-review:
+    path: skills/source-review
+    display: "Source Code Review"
+    description: "SAST, secret scanning, dependency analysis, code review methodology"
+    risk_level: L0
+    approval: auto
+    program_types: [source-code, web3]
+    source: "reviewed from reference repositories"
+    actions:
+      - source.sast-semgrep
+      - source.sast-semgrep-owasp
+      - source.sast-semgrep-secrets
+      - source.sast-semgrep-rce
+      - source.sast-semgrep-jwt
+      - source.sast-semgrep-xss
+      - source.sast-semgrep-sql-injection
+      - source.secrets-gitleaks
+      - source.secrets-trufflehog
+
+  # ===========================================================================
+  # AI/LLM SECURITY
+  # ===========================================================================
+  ai-security/llm-application-security:
+    path: skills/ai-security
+    display: "LLM Application Security"
+    description: "Prompt injection, tool misuse, data leakage, indirect injection in AI-integrated apps"
+    risk_level: L0-L2
+    approval: "L0 auto, L1 auto, L2 requires explicit approval"
+    program_types: [ai-llm]
+    source: "reviewed from reference repositories and OWASP Top 10 for LLM Applications"
+    actions: []
+
+  # ===========================================================================
+  # WEB3
+  # ===========================================================================
+  web3/web3-contract-review:
+    path: skills/web3
+    display: "Web3 Contract Review"
+    description: "Smart contract auditing, Slither/Aderyn analysis, Foundry fork-based PoC"
+    risk_level: L0-L2
+    approval: "L0 auto, L1 auto, L2 requires explicit approval"
+    program_types: [web3]
+    source: "reviewed from reference repositories"
+    actions: []
+
+  # ===========================================================================
+  # REPORTING
+  # ===========================================================================
+  reporting/evidence-and-reporting:
+    path: skills/reporting
+    display: "Evidence & Reporting"
+    description: "Evidence collection, sanitization, report generation for all major platforms"
+    risk_level: L0
+    approval: auto
+    program_types: [web2, api, mobile, cloud, source-code, ai-llm, web3, hybrid]
+    source: "original design"
+    actions: []
+
+  # ===========================================================================
+  # INTERNAL RECON — Disabled by default; requires private-pentest/local-lab profile
+  # ===========================================================================
+  internal-recon/internal-host-discovery:
+    path: skills/internal-recon/internal-host-discovery
+    display: "Internal Host Discovery (INTERNAL)"
+    description: "ARP/ICMP sweeps, local network enumeration — disabled by default"
+    risk_level: L1-L2
+    approval: "requires private-pentest or local-lab profile with explicit confirmation"
+    program_types: [private-pentest, local-lab]
+    source: "reviewed from internal-recon catalog"
+    disabled_by_default: true
+    profile_required: [private-pentest, local-lab]
+    actions:
+      - operator.internal.discovery.arp-sweep
+      - operator.internal.discovery.icmp-sweep
+      - operator.internal.netstate.interfaces
+      - operator.internal.netstate.routes
+      - operator.internal.netstate.neighbors
+      - operator.internal.netstate.listeners
+
+  internal-recon/ldap-enumeration:
+    path: skills/internal-recon/ldap-enumeration
+    display: "LDAP Enumeration (INTERNAL)"
+    description: "Anonymous and authenticated LDAP directory enumeration — disabled by default"
+    risk_level: L2-L3
+    approval: "requires private-pentest or local-lab profile with explicit confirmation"
+    program_types: [private-pentest, local-lab]
+    source: "reviewed from L3 credential catalog"
+    disabled_by_default: true
+    profile_required: [private-pentest, local-lab]
+    actions:
+      - operator.internal.ldap.naming-contexts
+      - operator.internal.ldap.anonymous-users
+      - internal.ldapsearch
+
+  internal-recon/linux-enumeration:
+    path: skills/internal-recon/linux-enumeration
+    display: "Linux Host Enumeration (INTERNAL)"
+    description: "Local Linux host enumeration after gaining access — disabled by default"
+    risk_level: L3
+    approval: "requires private-pentest or local-lab profile with explicit operator confirmation"
+    program_types: [private-pentest, local-lab]
+    source: "reviewed from reference repositories"
+    disabled_by_default: true
+    profile_required: [private-pentest, local-lab]
+    actions: []
+
+  internal-recon/internal-service-discovery:
+    path: skills/internal-recon/internal-service-discovery
+    display: "Internal Service Discovery (INTERNAL)"
+    description: "Internal port scanning, service enumeration, SMB/AD/Certificate Services discovery — disabled by default"
+    risk_level: L2-L3
+    approval: "requires private-pentest or local-lab profile with explicit confirmation"
+    program_types: [private-pentest, local-lab]
+    source: "reviewed from , L3 catalog, and internal-recon catalog"
+    disabled_by_default: true
+    profile_required: [private-pentest, local-lab]
+    actions:
+      - operator.internal.enum.service-ports
+      - internal.impacket-secretsdump
+      - internal.impacket-smbclient
+      - internal.impacket-wmiexec
+      - internal.impacket-psexec
+      - internal.impacket-ntlmrelayx
+      - internal.impacket-getnpusers
+      - internal.impacket-getuserspns
+      - internal.nxc-smb
+      - internal.nxc-ldap
+      - internal.nxc-ssh
+      - internal.nxc-winrm
+      - internal.nxc-mssql
+      - internal.nxc-rdp
+      - internal.nxc-ftp
+      - internal.responder
+      - internal.bloodhound-python
+      - internal.certipy
+      - internal.evil-winrm
+      - internal.chisel
+      - internal.ligolo
+
+  # ===========================================================================
+  # L3 OFFENSIVE (operator-controlled)
+  # ===========================================================================
+  l3/credential-attacks:
+    path: skills/internal-recon
+    display: "L3 Credential Attacks (OPERATOR RESPONSIBILITY)"
+    description: "Password spraying, Kerberoasting, AS-REP roasting, hash cracking — operator must explicitly confirm"
+    risk_level: L3
+    approval: "operator must confirm authorization + capability flags + scope match"
+    program_types: [bug-bounty, private-pentest, local-lab]
+    source: "reviewed from L3 credential catalog"
+    notes: "Available under ANY confirmed engagement profile when authorization is confirmed, asset is in code-checked scope, and every exact capability flag is Boolean true"
+    actions:
+      - auth.brute-hydra
+      - auth.crack-john
+      - internal.impacket-getnpusers
+      - internal.impacket-getuserspns
+
+  l3/exploitation:
+    path: skills/internal-recon
+    display: "L3 Exploitation (OPERATOR RESPONSIBILITY)"
+    description: "Metasploit, payload execution, lateral movement — operator must explicitly confirm"
+    risk_level: L3
+    approval: "operator must confirm authorization + capability flags + scope match"
+    program_types: [bug-bounty, private-pentest, local-lab]
+    source: "reviewed from L3 catalog"
+    notes: "Available under ANY confirmed engagement profile; operator bears full responsibility"
+    actions:
+      - exploit.metasploit
+      - net.scan-masscan

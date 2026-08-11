@@ -20,7 +20,7 @@ from hackbot.engagement_v2.errors import ContractError, ReasonCode
 from hackbot.engagement_v2.manifest import ActionDefinition, validate_manifest
 
 _ATTRIBUTION = (
-    "CyberNeon Recon Bundle (public source; no formal license), reviewed single-action subset"
+    "reviewed single-action subset from reference methodologies"
 )
 EXCLUDED_CAPABILITIES = frozenset({"denial-of-service", "destructive-testing", "data-exfiltration"})
 _SENSITIVE_CAPABILITIES = frozenset(

@@ -232,6 +232,8 @@ def _net(
     risk: RiskLevel,
     executable: str,
     argv: tuple[str, ...],
+    *,
+    skill: str = "",
     **kwargs: object,
 ) -> ActionDefinition:
     """Shorthand for network-access, external-tool action definitions."""
@@ -240,7 +242,9 @@ def _net(
         "uses_external_tool": True,
     }
     kw.update(kwargs)
-    return ActionDefinition(action_id, risk, executable=executable, argv_template=argv, **kw)  # type: ignore[arg-type]
+    return ActionDefinition(
+        action_id, risk, executable=executable, argv_template=argv, skill=skill, **kw  # type: ignore[arg-type]
+    )
 
 
 def _local(
@@ -248,6 +252,8 @@ def _local(
     risk: RiskLevel,
     executable: str,
     argv: tuple[str, ...],
+    *,
+    skill: str = "",
     **kwargs: object,
 ) -> ActionDefinition:
     """Shorthand for local-only (no network) external-tool action definitions."""
@@ -256,7 +262,9 @@ def _local(
         "uses_external_tool": True,
     }
     kw.update(kwargs)
-    return ActionDefinition(action_id, risk, executable=executable, argv_template=argv, **kw)  # type: ignore[arg-type]
+    return ActionDefinition(
+        action_id, risk, executable=executable, argv_template=argv, skill=skill, **kw  # type: ignore[arg-type]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -276,7 +284,13 @@ def _build_definitions() -> list[ActionDefinition]:
     sf = t("subfinder")
     if sf is not None:
         defs.append(
-            _net("recon.subfinder", RiskLevel.L0, sf, (sf, "-d", "{target}", "-silent", "-all"))
+            _net(
+                "recon.subfinder",
+                RiskLevel.L0,
+                sf,
+                (sf, "-d", "{target}", "-silent", "-all"),
+                skill="recon/passive-recon",
+            )
         )
 
     # -- amass: passive enum (passive flag) --

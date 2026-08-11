@@ -1,3 +1,16 @@
+---
+name: internal-recon-non-credential
+version: "1.0.0"
+description: "Reviewed non-credential internal reconnaissance catalog (P5a)"
+risk_level: "L1-L2"
+approval: "requires private-pentest or local-lab profile with explicit operator confirmation"
+program_types: [private-pentest, local-lab]
+disabled_by_default: true
+profile_required: [private-pentest, local-lab]
+source: "local reuse with attribution, no redistribution"
+code_catalog: src/hackbot/engagement_v2/recon_catalog.py
+---
+
 # Internal-recon: reviewed non-credential catalog (P5a)
 
 **Status:** reviewed, code-owned. These actions load under a confirmed
@@ -8,7 +21,7 @@ address / LDAP endpoint never enables it. Credential and L3 categories are P5b.
 
 Only a **reviewed generic single-tool argv subset** is promoted — never a copied
 multi-tool bundle pipeline, never a shell string. Attribution:
-`CyberNeon Recon Bundle (public source; no formal license)`, local reuse with attribution, no
+``, local reuse with attribution, no
 redistribution. The raw bundle HTML is never read.
 
 ## Actions

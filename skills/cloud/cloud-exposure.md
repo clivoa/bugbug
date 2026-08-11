@@ -1,3 +1,14 @@
+---
+name: cloud-exposure
+version: "1.0.0"
+description: "S3 bucket discovery, cloud metadata endpoints, IAM privilege analysis"
+risk_level: "L0-L2"
+approval: "L0 auto, L1 auto, L2 requires explicit approval"
+program_types: [cloud, web2, api]
+source: "reviewed from reference repositories"
+actions: []
+---
+
 # Cloud & DevOps Exposure Testing
 
 **status:** active

@@ -1,7 +1,7 @@
 # Licenses & Attribution
 
 Authoritative ledger of third-party material the Hackbot (`bugbug`) project was
-inspected against or derives patterns from, plus the local recon bundle.
+inspected against or derives patterns from.
 
 **Principles**
 - Presence of content is **not** permission to reuse. When no license exists, the
@@ -15,32 +15,7 @@ inspected against or derives patterns from, plus the local recon bundle.
 
 ---
 
-## 1. Local reconnaissance bundle
-
-| Field | Value |
-|---|---|
-| File | `references/recon/Recon-bundle.html` (immutable reference) |
-| Title | "Recon — CyberNeon Bundle" |
-| Contents | 19 reconnaissance notes (pt-BR) |
-| License | **NONE found** in the file (no MIT/GPL/Apache/CC/copyright string) |
-| Operator authorization | **Granted for LOCAL, PRIVATE use** — content was already circulating publicly (operator decision, 2026-08-07, revising the 2026-07-24 attribution-retained decision). **Redistribution NOT authorized.** |
-
-**Handling.** Per operator authorization we normalize the bundle's *methodology*
-into Hackbot skills for local use. The original HTML is never modified. Every
-skill or adapter materially derived from a note carries
-`attribution: "CyberNeon Recon Bundle (public source; no formal license)"` and
-a back-reference in `generated/recon-bundle/manifest.yaml`. Because no license
-grants redistribution, **derived skills must not be published or shared**
-outside this machine without further authorization. The derived skills remain
-local-only artifacts.
-
-External resources merely *linked* by the bundle (crt.sh, dnsdumpster,
-hackertarget, censys, securitytrails, viewdns, Google Transparency Report,
-exploit-db) are third-party services governed by their own terms.
-
----
-
-## 2. Reference repositories
+## 1. Reference repositories
 
 Cloned to `references/external/` (git-ignored). Dispositions detailed in
 [`reference-review.md`](./reference-review.md).
@@ -53,7 +28,7 @@ Cloned to `references/external/` (git-ignored). Dispositions detailed in
 | 0xN0RMXL/BugBountySkills | **MIT** | Checklists (rewritten) | Attribution if text adapted |
 | elementalsouls/Claude-BugHunter | **MIT** | **scope.py logic adapted (attributed)** | MIT notice in `src/hackbot/scope/` |
 | gadievron/raptor | **MIT** | Tier/plugin concepts | Attribution if code adapted |
-| capitalone/vulnhunter | **Apache-2.0** | fix→verify concept | NOTICE if code adapted |
+| capitalone/vulnhunter | **Apache-2.0** | fix->verify concept | NOTICE if code adapted |
 | cisco-open/ai-deep-sast | **Apache-2.0** | redaction + finding-store patterns | NOTICE if code adapted |
 | google/mantis | **Apache-2.0** | Workflow decomposition + schema | NOTICE if code adapted |
 | anthropics/defending-code-reference-harness | **Apache-2.0** | Untrusted-content boundaries + test targets | NOTICE if code adapted |
@@ -75,18 +50,15 @@ As additional files are adapted, add a row here and a header comment in the file
 
 ---
 
-## 3. Hackbot's own license
+## 2. Hackbot's own license
 
 **MIT** (see [`LICENSE`](../LICENSE)). Given the AGPL/GPL/BY-SA constraints above,
-Hackbot's own code stays clean-room or attributed-MIT/Apache, so MIT applies
-without conflict. **No AGPL/GPL/BY-SA code is incorporated**, so those
-obligations do not attach to Hackbot's source. The MIT grant does not extend to
-the local reconnaissance bundle (`references/recon/Recon-bundle.html`), which
-remains unlicensed upstream material authorized for local, private use only.
+Hackbot's own code stays clean-room or attributed-MIT/Apache. **No AGPL/GPL/BY-SA
+code is incorporated**, so those obligations do not attach to Hackbot's source.
 
 ---
 
-## 4. Tool & data dependencies (runtime)
+## 3. Tool & data dependencies (runtime)
 
 Security tools (subfinder, httpx, nuclei, ffuf, semgrep, gitleaks, nmap, etc.) are
 installed as external binaries under their own licenses and invoked as separate

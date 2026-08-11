@@ -1,3 +1,16 @@
+---
+name: hunting-api
+version: "1.0.0"
+description: "REST, GraphQL, and SOAP API security testing methodology (OWASP API Top 10 aligned)"
+risk_level: "L0-L2"
+approval: "L0 auto, L1 auto, L2 requires explicit approval"
+program_types: [api, web2, mobile]
+source: "reviewed from reference repositories (OWASP API Top 10 aligned)"
+actions:
+  - api.graphql-detect
+  - web.param-discover
+---
+
 # API Security Testing
 
 **status:** active

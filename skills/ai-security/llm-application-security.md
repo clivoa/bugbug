@@ -1,3 +1,14 @@
+---
+name: llm-application-security
+version: "1.0.0"
+description: "Prompt injection, tool misuse, data leakage, indirect injection in AI-integrated apps"
+risk_level: "L0-L1"
+approval: "L0 auto, L1 auto"
+program_types: [ai-llm, web2, api]
+source: "OWASP Top 10 for LLM Applications, Trail of Bits, Anthropic security research"
+actions: []
+---
+
 # LLM Application Security Testing
 
 **status:** active

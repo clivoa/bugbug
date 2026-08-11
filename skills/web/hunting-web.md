@@ -1,10 +1,31 @@
+---
+name: hunting-web
+version: "1.0.0"
+description: "Full web vulnerability methodology — XSS, SQLi, CSRF, SSRF, SSTI, business logic"
+risk_level: "L0-L2"
+approval: "L0 auto, L1 auto, L2 requires explicit approval"
+program_types: [web2]
+source: "reviewed from Claude-BugHunter, BugBountySkills, hack-skills"
+actions:
+  - web.dir-enum
+  - web.dir-enum-ext
+  - web.dir-enum-ferox
+  - web.scan-nuclei-safe
+  - web.scan-nuclei-all
+  - web.scan-xss
+  - web.scan-sqli-detect
+  - web.scan-sqli-time
+  - web.param-discover
+  - web.detect-waf
+---
+
 # Web Application Hunting
 
 **status:** active
 **risk:** L0–L2
 **approval:** L0 auto, L1 auto, L2 requires explicit approval
 **program_types:** [web2]
-**source:** reviewed from Claude-BugHunter, BugBountySkills, hack-skills, recon bundle
+**source:** reviewed from Claude-BugHunter, BugBountySkills, hack-skills,
 
 ## Web Vulnerability Classes
 

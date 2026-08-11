@@ -1,3 +1,19 @@
+---
+name: business-logic
+version: "1.0.0"
+description: "Race conditions, parameter pollution, IDOR, privilege escalation, workflow abuse"
+risk_level: "L0-L2"
+approval: "L2 requires explicit approval"
+program_types: [web2, api]
+source: "reviewed from reference repositories, PortSwigger research, OWASP"
+actions:
+  - web.param-discover
+  - net.http-post
+  - net.http-put
+  - net.http-delete
+  - net.http-patch
+---
+
 # Business Logic Vulnerabilities
 
 **status:** active

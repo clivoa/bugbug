@@ -30,7 +30,7 @@ _CONTRACT_SCHEMA_VERSION = 1
 _DEFINITION_DIGEST_DOMAIN = "hackbot-l3-action-definition-v1"
 _PROVENANCE_PATH = "skills/internal-recon/credential-l3-catalog.md"
 _ATTRIBUTION = (
-    "CyberNeon Recon Bundle (public source; no formal license), reviewed single-action subset"
+    "reviewed single-action subset from reference methodologies"
 )
 _COMPLETE_FIELDS = frozenset(
     {

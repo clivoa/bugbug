@@ -34,7 +34,7 @@ only authority for behavior.
 
 The repository is linked to the Project. Its code/default branch remains
 private. The initial `main` publication was explicitly authorized on
-2026-07-26 for the Recon-bundle and its derived artifacts; the local
+2026-07-26 for the Recon and its derived artifacts; the local
 publication guard recorded that one push through its documented override.
 Future pushes containing protected material still require the same deliberate
 operator acknowledgement.

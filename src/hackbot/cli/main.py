@@ -526,7 +526,7 @@ def build_parser() -> argparse.ArgumentParser:
     fd_list.add_argument("--json", action="store_true")
     fd.set_defaults(func=_cmd_finding)
 
-    sk = sub.add_parser("skills", help="list code-owned actions and recon-bundle provenance")
+    sk = sub.add_parser("skills", help="list code-owned actions and skill domains")
     sk_sub = sk.add_subparsers(dest="saction", required=True)
     sk_list = sk_sub.add_parser("list", help="list actions, availability, and attribution")
     sk_list.add_argument("--engagement", help="engagement dir (for --runner remote)")
