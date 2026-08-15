@@ -256,6 +256,66 @@ _TOOL_CANDIDATES: dict[str, tuple[str, ...]] = {
         "/opt/homebrew/bin/nth",
         "/usr/local/bin/nth",
     ),
+    # --- OOB interaction testing ---
+    "interactsh-client": (
+        "/opt/homebrew/bin/interactsh-client",
+        "/usr/local/bin/interactsh-client",
+        "/usr/bin/interactsh-client",
+        os.path.expanduser("~/go/bin/interactsh-client"),
+    ),
+    # --- JWT analysis ---
+    "jwt_tool": (
+        "/opt/homebrew/bin/jwt_tool",
+        "/usr/local/bin/jwt_tool",
+        os.path.expanduser("~/.local/bin/jwt_tool"),
+    ),
+    # --- CVE mapping ---
+    "cvemap": (
+        "/opt/homebrew/bin/cvemap",
+        "/usr/local/bin/cvemap",
+        "/usr/bin/cvemap",
+        os.path.expanduser("~/go/bin/cvemap"),
+    ),
+    # --- git repository dumping ---
+    "gitdumper": (
+        "/usr/local/bin/gitdumper",
+        "/usr/bin/gitdumper",
+        os.path.expanduser("~/.local/bin/gitdumper"),
+    ),
+    # --- DNS enumeration ---
+    "dnsrecon": (
+        "/usr/bin/dnsrecon",
+        "/usr/local/bin/dnsrecon",
+        os.path.expanduser("~/.local/bin/dnsrecon"),
+    ),
+    # --- web technology fingerprinting ---
+    "whatweb": (
+        "/usr/bin/whatweb",
+        "/opt/homebrew/bin/whatweb",
+        "/usr/local/bin/whatweb",
+    ),
+    # --- web spidering ---
+    "gospider": (
+        "/opt/homebrew/bin/gospider",
+        "/usr/local/bin/gospider",
+        "/usr/bin/gospider",
+        os.path.expanduser("~/go/bin/gospider"),
+    ),
+    # --- SMB enumeration ---
+    "smbmap": (
+        "/usr/bin/smbmap",
+        "/usr/local/bin/smbmap",
+        os.path.expanduser("~/.local/bin/smbmap"),
+    ),
+    # --- headless browser (evidence-driven, JS-aware testing) ---
+    "chromium": (
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/opt/homebrew/bin/chromium",
+        "/opt/homebrew/bin/google-chrome",
+    ),
 }
 
 
@@ -1027,6 +1087,172 @@ def _build_definitions() -> list[ActionDefinition]:
     whois = resolve_executable(whois_candidates)
     if whois is not None:
         defs.append(_net("recon.whois", RiskLevel.L0, whois, (whois, "{target}")))
+
+    # =====================================================================
+    # EXTENDED CATALOG — DNS, fingerprinting, CVE mapping, spidering, git,
+    # JWT, OOB, and SMB enumeration. Curated from the HackerAI pentesting
+    # tool catalog (open reference) and mapped to code-owned actions.
+    # =====================================================================
+
+    # -- dnsrecon: active DNS enumeration + zone-transfer attempts --
+    dnsrecon = t("dnsrecon")
+    if dnsrecon is not None:
+        defs.append(
+            _net(
+                "recon.dnsrecon",
+                RiskLevel.L1,
+                dnsrecon,
+                (dnsrecon, "-d", "{target}", "-t", "std"),
+                low_impact_allowlisted=True,
+                skill="recon/dns-recon",
+            )
+        )
+
+    # -- whatweb: web technology fingerprinting --
+    whatweb = t("whatweb")
+    if whatweb is not None:
+        defs.append(
+            _net(
+                "recon.whatweb",
+                RiskLevel.L0,
+                whatweb,
+                (whatweb, "-a", "1", "--no-errors", "{target}"),
+                skill="recon/service-fingerprinting",
+            )
+        )
+
+    # -- cvemap: map a product/version or CVE id to known CVEs (no target touch) --
+    cvemap = t("cvemap")
+    if cvemap is not None:
+        defs.append(
+            _net(
+                "recon.cvemap",
+                RiskLevel.L0,
+                cvemap,
+                (cvemap, "-q", "{target}"),
+                skill="recon/service-fingerprinting",
+            )
+        )
+
+    # -- gospider: fast web spider for endpoints and JS --
+    gospider = t("gospider")
+    if gospider is not None:
+        defs.append(
+            _net(
+                "recon.gospider",
+                RiskLevel.L1,
+                gospider,
+                (gospider, "-s", "{target}", "-q", "-o", "gospider-out"),
+                low_impact_allowlisted=True,
+                skill="recon/web-crawling",
+            )
+        )
+
+    # -- gitdumper: dump an exposed .git repository (target = full .git URL) --
+    gitdumper = t("gitdumper")
+    if gitdumper is not None:
+        defs.append(
+            _net(
+                "web.git-dump",
+                RiskLevel.L2,
+                gitdumper,
+                (gitdumper, "{target}", "gitdump"),
+                high_volume=True,
+                skill="web/file-handling",
+            )
+        )
+
+    # -- jwt_tool: offline decode and secret cracking --
+    jwt_tool = t("jwt_tool")
+    if jwt_tool is not None:
+        defs.append(
+            _local(
+                "auth.jwt-decode",
+                RiskLevel.L0,
+                jwt_tool,
+                (jwt_tool, "{target}"),
+                skill="auth/jwt-testing",
+            )
+        )
+        defs.append(
+            _local(
+                "auth.jwt-crack",
+                RiskLevel.L2,
+                jwt_tool,
+                (jwt_tool, "{target}", "-C", "-d", "{wordlist}"),
+                skill="auth/jwt-testing",
+            )
+        )
+
+    # -- interactsh-client: OOB interaction listener for blind vuln proof --
+    interactsh = t("interactsh-client")
+    if interactsh is not None:
+        defs.append(
+            _net(
+                "web.oob.interactsh",
+                RiskLevel.L1,
+                interactsh,
+                (interactsh, "-json"),
+                low_impact_allowlisted=True,
+                out_of_band=True,
+                skill="web/oob-interaction-testing",
+            )
+        )
+
+    # -- smbmap: anonymous SMB share/permission enumeration --
+    smbmap = t("smbmap")
+    if smbmap is not None:
+        defs.append(
+            _net(
+                "ad.enum.smbmap",
+                RiskLevel.L2,
+                smbmap,
+                (smbmap, "-H", "{target}"),
+                skill="internal-recon/internal-service-discovery",
+            )
+        )
+
+    # -- headless chromium: JS-rendered DOM dump and screenshot for
+    #    authenticated / JavaScript-heavy / evidence-driven testing --
+    chromium = t("chromium")
+    if chromium is not None:
+        defs.append(
+            _net(
+                "web.browser.dom",
+                RiskLevel.L1,
+                chromium,
+                (
+                    chromium,
+                    "--headless",
+                    "--no-sandbox",
+                    "--disable-gpu",
+                    "--virtual-time-budget=5000",
+                    "--dump-dom",
+                    "{target}",
+                ),
+                low_impact_allowlisted=True,
+                skill="web/browser-automation",
+            )
+        )
+        defs.append(
+            _net(
+                "web.browser.screenshot",
+                RiskLevel.L1,
+                chromium,
+                (
+                    chromium,
+                    "--headless",
+                    "--no-sandbox",
+                    "--disable-gpu",
+                    "--virtual-time-budget=5000",
+                    "--window-size=1920,1080",
+                    "--screenshot=bugbug-screenshot.png",
+                    "{target}",
+                ),
+                low_impact_allowlisted=True,
+                skill="web/browser-automation",
+            )
+        )
 
     # =====================================================================
     # REMOTE-ONLY (arsenal) ACTIONS

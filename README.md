@@ -74,6 +74,9 @@ ffuf, feroxbuster                        # fuzzing
 nuclei, dalfox, sqlmap, wafw00f          # vuln scanning
 arjun, graphw00f                         # param / graphql discovery
 semgrep, gitleaks, trufflehog            # source analysis
+dnsrecon, whatweb, cvemap, gospider      # extended recon
+gitdumper, jwt_tool, interactsh-client   # git dump / JWT / OOB proof
+chromium                                 # headless JS-render + screenshot
 hydra, john, masscan, metasploit         # L3: exploitation (remote)
 impacket, crackmapexec, bloodhound       # L3: AD attacks (remote)
 ```
@@ -131,6 +134,7 @@ engagements/<platform>/<program>/<date>/
 ## Documentation
 
 - [`docs/risk-and-approval.md`](docs/risk-and-approval.md) — risk levels and the approval workflow
+- [`docs/tool-recipes.md`](docs/tool-recipes.md) — when to use which tool (OOB, JWT, WAF, CVE mapping)
 - [`docs/tool-execution.md`](docs/tool-execution.md) — how tools get executed safely
 - [`docs/burp-mcp-integration.md`](docs/burp-mcp-integration.md) — Burp Suite MCP setup
 - [`docs/remote-runner.md`](docs/remote-runner.md) — running actions on a remote box

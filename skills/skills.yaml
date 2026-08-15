@@ -60,6 +60,7 @@ skills:
       - recon.dns.any
       - recon.dns.reverse
       - recon.dnsx-resolve
+      - recon.dnsrecon
 
   recon/tls-certificate-recon:
     path: skills/recon/tls-certificate-recon
@@ -134,6 +135,7 @@ skills:
     actions:
       - recon.katana-crawl
       - recon.httpx-probe
+      - recon.gospider
 
   recon/waf-cdn-detection:
     path: skills/recon/waf-cdn-detection
@@ -168,6 +170,8 @@ skills:
     actions:
       - recon.httpx-probe
       - web.scan-nuclei-tech
+      - recon.whatweb
+      - recon.cvemap
 
   recon/osint:
     path: skills/recon/osint
@@ -271,6 +275,30 @@ skills:
     source: "reviewed from BugBountySkills, Claude-BugHunter"
     actions:
       - web.dir-enum-ext
+      - web.git-dump
+
+  web/oob-interaction-testing:
+    path: skills/web
+    display: "Out-of-Band Interaction Testing"
+    description: "Blind SSRF, blind XXE, blind XSS, and callback proof via interactsh OOB listeners"
+    risk_level: L1
+    approval: "L1 auto; out-of-band testing must be allowed by the program"
+    program_types: [web2, api]
+    source: "reviewed from HackerAI tool recipes, PortSwigger research, ProjectDiscovery interactsh docs"
+    actions:
+      - web.oob.interactsh
+
+  web/browser-automation:
+    path: skills/web
+    display: "Browser Automation"
+    description: "Headless-browser testing — JS-rendered DOM, screenshots, and evidence for authenticated / JavaScript-heavy workflows"
+    risk_level: L0-L1
+    approval: "L0 auto, L1 auto"
+    program_types: [web2, api]
+    source: "reviewed from HackerAI agent-browser concept, headless Chromium"
+    actions:
+      - web.browser.dom
+      - web.browser.screenshot
 
   # ===========================================================================
   # API
@@ -301,6 +329,18 @@ skills:
     actions:
       - net.http-post
       - net.http-headers
+
+  auth/jwt-testing:
+    path: skills/auth
+    display: "JWT Testing"
+    description: "JWT alg confusion, weak signing keys, claim tampering, and jwt_tool decode/crack"
+    risk_level: L0-L2
+    approval: "L0 auto, L1 auto, L2 requires explicit approval"
+    program_types: [web2, api]
+    source: "reviewed from HackerAI tool recipes, PortSwigger JWT research, jwt_tool docs"
+    actions:
+      - auth.jwt-decode
+      - auth.jwt-crack
 
   # ===========================================================================
   # CLOUD
@@ -469,6 +509,7 @@ skills:
       - internal.evil-winrm
       - internal.chisel
       - internal.ligolo
+      - ad.enum.smbmap
 
   # ===========================================================================
   # L3 OFFENSIVE (operator-controlled)

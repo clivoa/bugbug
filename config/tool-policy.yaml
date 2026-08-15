@@ -123,11 +123,17 @@ tools:
     scope_types: [domain, url]
     note: "Traffic inspection — loopback only; requires explicit mobile/web profile"
 
+  chromium:
+    risk: L1
+    approval: auto
+    scope_types: [url]
+    note: "Headless browser — JS-rendered DOM dump and screenshot for evidence"
+
   playwright:
     risk: L1
     approval: auto
     scope_types: [url]
-    note: "Browser automation — requires explicit profile activation"
+    note: "Full browser automation (form fill, clicks, flows) — requires explicit profile activation"
 
   apktool:
     risk: L0
